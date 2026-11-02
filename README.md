@@ -140,12 +140,13 @@ Plug each phone back in:
 adb pull /sdcard/Android/data/org.beachsync.proto/files/ logs-phoneA/
 ```
 
-Each run writes four files:
+Each run writes five files:
 
 - `run-…-info.txt`: the phone model, Android build, GNSS chip and settings
 - `run-…-status.csv`: one row per second
 - `run-…-gps.csv`: every GPS clock report
 - `run-…-ntp.csv`: every NTP exchange
+- `run-…-events.csv`: everything in the event log
 
 Send them to Claude with the `t*.csv` files from the measure script.
 
@@ -176,6 +177,12 @@ The same works in **stream mode**, which tests the whole stream path (segment fe
 | **OUT** | The audio route, which should say *USB headset* or *USB audio* with the adapter in. Also: how far ahead the app writes, how much the output time stamps jitter, and underruns. |
 | *(stream)* | Position error, rate nudge, jumps, and frames missing because a segment arrived late |
 | **STREAM** | The server's newest segment, seconds buffered, fetch errors, and the server's clock minus flowtime |
+
+## The event log
+
+The newest event always shows under the Start button. Tap it, or press **Show event log**, to see the latest 200, newest first. The log stays readable after you press Stop, until the next run starts.
+
+It checks once a second and records each change once: time source changes, GPS first report, loss and return, underruns, jumps, missing audio, stream and NTP failures and recoveries, audio output changes and audio errors. Times are flowtime in UK time, or `--:--:--` before there is a time source.
 
 ## Troubleshooting
 

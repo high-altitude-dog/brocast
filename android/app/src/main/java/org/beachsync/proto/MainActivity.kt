@@ -35,6 +35,12 @@ class MainActivity : Activity() {
     private lateinit var button: Button
     private lateinit var clock: TextView
     private lateinit var status: TextView
+    private lateinit var latestEvent: TextView
+    private lateinit var logButton: Button
+    private lateinit var eventList: TextView
+    private var logOpen = false
+    private var shownLog: EventLog? = null
+    private var shownEvents = -1
     private var idTick = 0
     private var idStream = 0
     private var idAuto = 0
@@ -47,6 +53,7 @@ class MainActivity : Activity() {
     private val ui = Handler(Looper.getMainLooper())
     private val prefs by lazy { getSharedPreferences("proto", MODE_PRIVATE) }
     private val uk = DateTimeFormatter.ofPattern("HH:mm:ss.SSS z").withZone(ZoneId.of("Europe/London"))
+    private val ukEvent = DateTimeFormatter.ofPattern("HH:mm:ss").withZone(ZoneId.of("Europe/London"))
 
     private val loop = object : Runnable {
         override fun run() {
@@ -74,6 +81,33 @@ class MainActivity : Activity() {
         clock.text = if (s == null || fit == null) "--:--:--.---" else uk.format(Instant.ofEpochSecond(0, fit.utcAt(boot)))
         status.text = s?.describe(boot) ?: "Stopped. Set up both phones the same way, then press Start on each."
         if (s != null && ++ticks % 4 == 0) s.logRow(boot)
+        refreshEvents()
+    }
+
+    /** Redraws only when there is something new, and builds the full list only while it is open. */
+    private fun refreshEvents() {
+        val log = eventLog
+        val n = log?.total ?: 0
+        if (log === shownLog && n == shownEvents) return
+        shownLog = log; shownEvents = n
+        val last = log?.latest()
+        latestEvent.text = if (last == null) "No events yet" else "Latest: " + eventLine(last)
+        if (logOpen) {
+            eventList.text = log?.recent(SHOWN_EVENTS)?.joinToString("\n") { eventLine(it) } ?: ""
+        }
+    }
+
+    private fun eventLine(e: Event): String {
+        val t = e.utc?.let { ukEvent.format(Instant.ofEpochSecond(0, it)) } ?: "--:--:--"
+        return "$t ${e.lane.name.padEnd(6)} ${e.text}"
+    }
+
+    private fun toggleLog() {
+        logOpen = !logOpen
+        logButton.text = if (logOpen) "Hide event log" else "Show event log"
+        eventList.visibility = if (logOpen) View.VISIBLE else View.GONE
+        shownEvents = -1
+        refreshEvents()
     }
 
     private fun onButton() {
@@ -101,7 +135,7 @@ class MainActivity : Activity() {
             channel = when (channel.checkedRadioButtonId) { idLeft -> Renderer.LEFT; idRight -> Renderer.RIGHT; else -> Renderer.BOTH },
         )
         session = try {
-            Session(this, settings, gpsAllowed).also { it.start() }
+            Session(this, settings, gpsAllowed).also { it.start(); eventLog = it.events }
         } catch (e: Exception) {
             status.text = "Could not start: $e"; null
         }
@@ -174,6 +208,19 @@ class MainActivity : Activity() {
         button = Button(this).apply { setOnClickListener { onButton() } }
         col.addView(button)
 
+        latestEvent = TextView(this).apply {
+            typeface = Typeface.MONOSPACE; textSize = 12f; text = "No events yet"
+            setPadding(0, dp(8), 0, dp(4))
+            setOnClickListener { toggleLog() }
+        }
+        col.addView(latestEvent)
+        logButton = Button(this).apply { text = "Show event log"; setOnClickListener { toggleLog() } }
+        col.addView(logButton)
+        eventList = TextView(this).apply {
+            typeface = Typeface.MONOSPACE; textSize = 12f; setTextIsSelectable(true); visibility = View.GONE
+        }
+        col.addView(eventList)
+
         status = TextView(this).apply {
             typeface = Typeface.MONOSPACE; textSize = 12f; setTextIsSelectable(true)
             setPadding(0, dp(12), 0, 0)
@@ -214,5 +261,9 @@ class MainActivity : Activity() {
     companion object {
         /** Kept outside the activity, so a test run survives the screen being rebuilt. */
         var session: Session? = null
+
+        /** The latest run's events, kept so they can still be read after Stop. */
+        var eventLog: EventLog? = null
+        private const val SHOWN_EVENTS = 200
     }
 }

@@ -3,6 +3,7 @@ package org.beachsync.proto
 import android.content.Context
 import android.media.AudioDeviceInfo
 import android.os.Build
+import android.os.Process
 import android.os.SystemClock
 import java.io.File
 import java.text.SimpleDateFormat
@@ -13,7 +14,7 @@ import kotlin.math.roundToLong
 
 class Settings(val url: String, val stream: Boolean, val policy: Policy, val pitchHz: Double, val lagMs: Double, val channel: Int)
 
-/** One test run: the time sources, the stream, the audio thread and three CSV logs. */
+/** One test run: the time sources, the stream, the audio thread, the event log and four CSV logs. */
 class Session(ctx: Context, val s: Settings, gpsAllowed: Boolean) {
     private val dir: File = ctx.getExternalFilesDir(null) ?: ctx.filesDir
     val name = "run-" + SimpleDateFormat("yyyyMMdd-HHmmss", Locale.UK).format(Date())
@@ -29,14 +30,27 @@ class Session(ctx: Context, val s: Settings, gpsAllowed: Boolean) {
     private val renderer = Renderer(s.pitchHz, stream, s.channel)
     val play = Playout(renderer, stream, lagNs)
     val folder: String = dir.absolutePath
+    private val eventCsv = CsvLog(File(dir, "$name-events.csv"), "boot_ns,flow_utc_ns,lane,text")
+    val events = EventLog { e -> eventCsv.row(e.boot, e.utc, e.lane, "\"" + e.text.replace("\"", "\"\"") + "\"") }
+    private val detector = EventDetector()
+    @Volatile private var watching = true
+    private val watcher = Thread({
+        Process.setThreadPriority(Process.THREAD_PRIORITY_BACKGROUND)
+        while (watching) {
+            checkEvents()
+            try { Thread.sleep(1000) } catch (_: InterruptedException) { }
+        }
+    }, "events")
 
     fun start() {
         FlowTime.reset(s.policy)
         File(dir, "$name-info.txt").writeText(info())
+        note(Lane.CLOCK, "Run started: time source setting ${s.policy}" + if (gps == null) ", GPS off (no location permission)" else "")
         gps?.start()
         ntp.start()
         stream?.start()
         play.start()
+        watcher.start()
     }
 
     fun stop() {
@@ -45,7 +59,27 @@ class Session(ctx: Context, val s: Settings, gpsAllowed: Boolean) {
         ntp.running = false; ntp.interrupt()
         gps?.stop()
         play.join(500)
-        statusLog.close(); gpsLog.close(); ntpLog.close()
+        watching = false; watcher.interrupt(); watcher.join(500)
+        note(Lane.CLOCK, "Run stopped")
+        statusLog.close(); gpsLog.close(); ntpLog.close(); eventCsv.close()
+    }
+
+    private fun note(lane: Lane, text: String) {
+        val boot = nowBoot()
+        events.add(Event(boot, FlowTime.fit()?.utcAt(boot), lane, text))
+    }
+
+    /** Runs on the watcher thread only. It reads the counters the status panel already shows. */
+    private fun checkEvents() {
+        val boot = nowBoot()
+        val fit = FlowTime.fit()
+        val found = detector.update(Reading(
+            boot, fit?.utcAt(boot), FlowTime.chosen, fit?.errAt(boot) ?: Double.NaN,
+            gps?.lastBoot ?: 0L, play.underruns, renderer.jumps, renderer.missingFrames,
+            stream?.lastError, stream?.errors ?: 0, ntp.lastError,
+            if (play.track != null) routeName(play) else null, play.error,
+        ))
+        for (e in found) events.add(e)
     }
 
     private fun info() = buildString {

@@ -41,6 +41,7 @@ The whole point is to drive the spread of when listeners hear each sound to near
 | `android/.../NtpClient.kt` | SNTP to `ntp1`–`ntp3.npl.co.uk` every 16 s; `parseNtp` is pure |
 | `android/.../StreamClient.kt` | Manifest and segment fetch into a lock-free ring |
 | `android/.../Session.kt` | One test run: wiring, the status panel, CSV logs |
+| `android/.../Events.kt` | The plain event log: detects changes in the app's counters on a low-priority thread, never the audio thread. Plain Kotlin, tested in `simtest/`. |
 | `android/.../MainActivity.kt` | The screen |
 | `server/beachsync_server.py` | The stream server (stdlib only). `--clicks` or `--source FILE` (needs ffmpeg). Serves `/manifest.json` and `/seg/<n>.pcm`. |
 | `measure/beachsync_measure.py` | Analyses a WAV recording (numpy). Modes: `ticks-stereo`, `ticks-tones`, `music-stereo`. |

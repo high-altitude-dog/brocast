@@ -1,7 +1,7 @@
 // Desktop tests of the app's pure timing code: NTP parsing, the GPS and NTP fits, and the playout loop.
 // Needs the Kotlin compiler (kotlinc) and the Android SDK's android.jar. From the beachsync-prototype folder:
 //   P=android/app/src/main/java/org/beachsync/proto; J=$ANDROID_HOME/platforms/android-35/android.jar
-//   kotlinc -cp $J -d /tmp/simtest simtest/SimTest.kt $P/Flow.kt $P/Renderer.kt $P/NtpClient.kt $P/CsvLog.kt
+//   kotlinc -cp $J -d /tmp/simtest simtest/SimTest.kt $P/Flow.kt $P/Renderer.kt $P/NtpClient.kt $P/CsvLog.kt $P/Events.kt
 //   java -cp /tmp/simtest:$J:<kotlinc folder>/lib/kotlin-stdlib.jar SimTestKt
 import org.beachsync.proto.*
 import kotlin.math.abs
@@ -179,7 +179,50 @@ fun testChannel() {
     }
 }
 
+fun testEvents() {
+    println("Event log: one event per change, not one per second a state lasts")
+    val s = 1_000_000_000L
+    fun reading(
+        t: Long, source: Source? = null, gps: Long = 0L, underruns: Int = 0, jumps: Int = 0, missing: Long = 0L,
+        fetch: String? = null, fetchErrors: Int = 0, ntp: String? = null, route: String? = null,
+    ) = Reading(t * s, null, source, 2e6, gps * s, underruns, jumps, missing, fetch, fetchErrors, ntp, route, null)
+    val d = EventDetector()
+
+    check(d.update(reading(100)).isEmpty(), "a quiet start logs nothing")
+    val first = d.update(reading(101, Source.NTP))
+    check(first.size == 1 && first[0].lane == Lane.CLOCK && first[0].text.startsWith("Time source: NTP"), "first time source is logged")
+    check(d.update(reading(102, Source.NTP)).isEmpty(), "no change logs nothing")
+    check(d.update(reading(103, Source.NTP, gps = 103)).single().text == "First GPS time report", "first GPS report is logged")
+    check(d.update(reading(108, Source.NTP, gps = 103)).isEmpty(), "5 s without GPS isn't yet a loss")
+    check(d.update(reading(109, Source.NTP, gps = 103)).single().text.startsWith("GPS lost"), "6 s without GPS is a loss")
+    check(d.update(reading(110, Source.NTP, gps = 103)).isEmpty(), "a loss is logged once")
+    check(d.update(reading(130, Source.NTP, gps = 130)).single().text == "GPS back after 27 s", "GPS return gives the gap")
+    check(d.update(reading(131, Source.GPS, gps = 131)).single().text.startsWith("Time source changed from NTP to GPS"), "a source change is logged")
+
+    check(d.update(reading(132, Source.GPS, gps = 132, underruns = 3)).single().text.contains("×3"), "underruns are logged with their count")
+    check(d.update(reading(133, Source.GPS, gps = 133, underruns = 3)).isEmpty(), "unchanged underruns log nothing")
+    check(d.update(reading(134, Source.GPS, gps = 134, underruns = 3, jumps = 1)).single().text.startsWith("Jump"), "a jump is logged")
+    check(d.update(reading(135, Source.GPS, gps = 135, underruns = 3, jumps = 1, missing = 4800)).single().text.contains("100 ms"), "missing audio is logged in ms")
+
+    fun later(t: Long, fetch: String? = null, fetchErrors: Int = 0, ntp: String? = null, route: String? = null) =
+        reading(t, Source.GPS, gps = t, underruns = 3, jumps = 1, missing = 4800, fetch = fetch, fetchErrors = fetchErrors, ntp = ntp, route = route)
+    check(d.update(later(140, fetch = "timeout", fetchErrors = 1)).single().text == "Stream fetch failing: timeout", "fetch failure is logged")
+    check(d.update(later(141, fetch = "timeout", fetchErrors = 2)).isEmpty(), "ongoing fetch failure is logged once")
+    check(d.update(later(150, fetchErrors = 5)).single().text == "Stream fetch working again after 10 s (5 errors)", "fetch recovery gives time and count")
+    check(d.update(later(151, ntp = "no reply")).single().lane == Lane.NET, "NTP failure is logged")
+    check(d.update(later(155)).single().text == "NTP working again after 4 s", "NTP recovery is logged")
+    check(d.update(later(156, route = "USB headset")).single().text == "Audio output: USB headset", "first output route is logged")
+    check(d.update(later(157)).isEmpty(), "losing the route reading logs nothing")
+    check(d.update(later(158, route = "speaker")).single().text == "Audio output changed to speaker", "route change is logged")
+
+    var sunk = 0
+    val log = EventLog(keep = 2) { sunk++ }
+    for (i in 1..3) log.add(Event(i.toLong(), null, Lane.AUDIO, "e$i"))
+    check(log.total == 3 && sunk == 3, "every event reaches the file, even past the screen limit")
+    check(log.latest()?.text == "e3" && log.recent(10).map { it.text } == listOf("e3", "e2"), "the screen gets the newest first, within its limit")
+}
+
 fun main() {
-    testNtp(); testGps(); testNtpFit(); testPlayout(); testTickTiming(); testChannel()
+    testNtp(); testGps(); testNtpFit(); testPlayout(); testTickTiming(); testChannel(); testEvents()
     println(if (failures == 0) "ALL PASSED" else "$failures FAILED")
 }
