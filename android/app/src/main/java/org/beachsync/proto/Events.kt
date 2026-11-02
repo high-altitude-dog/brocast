@@ -1,10 +1,34 @@
 package org.beachsync.proto
 
+import java.util.Locale
+import kotlin.math.abs
+
 /*
  * The plain event log: what changed during a run, in plain words.
  * A low-priority thread compares readings of the app's existing counters once a second, so nothing here
  * ever runs on the audio thread. Plain Kotlin (no Android calls), so simtest can run it on a desktop.
  */
+
+/** A duration in adaptive units at three significant figures, as design/ui-spec.md asks. Always positive. */
+fun fmtDuration(ns: Double): String {
+    if (ns.isNaN() || ns.isInfinite()) return "—"
+    val a = abs(ns)
+    if (a < 1e3) return "%.0f ns".format(Locale.ROOT, a)
+    val (v, unit) = when {
+        a < 1e6 -> a / 1e3 to "µs"
+        a < 1e9 -> a / 1e6 to "ms"
+        else -> a / 1e9 to "s"
+    }
+    val digits = when { v < 10 -> 2; v < 100 -> 1; else -> 0 }
+    return "%.${digits}f %s".format(Locale.ROOT, v, unit)
+}
+
+/** The same, with a sign in front. */
+fun fmtSigned(ns: Double): String = when {
+    ns.isNaN() || ns.isInfinite() -> "—"
+    ns < 0 -> "−" + fmtDuration(ns)
+    else -> "+" + fmtDuration(ns)
+}
 
 enum class Lane { CLOCK, AUDIO, NET, OUTPUT }
 
@@ -56,7 +80,7 @@ class EventDetector {
         fun add(lane: Lane, text: String) { out.add(Event(r.boot, r.utc, lane, text)) }
 
         if (r.source != source) {
-            val err = if (r.errNs.isNaN() || r.errNs.isInfinite()) "" else " (±%.1f ms)".format(r.errNs / 1e6)
+            val err = if (r.errNs.isNaN() || r.errNs.isInfinite()) "" else " (±${fmtDuration(r.errNs)})"
             add(Lane.CLOCK, when {
                 r.source == null -> "No time source"
                 source == null -> "Time source: ${r.source}$err"
@@ -74,7 +98,7 @@ class EventDetector {
             if (tightSince < 0) tightSince = r.boot
             if (r.boot - tightSince >= TIGHT_HOLD_NS) {
                 val sats = if (r.satellites > 0) ", ${r.satellites} satellites" else ""
-                add(Lane.CLOCK, "Sync tightened from ±${fmtErr(tightRef)} to ±${fmtErr(r.errNs)}$sats")
+                add(Lane.CLOCK, "Sync tightened from ±${fmtDuration(tightRef)} to ±${fmtDuration(r.errNs)}$sats")
                 tightRef = r.errNs; tightSince = -1
             }
         } else tightSince = -1
@@ -138,8 +162,6 @@ class EventDetector {
         const val TIGHT_WORSE = 1.25
         const val TIGHT_HOLD_NS = 10_000_000_000L
         const val TIGHT_FLOOR_NS = 100_000.0      // below 0.1 ms, changes are routine and not worth an entry
-
-        fun fmtErr(ns: Double) = if (ns < 1e6) "%.0f µs".format(ns / 1e3) else "%.2f ms".format(ns / 1e6)
     }
 }
 

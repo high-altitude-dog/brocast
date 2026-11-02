@@ -155,6 +155,6 @@ class NudgeControl(mode: NudgeMode, periodS: Double?, private val note: (String)
 
         fun fastestS(gapNs: Long) = abs(gapNs) / MAX_RATE / 1e9
         fun recommendedS(gapNs: Long) = max(RECOMMENDED_S, fastestS(gapNs))
-        fun fmt(ns: Long) = if (abs(ns) < 1_000_000L) "%.0f µs".format(abs(ns) / 1e3) else "%.2f ms".format(abs(ns) / 1e6)
+        fun fmt(ns: Long) = fmtDuration(ns.toDouble())
     }
 }

@@ -341,6 +341,14 @@ fun testEvents() {
     check(d.update(later(157)).isEmpty(), "losing the route reading logs nothing")
     check(d.update(later(158, route = "speaker")).single().text == "Audio output changed to speaker", "route change is logged")
 
+    println("Durations: adaptive units at three significant figures")
+    for ((ns, want) in listOf(70.0 to "70 ns", 3_000.0 to "3.00 µs", 38_400.0 to "38.4 µs", 800_000.0 to "800 µs", 3_200_000.0 to "3.20 ms", 1_400_000_000.0 to "1.40 s", -5_000_000.0 to "5.00 ms", Double.NaN to "—")) {
+        check(fmtDuration(ns) == want, "$ns ns reads as ${fmtDuration(ns)}")
+    }
+    check(fmtSigned(-1_200_000.0) == "−1.20 ms" && fmtSigned(3_000.0) == "+3.00 µs", "signed durations show their sign")
+    val gpsErr = EventDetector().update(Reading(s, null, Source.GPS, 70.0, 0L, 0, 0, 0L, null, 0, null, null, null))
+    check(gpsErr.single().text == "Time source: GPS (±70 ns)", "a GPS error no longer reads as ±0.0 ms")
+
     println("Event log: tightening needs a real, lasting improvement")
     val td = EventDetector()
     fun tight(t: Long, err: Double, sats: Int = 9) =
