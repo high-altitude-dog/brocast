@@ -145,7 +145,7 @@ def main():
     src.add_argument("--source", help="music file to loop (any format ffmpeg reads)")
     p.add_argument("--port", type=int, default=8080)
     p.add_argument("--bind", default="0.0.0.0", help="address to listen on (default all)")
-    p.add_argument("--d-ms", type=int, default=21000, help="playout delay D advertised to phones (ms)")
+    p.add_argument("--d-ms", type=int, default=60000, help="playout delay D advertised to phones (ms)")
     a = p.parse_args()
     if a.clicks:
         pcm, label = click_track(), "clicks"

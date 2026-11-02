@@ -11,7 +11,7 @@ import java.util.concurrent.atomic.AtomicReferenceArray
 
 /**
  * Fetches the server's manifest every second and keeps the segments around the one being heard,
- * from 1 s behind to 15 s ahead. Segments live in a small ring the audio thread can read without locks.
+ * from 1 s behind to [BUFFER_S] s ahead. Segments live in a small ring the audio thread can read without locks.
  */
 class StreamClient(private val baseUrl: String, private val lagNs: Long) : Thread("stream"), SegmentSource {
     class Manifest(val startNs: Long, val newest: Long, val oldest: Long, val dMs: Long, val source: String)
@@ -62,9 +62,9 @@ class StreamClient(private val baseUrl: String, private val lagNs: Long) : Threa
         if (fit != null) {
             val heard = Math.floorDiv(fit.utcAt(b4) + lagNs - m.dMs * 1_000_000L - m.startNs, 1_000_000_000L)
             first = maxOf(m.oldest, heard - 1)
-            last = minOf(m.newest, heard + 15)
+            last = minOf(m.newest, heard + BUFFER_S)
         } else {
-            first = maxOf(m.oldest, m.newest - 20)
+            first = maxOf(m.oldest, m.newest - minOf(BUFFER_S.toLong(), m.dMs / 1000))
             last = m.newest
         }
         var have = 0
@@ -101,5 +101,8 @@ class StreamClient(private val baseUrl: String, private val lagNs: Long) : Threa
 
     private fun slot(n: Long) = Math.floorMod(n, RING.toLong()).toInt()
 
-    private companion object { const val RING = 64 }
+    private companion object {
+        const val BUFFER_S = 60             // seconds of audio to hold ahead of the one being heard
+        const val RING = BUFFER_S + 4       // holds the whole window (1 s behind to BUFFER_S ahead) without collisions
+    }
 }
