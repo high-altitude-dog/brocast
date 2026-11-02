@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=390">
+<title>Sharing states · Beach Sync</title>
+<!-- Exported from the Beach Sync UI Mock-ups canvas. Static: tokens are in ../tokens.json, behaviour in ../ui-spec.md -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&amp;family=Space+Grotesk:wght@400;500;700&amp;display=swap">
+<style>
+body{margin:0;background:#0A0C0F}
+a{color:#C8FF4D}a:hover{color:#E2FF9E}
+</style>
+</head>
+<body>
+<div style="width: 390px; height: 844px; box-sizing: border-box; background: #0A0C0F; color: #ECEFF2; font-family: 'Space Grotesk', system-ui, sans-serif; padding: 16px 18px 18px; display: flex; flex-direction: column; gap: 11px; overflow: hidden">
+
+  <div style="display: flex; flex-direction: column; gap: 2px">
+    <span style="font-size: 11px; letter-spacing: 0.16em; color: #8B95A1; font-weight: 500">SETTINGS › DELIVERY</span>
+    <span style="font-size: 18px; font-weight: 700">Sharing, every state</span>
+    <span style="font-size: 11.5px; color: #8B95A1; line-height: 1.35">Wi-Fi, charging and not playing must hold, plus party times if the listener chose <span style="color: #C4CBD2">Only during global parties</span>. The status line says what sharing is doing, or what it waits for.</span>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 4px">
+    <span style="font-size: 10px; font-weight: 700; letter-spacing: 0.14em; color: #8B95A1">ON · SHARING</span>
+    <div style="background: #12161B; border: 1px solid #222932; border-radius: 14px; padding: 0 4px 0 14px; display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 56px">
+      <div style="display: flex; flex-direction: column; gap: 3px">
+        <span style="font-size: 14px; font-weight: 500; color: #ECEFF2">Share with other listeners</span>
+        <span style="display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: #C4CBD2"><span style="width: 7px; height: 7px; border-radius: 50%; background: #C8FF4D; flex: none"></span>Sharing now</span>
+      </div>
+      <button aria-pressed="true" aria-label="Share with other listeners, on" style="appearance: none; width: 52px; height: 44px; flex: none; background: transparent; border: none; padding: 0; display: flex; align-items: center; justify-content: center; cursor: pointer"><span style="width: 46px; height: 26px; border-radius: 13px; background: #C8FF4D; display: flex; align-items: center; justify-content: flex-end; padding: 2px; box-sizing: border-box"><span style="width: 22px; height: 22px; border-radius: 50%; background: #0A0C0F"></span></span></button>
+    </div>
+    <span style="font-size: 11px; color: #8B95A1; line-height: 1.35; padding-left: 2px">Every condition met. Accent dot plus words.</span>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 4px">
+    <span style="font-size: 10px; font-weight: 700; letter-spacing: 0.14em; color: #8B95A1">ON · WAITING</span>
+    <div style="background: #12161B; border: 1px solid #222932; border-radius: 14px; padding: 0 4px 0 14px; display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 56px">
+      <div style="display: flex; flex-direction: column; gap: 3px">
+        <span style="font-size: 14px; font-weight: 500; color: #ECEFF2">Share with other listeners</span>
+        <span style="display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: #C4CBD2"><span style="width: 7px; height: 7px; border-radius: 50%; border: 1.5px solid #8B95A1; box-sizing: border-box; flex: none"></span>Waiting for the next global party</span>
+      </div>
+      <button aria-pressed="true" aria-label="Share with other listeners, on" style="appearance: none; width: 52px; height: 44px; flex: none; background: transparent; border: none; padding: 0; display: flex; align-items: center; justify-content: center; cursor: pointer"><span style="width: 46px; height: 26px; border-radius: 13px; background: #C8FF4D; display: flex; align-items: center; justify-content: flex-end; padding: 2px; box-sizing: border-box"><span style="width: 22px; height: 22px; border-radius: 50%; background: #0A0C0F"></span></span></button>
+    </div>
+    <span style="font-size: 11px; color: #8B95A1; line-height: 1.35; padding-left: 2px">Only with the party option on, outside party times. Wins over the paused reasons.</span>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 4px">
+    <span style="font-size: 10px; font-weight: 700; letter-spacing: 0.14em; color: #8B95A1">ON · PAUSED</span>
+    <div style="background: #12161B; border: 1px solid #222932; border-radius: 14px; padding: 0 4px 0 14px; display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 56px">
+      <div style="display: flex; flex-direction: column; gap: 3px">
+        <span style="font-size: 14px; font-weight: 500; color: #ECEFF2">Share with other listeners</span>
+        <span style="display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: #C4CBD2"><span style="width: 7px; height: 7px; border-radius: 50%; border: 1.5px solid #8B95A1; box-sizing: border-box; flex: none"></span>Paused · not charging</span>
+      </div>
+      <button aria-pressed="true" aria-label="Share with other listeners, on" style="appearance: none; width: 52px; height: 44px; flex: none; background: transparent; border: none; padding: 0; display: flex; align-items: center; justify-content: center; cursor: pointer"><span style="width: 46px; height: 26px; border-radius: 13px; background: #C8FF4D; display: flex; align-items: center; justify-content: flex-end; padding: 2px; box-sizing: border-box"><span style="width: 22px; height: 22px; border-radius: 50%; background: #0A0C0F"></span></span></button>
+    </div>
+    <span style="font-size: 11px; color: #8B95A1; line-height: 1.35; padding-left: 2px">A condition is unmet. Names the first one: <span style="font-family: 'JetBrains Mono', ui-monospace, monospace">not on Wi-Fi</span>, <span style="font-family: 'JetBrains Mono', ui-monospace, monospace">not charging</span> or <span style="font-family: 'JetBrains Mono', ui-monospace, monospace">playing</span>.</span>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 4px">
+    <span style="font-size: 10px; font-weight: 700; letter-spacing: 0.14em; color: #8B95A1">OFF</span>
+    <div style="background: #12161B; border: 1px solid #222932; border-radius: 14px; padding: 0 4px 0 14px; display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 56px">
+      <div style="display: flex; flex-direction: column; gap: 3px">
+        <span style="font-size: 14px; font-weight: 500; color: #ECEFF2">Share with other listeners</span>
+        
+      </div>
+      <button aria-pressed="false" aria-label="Share with other listeners, off" style="appearance: none; width: 52px; height: 44px; flex: none; background: transparent; border: none; padding: 0; display: flex; align-items: center; justify-content: center; cursor: pointer"><span style="width: 46px; height: 26px; border-radius: 13px; border: 1.5px solid #4A5562; display: flex; align-items: center; padding: 2px; box-sizing: border-box"><span style="width: 18px; height: 18px; border-radius: 50%; background: #8B95A1"></span></span></button>
+    </div>
+    <span style="font-size: 11px; color: #8B95A1; line-height: 1.35; padding-left: 2px">Not now on first use, or switched off. The conditions line stays as in Settings.</span>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 4px">
+    <span style="font-size: 10px; font-weight: 700; letter-spacing: 0.14em; color: #8B95A1">PRIVACY MODE</span>
+    <div style="background: #12161B; border: 1px solid #222932; border-radius: 14px; padding: 0 4px 0 14px; display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 56px">
+      <div style="display: flex; flex-direction: column; gap: 3px">
+        <span style="font-size: 14px; font-weight: 500; color: #8B95A1">Share with other listeners</span>
+        <span style="display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: #C4CBD2"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8B95A1" stroke-width="2.2" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"></rect><path d="M8 11V8a4 4 0 0 1 8 0v3"></path></svg>Off in Privacy mode</span>
+      </div>
+      <button aria-disabled="true" aria-label="Share with other listeners, off in Privacy mode" style="appearance: none; width: 52px; height: 44px; flex: none; background: transparent; border: none; padding: 0; display: flex; align-items: center; justify-content: center; cursor: default"><span style="width: 46px; height: 26px; border-radius: 13px; border: 1.5px dashed #4A5562; display: flex; align-items: center; padding: 2px 2px 2px 5px; box-sizing: border-box"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8B95A1" stroke-width="2.2" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"></rect><path d="M8 11V8a4 4 0 0 1 8 0v3"></path></svg></span></button>
+    </div>
+    <span style="font-size: 11px; color: #8B95A1; line-height: 1.35; padding-left: 2px">Satellites off: sharing stops at once and the switch locks. No button to turn satellites on. The listener’s own choice returns when satellites go back on.</span>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 6px; border: 1px dashed #2A323C; border-radius: 14px; padding: 10px 12px">
+    <span style="font-size: 10px; font-weight: 700; letter-spacing: 0.14em; color: #8B95A1">FIRST USE IN PRIVACY MODE</span>
+    <div style="display: grid; grid-template-columns: minmax(0, 1fr) 16px minmax(0, 1fr); gap: 6px; align-items: center; font-size: 11.5px; line-height: 1.35">
+      <span style="color: #C4CBD2">No prompt. Sharing stays off.</span>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8B95A1" stroke-width="2" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg>
+      <span style="color: #C4CBD2">Satellites turned on: the prompt appears, default on.</span>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
