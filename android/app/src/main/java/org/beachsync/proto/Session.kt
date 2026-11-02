@@ -84,7 +84,7 @@ class Session(ctx: Context, val s: Settings, private val satellitesOn: Boolean) 
             boot, fit?.utcAt(boot), FlowTime.chosen, fit?.errAt(boot) ?: Double.NaN,
             if (gps.active) gps.lastBoot else 0L, play.underruns, renderer.jumps, renderer.missingFrames,
             stream?.lastError, stream?.errors ?: 0, ntp.lastError,
-            if (play.track != null) routeName(play) else null, play.error,
+            if (play.track != null) routeName(play) else null, play.error, gps.used,
         ))
         for (e in found) events.add(e)
     }
@@ -124,7 +124,10 @@ class Session(ctx: Context, val s: Settings, private val satellitesOn: Boolean) 
         append("SOURCE ")
         append(if (src == null) "none yet" else src.name + if (holdover) " (holdover)" else "")
         if (fit != null) append("   ±").append(fmtNs(fit.errAt(boot)))
-        append("   switches ").append(FlowTime.switches).append('\n')
+        append("   switches ").append(FlowTime.switches)
+        val from = detector.tighteningFromNs
+        if (!from.isNaN()) append("   TIGHTENING from ±").append(fmtNs(from))
+        append('\n')
 
         val g = gps
         if (!g.active) append("GPS    off (Use satellites is off)\n") else {

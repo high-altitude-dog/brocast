@@ -78,6 +78,34 @@ fun testGps() {
     check(e < 100, "after the step it tracks again: off by ${"%.0f".format(e)} ns")
 }
 
+fun testGpsWeighting() {
+    println("GPS fit: 40 s of poor signal, then 20 s of good signal, 200 trials")
+    val x0 = 1_761_955_200_000_000_000L
+    fun meanError(useChipFigure: Boolean): Double {
+        var total = 0.0
+        for (seed in 0 until 200) {
+            val rnd = Random(1000 + seed)
+            val f = GpsFitter()
+            var fit: ClockFit? = null
+            var b = 5_000_000_000L
+            for (i in 0 until 60) {
+                val sigma = if (i < 40) 5000.0 else 30.0
+                val noise = (rnd.nextDouble() * 2 - 1) * sigma * 1.73   // uniform, sd = sigma
+                val unc = if (useChipFigure) sigma else 30.0
+                // current = null: this test is about the fit, so the outlier check stays out of it
+                f.add(b, x0 + noise.toLong(), unc, null)?.let { fit = it }
+                b += 1_000_000_000L
+            }
+            val last = b - 1_000_000_000L
+            total += abs((fit!!.utcAt(last) - last - x0).toDouble())
+        }
+        return total / 200
+    }
+    val weighted = meanError(true)
+    val equal = meanError(false)
+    check(weighted < equal / 3, "using the chip's figures: off by ${"%.0f".format(weighted)} ns, against ${"%.0f".format(equal)} ns with equal weights")
+}
+
 fun testGpsEstimate() {
     println("GPS error estimate: Silver's link delay is counted, and holdover's bound grows at 5 ppm")
     val x0 = 1_761_955_200_000_000_000L
@@ -242,6 +270,24 @@ fun testEvents() {
     check(d.update(later(157)).isEmpty(), "losing the route reading logs nothing")
     check(d.update(later(158, route = "speaker")).single().text == "Audio output changed to speaker", "route change is logged")
 
+    println("Event log: tightening needs a real, lasting improvement")
+    val td = EventDetector()
+    fun tight(t: Long, err: Double, sats: Int = 9) =
+        td.update(Reading(t * s, null, Source.GPS, err, t * s, 0, 0, 0L, null, 0, null, null, null, sats)).filter { it.text.startsWith("Sync") }
+    check(tight(200, 3.2e6).isEmpty(), "the first estimate is only a baseline")
+    check(tight(201, 0.8e6).isEmpty() && !td.tighteningFromNs.isNaN(), "an improvement shows as under way while it's confirmed")
+    check(tight(205, 0.8e6).isEmpty(), "and isn't logged before 10 s")
+    check(tight(211, 0.8e6).single().text == "Sync tightened from ±3.20 ms to ±800 µs, 9 satellites", "after 10 s it's logged once, with the figures")
+    check(td.tighteningFromNs.isNaN(), "and the status panel stops showing it")
+    check(tight(212, 0.8e6).isEmpty(), "it isn't repeated")
+    check(tight(213, 0.75e6, sats = 14).isEmpty() && tight(230, 0.75e6, sats = 14).isEmpty(), "more satellites with little improvement log nothing")
+    check(tight(231, 5e6).isEmpty(), "getting worse logs nothing here")
+    check(tight(232, 2e6).isEmpty() && tight(240, 5e6).isEmpty() && tight(251, 2e6).isEmpty(), "a brief improvement that doesn't last logs nothing")
+    val quiet = EventDetector()
+    fun routine(t: Long, err: Double) = quiet.update(Reading(t * s, null, Source.GPS, err, t * s, 0, 0, 0L, null, 0, null, null, null, 9)).filter { it.text.startsWith("Sync") }
+    routine(300, 90_000.0)
+    check(routine(301, 40_000.0).isEmpty() && routine(320, 40_000.0).isEmpty(), "changes below 0.1 ms are routine and log nothing")
+
     var sunk = 0
     val log = EventLog(keep = 2) { sunk++ }
     for (i in 1..3) log.add(Event(i.toLong(), null, Lane.AUDIO, "e$i"))
@@ -250,6 +296,6 @@ fun testEvents() {
 }
 
 fun main() {
-    testNtp(); testGps(); testGpsEstimate(); testNtpFit(); testPlayout(); testTickTiming(); testChannel(); testEvents()
+    testNtp(); testGps(); testGpsWeighting(); testGpsEstimate(); testNtpFit(); testPlayout(); testTickTiming(); testChannel(); testEvents()
     println(if (failures == 0) "ALL PASSED" else "$failures FAILED")
 }

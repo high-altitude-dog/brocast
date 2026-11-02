@@ -88,41 +88,46 @@ class Line(
     fun slopeSe() = rms / sqrt(sxx)
 }
 
-fun fitLine(x: DoubleArray, y: DoubleArray, n: Int): Line? {
+fun fitLine(x: DoubleArray, y: DoubleArray, n: Int, w: DoubleArray? = null): Line? {
     if (n < 3) return null
+    var sumW = 0.0
+    for (i in 0 until n) sumW += w?.get(i) ?: 1.0
+    val scale = n / sumW   // weights average 1, so with no weights this is the ordinary fit
     var mx = 0.0
     var my = 0.0
-    for (i in 0 until n) { mx += x[i]; my += y[i] }
+    for (i in 0 until n) { val wi = scale * (w?.get(i) ?: 1.0); mx += wi * x[i]; my += wi * y[i] }
     mx /= n; my /= n
     var sxx = 0.0
     var sxy = 0.0
     var lo = x[0]
     var hi = x[0]
     for (i in 0 until n) {
+        val wi = scale * (w?.get(i) ?: 1.0)
         val dx = x[i] - mx
-        sxx += dx * dx; sxy += dx * (y[i] - my)
+        sxx += wi * dx * dx; sxy += wi * dx * (y[i] - my)
         if (x[i] < lo) lo = x[i]
         if (x[i] > hi) hi = x[i]
     }
     if (sxx <= 0.0) return null
     val b = sxy / sxx
     var ss = 0.0
-    for (i in 0 until n) { val r = y[i] - my - b * (x[i] - mx); ss += r * r }
+    for (i in 0 until n) { val r = y[i] - my - b * (x[i] - mx); ss += scale * (w?.get(i) ?: 1.0) * r * r }
     return Line(mx, my, b, sxx, sqrt(ss / (n - 2)), n, hi - lo)
 }
 
 /** Fit, drop points further from the line than 5 robust sigmas plus [floor], fit again. */
-fun robustFit(x: DoubleArray, y: DoubleArray, n: Int, floor: Double): Line? {
-    val first = fitLine(x, y, n) ?: return null
+fun robustFit(x: DoubleArray, y: DoubleArray, n: Int, floor: Double, w: DoubleArray? = null): Line? {
+    val first = fitLine(x, y, n, w) ?: return null
     val res = DoubleArray(n) { abs(y[it] - first.at(x[it])) }
     val sorted = res.copyOf()
     sorted.sort()
     val limit = 5 * 1.4826 * sorted[n / 2] + floor
     val xs = DoubleArray(n)
     val ys = DoubleArray(n)
+    val ws = if (w != null) DoubleArray(n) else null
     var k = 0
-    for (i in 0 until n) if (res[i] <= limit) { xs[k] = x[i]; ys[k] = y[i]; k++ }
-    return if (k == n) first else fitLine(xs, ys, k)
+    for (i in 0 until n) if (res[i] <= limit) { xs[k] = x[i]; ys[k] = y[i]; if (ws != null) ws[k] = w!![i]; k++ }
+    return if (k == n) first else fitLine(xs, ys, k, ws)
 }
 
 /**
@@ -133,6 +138,7 @@ fun robustFit(x: DoubleArray, y: DoubleArray, n: Int, floor: Double): Line? {
 class GpsFitter(private val window: Int = 60) {
     private val boot = LongArray(window)
     private val off = LongArray(window)
+    private val unc = DoubleArray(window)
     private var n = 0
     private var head = 0
     private var strikes = 0
@@ -158,19 +164,23 @@ class GpsFitter(private val window: Int = 60) {
             }
         }
         strikes = 0
-        boot[head] = b; off[head] = o
+        boot[head] = b; off[head] = o; unc[head] = uncNs
         head = (head + 1) % window
         if (n < window) n++
         if (n < MIN) return null
         // x: seconds before the newest sample; y: ns relative to the newest offset (keeps the doubles exact)
+        // w: the chip's own confidence in each sample, so a better signal counts straight away
         val x = DoubleArray(n)
         val y = DoubleArray(n)
+        val w = DoubleArray(n)
         for (i in 0 until n) {
             val j = (head - 1 - i + window) % window
             x[i] = (boot[j] - b) / 1e9
             y[i] = (off[j] - o).toDouble()
+            val u = maxOf(unc[j], WEIGHT_FLOOR_NS)
+            w[i] = 1.0 / (u * u)
         }
-        val line = robustFit(x, y, n, 200.0) ?: return null
+        val line = robustFit(x, y, n, 200.0, w) ?: return null
         if (line.span < 3.0) return null
         last = line
         val se = line.se(0.0)
@@ -181,6 +191,7 @@ class GpsFitter(private val window: Int = 60) {
 
     companion object {
         const val MIN = 5
+        const val WEIGHT_FLOOR_NS = 10.0              // chips reporting no figure, or a tiny one, don't dominate the fit
         const val SILVER_LINK_NS = 5_000_000.0        // the design's 1-5 ms Silver link, at its upper end
         const val HOLDOVER_DRIFT_NS_PER_S = 5000.0    // 5 ppm of rate change: a starting value until phones measure it
     }

@@ -25,6 +25,7 @@ class Reading(
     val ntpError: String?,       // null while NTP is working
     val route: String?,          // null until there is an output
     val audioError: String?,
+    val satellites: Int = 0,
 )
 
 /** Turns successive readings into events: one for each change, not one for each second a state lasts. */
@@ -43,6 +44,12 @@ class EventDetector {
     private var ntpSince = 0L
     private var route: String? = null
     private var audioError: String? = null
+    private var tightRef = Double.NaN
+    private var tightSince = -1L
+
+    /** While an improvement is being confirmed, the error it improves on; otherwise NaN. For the status panel. */
+    @Volatile var tighteningFromNs = Double.NaN
+        private set
 
     fun update(r: Reading): List<Event> {
         val out = ArrayList<Event>()
@@ -57,6 +64,21 @@ class EventDetector {
             })
             source = r.source
         }
+
+        // Tightened: the estimate is at least 20% better and stays so for 10 s. Satellite count alone never triggers it.
+        if (r.source == null || r.errNs.isNaN() || r.errNs.isInfinite()) {
+            tightRef = Double.NaN; tightSince = -1
+        } else if (tightRef.isNaN() || r.errNs > TIGHT_WORSE * tightRef) {
+            tightRef = r.errNs; tightSince = -1
+        } else if (r.errNs < TIGHT_BETTER * tightRef && tightRef >= TIGHT_FLOOR_NS) {
+            if (tightSince < 0) tightSince = r.boot
+            if (r.boot - tightSince >= TIGHT_HOLD_NS) {
+                val sats = if (r.satellites > 0) ", ${r.satellites} satellites" else ""
+                add(Lane.CLOCK, "Sync tightened from ±${fmtErr(tightRef)} to ±${fmtErr(r.errNs)}$sats")
+                tightRef = r.errNs; tightSince = -1
+            }
+        } else tightSince = -1
+        tighteningFromNs = if (tightSince >= 0) tightRef else Double.NaN
 
         if (r.gpsLastBoot > 0) {
             if (!gpsSeen) { gpsSeen = true; add(Lane.CLOCK, "First GPS time report") }
@@ -112,6 +134,12 @@ class EventDetector {
     private companion object {
         const val GPS_LOST_NS = 5_000_000_000L
         const val FRAMES_PER_MS = 48L
+        const val TIGHT_BETTER = 0.8
+        const val TIGHT_WORSE = 1.25
+        const val TIGHT_HOLD_NS = 10_000_000_000L
+        const val TIGHT_FLOOR_NS = 100_000.0      // below 0.1 ms, changes are routine and not worth an entry
+
+        fun fmtErr(ns: Double) = if (ns < 1e6) "%.0f µs".format(ns / 1e3) else "%.2f ms".format(ns / 1e6)
     }
 }
 
