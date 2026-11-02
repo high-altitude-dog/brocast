@@ -101,3 +101,88 @@ fun parseHandshakeCode(code: String): Double? {
     if (!Regex("-?\\d{4}").matches(t)) return null
     return t.toInt() / 10.0
 }
+
+// ---- The earcup test's analysis ----
+
+object Earcup {
+    const val RATE = 48000
+    const val CLICKS = 10
+    const val SPACING_S = 0.5
+    const val PREROLL_S = 1.5       // Bluetooth headsets can miss the first moments of sound
+    const val TAIL_S = 0.6
+    /** Where a click can arrive after its output time stamp: mic latency, and whatever lag the stamp doesn't cover. */
+    const val BEFORE_MS = 40.0
+    const val AFTER_MS = 450.0
+    const val QUIET = 0.01f         // the loudest sample in a leg, full scale being 1
+    const val MIN_STRENGTH = 5.0    // the leg's peak against its typical level
+
+    /** A 20 ms sweep from 1 to 4 kHz, the band that matters most for timing. Far easier to find exactly than a single pitch. */
+    fun click(): FloatArray {
+        val n = RATE / 50
+        var phase = 0.0
+        return FloatArray(n) { i ->
+            val t = i.toDouble() / n
+            phase += 2 * Math.PI * (1000.0 + 3000.0 * t) / RATE
+            (Math.sin(phase) * Math.sin(Math.PI * t) * Math.sin(Math.PI * t)).toFloat()
+        }
+    }
+}
+
+/** One leg's clicks. Readings are ms from each click's output time stamp to when the mic heard it. */
+class EarcupLeg(val readingsMs: DoubleArray, val peakMs: Double, val strength: Double, val level: Float, val profile: FloatArray)
+
+/** [expected] holds where each click would sit in [rec] if it took no time at all. Null if the leg has no audio to search. */
+fun analyseLeg(rec: FloatArray, expected: LongArray, click: FloatArray = Earcup.click()): EarcupLeg? {
+    val perMs = Earcup.RATE / 1000.0
+    val before = (Earcup.BEFORE_MS * perMs).toInt()
+    val span = before + (Earcup.AFTER_MS * perMs).toInt()
+    val energy = click.sumOf { (it * it).toDouble() }.toFloat()
+    val total = FloatArray(span)
+    val each = ArrayList<FloatArray>()
+    var level = 0f
+    for (e in expected) {
+        val from = e.toInt() - before
+        if (from < 0 || from + span + click.size > rec.size) continue
+        val c = FloatArray(span) { k ->
+            var sum = 0f
+            for (j in click.indices) sum += click[j] * rec[from + k + j]
+            kotlin.math.abs(sum) / energy
+        }
+        for (k in 0 until span) total[k] += c[k]
+        for (k in 0 until span + click.size) level = maxOf(level, kotlin.math.abs(rec[from + k]))
+        each.add(c)
+    }
+    if (each.isEmpty()) return null
+    val peak = total.indices.maxByOrNull { total[it] }!!
+    val typical = median(DoubleArray(span) { total[it].toDouble() })
+    // Each click finds its own peak anywhere in the window, so clicks that disagree show up as scatter rather than being hidden.
+    val tops = each.map { c ->
+        val at = c.indices.maxByOrNull { c[it] }!!
+        at to c[at]
+    }
+    val strongest = median(DoubleArray(tops.size) { tops[it].second.toDouble() })
+    val readings = tops.filter { it.second >= 0.3 * strongest }.map { (it.first - before) / perMs }.toDoubleArray()
+    return EarcupLeg(readings, (peak - before) / perMs, if (typical > 0) total[peak] / typical else 0.0, level, total)
+}
+
+enum class EarcupFault { TOO_QUIET, TOO_NOISY, DISAGREE }
+
+sealed class EarcupOutcome {
+    class Pass(val laterMs: Double, val speaker: EarcupLeg, val headphones: EarcupLeg, val scatterMs: Double) : EarcupOutcome()
+    class Fail(val fault: EarcupFault, val lowMs: Double = 0.0, val highMs: Double = 0.0) : EarcupOutcome()
+    class Problem(val text: String) : EarcupOutcome()
+}
+
+/** Faults first in the order that decides the fix: no signal, then a signal lost in noise, then a signal that won't hold still. */
+fun earcupVerdict(speaker: EarcupLeg?, headphones: EarcupLeg?): EarcupOutcome {
+    if (speaker == null || headphones == null) return EarcupOutcome.Fail(EarcupFault.TOO_QUIET)
+    for (leg in listOf(speaker, headphones)) if (leg.level < Earcup.QUIET) return EarcupOutcome.Fail(EarcupFault.TOO_QUIET)
+    for (leg in listOf(speaker, headphones)) if (leg.strength < Earcup.MIN_STRENGTH) return EarcupOutcome.Fail(EarcupFault.TOO_NOISY)
+    val a = summarise(speaker.readingsMs)
+    val b = summarise(headphones.readingsMs)
+    if (!usable(a) || !usable(b)) {
+        val all = (if (usable(a)) headphones else speaker).readingsMs
+        return EarcupOutcome.Fail(EarcupFault.DISAGREE, all.minOrNull() ?: 0.0, all.maxOrNull() ?: 0.0)
+    }
+    return EarcupOutcome.Pass(b!!.medianMs - a!!.medianMs, speaker, headphones, a.scatterMs + b.scatterMs)
+}

@@ -4,6 +4,7 @@ import android.graphics.Paint
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -43,6 +44,7 @@ import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
@@ -81,22 +83,21 @@ private fun rememberSecondTick(): State<Long> = produceState(Session.nowBoot()) 
 private fun logScale(ns: Double) = if (ns.isNaN() || ns <= 0.0) 0f else ((log10(ns) - 3.0) / 4.0).coerceIn(0.0, 1.0).toFloat()
 
 @Composable
-fun NowPlaying(state: BenchState, actions: BenchActions, openLog: () -> Unit, openNudge: () -> Unit, openBench: () -> Unit) {
+fun NowPlaying(state: BenchState, actions: BenchActions, openLog: () -> Unit, openNudge: () -> Unit, openBench: () -> Unit, openSettings: () -> Unit, openSignals: () -> Unit, openCalibration: () -> Unit) {
     val boot by rememberSecondTick()
     val s = state.session
     val listen = {
-        if (s == null) state.stream = true
-        actions.startOrStop()
+        if (s == null) { state.stream = true; actions.listen() } else actions.startOrStop()
     }
     Column(
         Modifier.fillMaxSize().background(Ink.bg).safeDrawingPadding().verticalScroll(rememberScrollState())
             .padding(top = Tokens.Space.screenPaddingTop.dp, start = Tokens.Space.screenPaddingSide.dp, end = Tokens.Space.screenPaddingSide.dp, bottom = Tokens.Space.screenPaddingBottom.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Masthead(s, openBench)
+        Masthead(s, openBench, openSettings, openSignals, openCalibration)
         BasicText(s?.stream?.manifest?.source?.ifEmpty { null } ?: "Beach Sync Radio", style = Tokens.Text.screenTitle.style().copy(fontSize = 20.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
         BasicText("Live", style = Tokens.Text.body.style(Ink.textSecondary).copy(fontSize = 13.sp))
-        Dial(s, boot)
+        Dial(s, boot, state.localTime)
         SyncBadge(s, boot)
         // There's no Play control in the design yet. This is the test bench's button until there is.
         RunButton(s != null, listen, "PLAY", "STOP")
@@ -106,7 +107,7 @@ fun NowPlaying(state: BenchState, actions: BenchActions, openLog: () -> Unit, op
         Row(Modifier.fillMaxWidth().height(IntrinsicTile), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             val gold = when (s?.gps?.gold) { true -> "Gold · "; false -> "Silver · "; null -> "" }
             Tile("SOURCE", FlowTime.chosen?.name?.takeIf { s != null } ?: "—", if (s == null) "" else if (s.gps.active) "$gold${s.gps.used} sats" else "Satellites off", Modifier.weight(1f))
-            Tile("HEADPHONES", "${s?.s?.lagMs ?: state.lag} ms", "typed", Modifier.weight(1f))
+            Tile("HEADPHONES", "${s?.s?.lagMs ?: state.lag} ms", state.lagSource, Modifier.weight(1f))
             Tile("AHEAD", "—", "downloaded", Modifier.weight(1f))
         }
         Card { SatellitesRow(state.satellites, actions::setSatellites, "Position stays on this phone · off = Privacy mode") }
@@ -117,7 +118,7 @@ private val IntrinsicTile = 84.dp
 
 /** Holding the station name opens the test bench: the developer way in, with nothing on screen for listeners to trip over. */
 @Composable
-private fun Masthead(s: Session?, openBench: () -> Unit) {
+private fun Masthead(s: Session?, openBench: () -> Unit, openSettings: () -> Unit, openSignals: () -> Unit, openCalibration: () -> Unit) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Column(
             Modifier.weight(1f).pointerInput(Unit) { detectTapGestures(onLongPress = { openBench() }) }.semantics { contentDescription = "Beach Sync Radio. Hold to open the test bench." },
@@ -127,19 +128,20 @@ private fun Masthead(s: Session?, openBench: () -> Unit) {
             val d = s?.stream?.manifest?.dMs
             BasicText(if (d != null) "Live · D ${d / 1000} s" else "Live · D —", style = Tokens.Text.bodyStrong.style())
         }
-        // These screens aren't built yet, so the buttons are dimmed and do nothing.
+        // Archive isn't built, so its button is dimmed and does nothing.
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            for (icon in HeaderIcon.entries) IconBox(icon)
+            for (icon in HeaderIcon.entries) IconBox(icon, when (icon) { HeaderIcon.SETTINGS -> openSettings; HeaderIcon.TIME -> openSignals; HeaderIcon.CALIBRATION -> openCalibration; else -> null })
         }
     }
 }
 
-private enum class HeaderIcon(val label: String) { TIME("Time signals, not available yet"), CALIBRATION("Calibration, not available yet"), ARCHIVE("Archive, not available yet"), SETTINGS("Settings, not available yet") }
+private enum class HeaderIcon(val label: String) { TIME("Time signals"), CALIBRATION("Calibration"), ARCHIVE("Archive, not available yet"), SETTINGS("Settings") }
 
 @Composable
-private fun IconBox(icon: HeaderIcon) {
+private fun IconBox(icon: HeaderIcon, onClick: (() -> Unit)?) {
     Canvas(
-        Modifier.size(Tokens.Space.touchTarget.dp).alpha(0.45f).border(Tokens.Stroke.card.dp, Ink.border, RoundedCornerShape(Tokens.Radius.control.dp)).padding(12.dp)
+        Modifier.size(Tokens.Space.touchTarget.dp).alpha(if (onClick != null) 1f else 0.45f).border(Tokens.Stroke.card.dp, Ink.border, RoundedCornerShape(Tokens.Radius.control.dp))
+            .then(if (onClick != null) Modifier.clickable(role = Role.Button, onClick = onClick) else Modifier).padding(12.dp)
             .semantics { contentDescription = icon.label },
     ) {
         val w = size.width
@@ -173,7 +175,7 @@ private fun IconBox(icon: HeaderIcon) {
 
 /** The Brocast clock. The design's sub-second dial is left out, because this screen updates once a second. */
 @Composable
-private fun Dial(s: Session?, boot: Long) {
+private fun Dial(s: Session?, boot: Long, showLocal: Boolean) {
     val fit = FlowTime.fit()
     val utc = if (s != null && fit != null) fit.utcAt(boot) else null
     val now = utc?.let { Instant.ofEpochSecond(0, it) }
@@ -219,7 +221,7 @@ private fun Dial(s: Session?, boot: Long) {
             BasicText(now?.let { CLOCK_ZONE.format(it) } ?: " ", style = Tokens.Text.clockZone.style())
             BasicText(now?.let { CLOCK_DIGITS.format(it) } ?: "--:--:--", style = Tokens.Text.clock.style())
             val local = ZoneId.systemDefault()
-            val different = now != null && local.rules.getOffset(now) != UK.rules.getOffset(now)
+            val different = showLocal && now != null && local.rules.getOffset(now) != UK.rules.getOffset(now)
             BasicText(if (different) shortZone(LOCAL_DIGITS.withZone(local).format(now)) + " · local" else " ", style = Tokens.Text.clockLocal.style().copy(fontSize = 10.sp), maxLines = 1)
         }
     }

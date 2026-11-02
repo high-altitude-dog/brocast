@@ -82,15 +82,29 @@ class BenchState {
     var pitch by mutableStateOf("2000")
     var lag by mutableStateOf("0")
     var satellites by mutableStateOf(true)
+    var localTime by mutableStateOf(true)
     var nudgeMode by mutableStateOf(NudgeMode.AUTO)
     var nudgePeriodS by mutableStateOf<Double?>(null)
     var session by mutableStateOf<Session?>(null)
     var eventLog by mutableStateOf<EventLog?>(null)
+    var earcup by mutableStateOf<org.beachsync.proto.EarcupRun?>(null)
+    var lagSource by mutableStateOf("typed")
 }
 
 interface BenchActions {
     fun startOrStop()
     fun setSatellites(on: Boolean)
+    fun setLocalTime(on: Boolean)
+    /** Like startOrStop, but playing with the value calibration chose for the output in use. */
+    fun listen()
+    fun output(): org.beachsync.proto.AudioOutput
+    fun savedCalibration(o: org.beachsync.proto.AudioOutput): org.beachsync.proto.Calibration?
+    fun tableCalibration(o: org.beachsync.proto.AudioOutput): org.beachsync.proto.Calibration
+    fun saveCalibration(o: org.beachsync.proto.AudioOutput, c: org.beachsync.proto.Calibration)
+    fun earcupValue(pass: org.beachsync.proto.EarcupOutcome.Pass): org.beachsync.proto.Calibration
+    fun startEarcup(o: org.beachsync.proto.AudioOutput)
+    fun cancelEarcup()
+    fun resetEarcup()
     fun setNudgeMode(mode: NudgeMode)
     fun setNudgePeriod(seconds: Double?)
 }

@@ -71,7 +71,7 @@ To keep tokens low:
 | Path | What it is |
 |---|---|
 | `android/` | The app: Kotlin, package `org.beachsync.proto`. AGP 8.7.3, Kotlin 2.0.21, Gradle 8.11.1, compileSdk/targetSdk 35, minSdk 31. Jetpack Compose (and the AndroidX it needs) is allowed for screens only; the rest stays free of AndroidX. |
-| `android/.../ui/` | Compose screens. `Theme.kt` uses `Tokens`, generated from `design/tokens.json` by the `generateTokens` Gradle task on every build; never copy token values by hand. `TestBench.kt` is built from the design. `PlainScreens.kt` holds temporary event log and rate nudge screens until those designs are built. |
+| `android/.../ui/` | Compose screens. `Theme.kt` uses `Tokens`, generated from `design/tokens.json` by the `generateTokens` Gradle task on every build; never copy token values by hand. The app opens on `NowPlaying.kt`; holding the station name, or a launch from the test scripts, opens `TestBench.kt`. `SettingsPage.kt` and `DetailScreens.kt` (Time signals, Stream gap, Event log) are built from the design, with parts that have no data left out. |
 | `android/.../Flow.kt` | `ClockFit`, `FlowTime` (source choice, with 20%-better-for-10-s hysteresis), line fits, `GpsFitter`, `NtpFitter` |
 | `android/.../Renderer.kt` | Tick and stream rendering, and the PI rate nudge that tracks the audio clock (±0.1% at most, jump if more than 20 ms out) |
 | `android/.../Nudge.kt` | How a gap closes when flowtime moves: Auto, Manual, Go and the period. The audio thread only reads one immutable `NudgeState`. Plain Kotlin, tested in `simtest/`. |
@@ -79,8 +79,10 @@ To keep tokens low:
 | `android/.../GpsTime.kt` | GnssClock → UTC−boot samples, with full tracking on |
 | `android/.../NtpClient.kt` | SNTP to `ntp1`–`ntp3.npl.co.uk` every 16 s; `parseNtp` is pure |
 | `android/.../StreamClient.kt` | Manifest and segment fetch into a lock-free ring |
+| `android/.../OpusDecoder.kt`, `OpusBlock.kt` | Decode the 1 s Opus blocks on the stream thread, with Android's software decoder, before they reach the ring. `OpusBlock.kt` is plain Kotlin, tested in `simtest/`. |
 | `android/.../FetchPlan.kt` | Which segment to fetch next, skipping any that can't arrive in time. Plain Kotlin, tested in `simtest/`. |
-| `android/.../Calibration.kt` | The arithmetic for the latency table, earcup test and two-phone handshake. Plain Kotlin, tested in `simtest/`. Nothing in the app uses it yet. |
+| `android/.../Calibration.kt` | The arithmetic for the latency table, earcup test and two-phone handshake. Plain Kotlin, tested in `simtest/`. |
+| `android/.../EarcupTest.kt` | The earcup test's audio and the output's name, on its own threads and audio objects, only when no run is active. Results go to `earcup-results.csv` in the app's files. |
 | `android/.../Session.kt` | One test run: wiring, the status panel, CSV logs |
 | `android/.../SessionService.kt` | The foreground service that keeps a run alive off screen, with a plain notice and a Stop button. Never touches the audio thread. The designed media notification isn't built yet. |
 | `android/.../Events.kt` | The plain event log: detects changes in the app's counters on a low-priority thread, never the audio thread. Plain Kotlin, tested in `simtest/`. |

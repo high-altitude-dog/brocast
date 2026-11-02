@@ -1,7 +1,7 @@
 // Desktop tests of the app's pure timing code: NTP parsing, the GPS and NTP fits, and the playout loop.
 // Needs the Kotlin compiler (kotlinc) and the Android SDK's android.jar. From the beachsync-prototype folder:
 //   P=android/app/src/main/java/org/beachsync/proto; J=$ANDROID_HOME/platforms/android-35/android.jar
-//   kotlinc -cp $J -d /tmp/simtest simtest/SimTest.kt $P/Flow.kt $P/Renderer.kt $P/NtpClient.kt $P/CsvLog.kt $P/Events.kt $P/Nudge.kt $P/FetchPlan.kt $P/Calibration.kt
+//   kotlinc -cp $J -d /tmp/simtest simtest/SimTest.kt $P/Flow.kt $P/Renderer.kt $P/NtpClient.kt $P/CsvLog.kt $P/Events.kt $P/Nudge.kt $P/FetchPlan.kt $P/Calibration.kt $P/OpusBlock.kt
 //   java -cp /tmp/simtest:$J:<kotlinc folder>/lib/kotlin-stdlib.jar SimTestKt
 import org.beachsync.proto.*
 import kotlin.math.abs
@@ -514,6 +514,53 @@ fun testFetchPlan() {
     check(oldSlowShare < 0.05, "where starting from the second being heard played almost nothing")
 }
 
+fun testOpusBlock() {
+    println("Opus blocks")
+    val out = java.io.ByteArrayOutputStream()
+    for (i in 0 until OpusBlock.PACKETS) { val size = 3 + i; out.write(size and 255); out.write(size shr 8); repeat(size) { out.write(i) } }
+    val block = out.toByteArray()
+    val spans = OpusBlock.spans(block)
+    check(spans != null && spans.size == OpusBlock.PACKETS && spans[7].second == 10 && block[spans[7].first].toInt() == 7, "a block splits into its packets")
+    check(OpusBlock.spans(block.copyOf(block.size - 1)) == null, "a cut-off block is refused")
+    check(OpusBlock.spans(block + byteArrayOf(1, 0, 9)) == null, "a block with too many packets is refused")
+    val head = OpusBlock.head()
+    check(String(head, 0, 8) == "OpusHead" && head.size == 19 && head[9].toInt() == 2 && head[10].toInt() == 0 && head[11].toInt() == 0, "the decoder's header has stereo and no skipped samples")
+    val rnd = Random(3)
+    val original = ShortArray(96000) { (rnd.nextInt(20000) - 10000).toShort() }
+    val late = ShortArray(96000) { i -> original[Math.floorMod(i / 2 * 2 - 624 + i % 2, 96000)] }
+    val (lag, match) = bestLag(late, original, 2000)
+    check(lag == 312 && match > 0.95, "the check finds audio 312 samples late: $lag, match $match")
+}
+
+fun testEarcupAnalysis() {
+    println("Earcup analysis")
+    val rnd = Random(7)
+    val click = Earcup.click()
+    fun recording(lagMs: Double, gain: Float, noise: Float, wobbleMs: Double = 0.0): Pair<FloatArray, LongArray> {
+        val rec = FloatArray(Earcup.RATE * 7) { (rnd.nextFloat() - 0.5f) * 2 * noise }
+        val expected = LongArray(Earcup.CLICKS) { (Earcup.RATE + it * Earcup.SPACING_S * Earcup.RATE).toLong() }
+        for ((i, e) in expected.withIndex()) {
+            val wobble = if (i % 2 == 0) wobbleMs else -wobbleMs
+            val at = e.toInt() + ((lagMs + wobble) * Earcup.RATE / 1000).toInt()
+            for (j in click.indices) rec[at + j] += click[j] * gain
+        }
+        return rec to expected
+    }
+    fun leg(lagMs: Double, gain: Float = 0.5f, noise: Float = 0.002f, wobbleMs: Double = 0.0): EarcupLeg? {
+        val (rec, expected) = recording(lagMs, gain, noise, wobbleMs)
+        return analyseLeg(rec, expected, click)
+    }
+    val pass = earcupVerdict(leg(40.0), leg(220.0))
+    check(pass is EarcupOutcome.Pass && abs(pass.laterMs - 180.0) < 0.1, "finds how much later the headphones are: ${(pass as? EarcupOutcome.Pass)?.laterMs}")
+    val quiet = earcupVerdict(leg(40.0, 0.002f, 0.0005f), leg(220.0, 0.002f, 0.0005f))
+    check(quiet is EarcupOutcome.Fail && quiet.fault == EarcupFault.TOO_QUIET, "a quiet recording says too quiet")
+    val noisy = earcupVerdict(leg(40.0, 0.05f, 0.6f), leg(220.0, 0.05f, 0.6f))
+    check(noisy is EarcupOutcome.Fail && noisy.fault == EarcupFault.TOO_NOISY, "a click lost in noise says too noisy: ${(noisy as? EarcupOutcome.Fail)?.fault ?: "passed"}")
+    val wobbly = earcupVerdict(leg(40.0), leg(220.0, wobbleMs = 4.0))
+    check(wobbly is EarcupOutcome.Fail && wobbly.fault == EarcupFault.DISAGREE, "clicks that won't hold still say readings disagree")
+    check(earcupVerdict(null, leg(220.0)) is EarcupOutcome.Fail, "a leg with nothing to search gives no value")
+}
+
 fun testCalibration() {
     println("Calibration arithmetic")
     fun near(a: Double, b: Double) = abs(a - b) < 1e-9
@@ -549,6 +596,8 @@ fun testCalibration() {
 }
 
 fun main() {
+    testOpusBlock()
+    testEarcupAnalysis()
     testCalibration()
     testFetchPlan()
     testTickPattern()

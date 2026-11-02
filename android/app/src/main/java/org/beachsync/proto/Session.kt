@@ -229,6 +229,9 @@ class Session(ctx: Context, val s: Settings, private val satellitesOn: Boolean) 
         return rows
     }
 
+    /** The output in use, such as "speaker" or "Bluetooth". */
+    fun outputName() = routeName(play)
+
     private fun routeName(p: Playout): String {
         val d = try { p.track?.routedDevice } catch (_: Exception) { null } ?: return "no output yet"
         val type = when (d.type) {

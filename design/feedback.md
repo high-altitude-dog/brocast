@@ -2,6 +2,10 @@
 
 Claude Desktop: read this before each design round. Newest notes go first.
 
+## 2026-11-02: Time signals, Stream gap and Event log built
+
+These replace the plain screens. All update once a second. Left out because the app has no data for them: the sky plot and constellation list, extra NTP servers, the safety check's age, the event timeline's error trace, tapping and pinching, and the Screen lane. Stream gap says neither "behind" nor "ahead", and adds a `Use recommended` link in Manual. The recommended period is 60 s, so its label reads `rec. 1 min`.
+
 ## 2026-11-02: Now playing built, and what differs from the design
 
 The user decided **Now playing updates once per second**. Please update the spec:

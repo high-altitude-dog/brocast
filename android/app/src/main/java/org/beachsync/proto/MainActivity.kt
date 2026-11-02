@@ -19,9 +19,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import org.beachsync.proto.ui.BenchActions
 import org.beachsync.proto.ui.BenchState
+import org.beachsync.proto.ui.CalibrationPage
+import org.beachsync.proto.ui.EarcupPage
 import org.beachsync.proto.ui.NowPlaying
-import org.beachsync.proto.ui.PlainEventLog
-import org.beachsync.proto.ui.PlainNudge
+import org.beachsync.proto.ui.EventLogScreen
+import org.beachsync.proto.ui.StreamGapScreen
+import org.beachsync.proto.ui.TimeSignalsScreen
+import org.beachsync.proto.ui.SettingsPage
 import org.beachsync.proto.ui.TestBench
 
 /** Opens on Now playing. The test scripts launch straight into the test bench. The run itself lives in [Session]. */
@@ -32,6 +36,12 @@ class MainActivity : ComponentActivity(), BenchActions {
     private val locationPermissions = arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
 
     private val runStopped: () -> Unit = { state.session = null }
+    private var listenLag: Double? = null
+    private var earcupOutput: AudioOutput? = null
+
+    private val askForMic = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) earcupOutput?.let { beginEarcup(it) }
+    }
 
     private val askForStart = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
         if (state.satellites && !hasLocation()) satellitesOff()
@@ -58,12 +68,19 @@ class MainActivity : ComponentActivity(), BenchActions {
             var page by remember { mutableStateOf(home) }
             var from by remember { mutableStateOf(home) }   // where the event log and nudge screens go back to
             var logLane by remember { mutableStateOf<Lane?>(null) }
-            BackHandler(page != home) { page = if (page == Page.LOG || page == Page.NUDGE) from else home }
+            BackHandler(page != home) {
+                if (page == Page.EARCUP) cancelEarcup()
+                page = when (page) { Page.LOG, Page.NUDGE -> from; Page.EARCUP -> Page.CALIBRATION; else -> home }
+            }
             when (page) {
-                Page.NOW -> NowPlaying(state, this, { logLane = null; from = Page.NOW; page = Page.LOG }, { from = Page.NOW; page = Page.NUDGE }, { page = Page.BENCH })
+                Page.NOW -> NowPlaying(state, this, { logLane = null; from = Page.NOW; page = Page.LOG }, { from = Page.NOW; page = Page.NUDGE }, { page = Page.BENCH }, { page = Page.SETTINGS }, { page = Page.SIGNALS }, { page = Page.CALIBRATION })
+                Page.CALIBRATION -> CalibrationPage(state, this, { page = home }, { resetEarcup(); page = Page.EARCUP })
+                Page.EARCUP -> EarcupPage(state, this) { page = Page.CALIBRATION }
+                Page.SIGNALS -> TimeSignalsScreen(state, this) { page = home }
+                Page.SETTINGS -> SettingsPage(state, this, { page = home }, { page = Page.CALIBRATION })
                 Page.BENCH -> TestBench(state, this, { logLane = it; from = Page.BENCH; page = Page.LOG }, { from = Page.BENCH; page = Page.NUDGE })
-                Page.LOG -> PlainEventLog(state, logLane) { page = from }
-                Page.NUDGE -> PlainNudge(state, this) { page = from }
+                Page.LOG -> EventLogScreen(state, logLane) { page = from }
+                Page.NUDGE -> StreamGapScreen(state, this) { page = from }
             }
         }
     }
@@ -95,7 +112,7 @@ class MainActivity : ComponentActivity(), BenchActions {
             stream = state.stream,
             policy = state.policy,
             pitchHz = state.pitch.toDoubleOrNull() ?: 2000.0,
-            lagMs = state.lag.toDoubleOrNull() ?: 0.0,
+            lagMs = listenLag ?: state.lag.toDoubleOrNull() ?: 0.0,
             channel = state.channel,
             nudgeMode = state.nudgeMode,
             nudgePeriodS = state.nudgePeriodS,
@@ -105,6 +122,7 @@ class MainActivity : ComponentActivity(), BenchActions {
             soloSlot = intent?.getIntExtra("soloSlot", 0) ?: 0,
             soloCount = intent?.getIntExtra("soloCount", 0) ?: 0,
         )
+        listenLag = null
         SessionService.run(this, satellitesOn)
         val started = Session(applicationContext, settings, satellitesOn)
         started.start()
@@ -119,6 +137,11 @@ class MainActivity : ComponentActivity(), BenchActions {
         state.satellites = on
         prefs.edit().putBoolean(KEY_SATELLITES, on).apply()
         if (on && !hasLocation()) askForSwitch.launch(locationPermissions) else satellitesInRun(on)
+    }
+
+    override fun setLocalTime(on: Boolean) {
+        state.localTime = on
+        prefs.edit().putBoolean(KEY_LOCAL_TIME, on).apply()
     }
 
     private fun satellitesInRun(on: Boolean) {
@@ -144,6 +167,51 @@ class MainActivity : ComponentActivity(), BenchActions {
         session?.nudge?.setPeriod(seconds, Session.nowBoot())
     }
 
+    override fun listen() {
+        val out = output()
+        val cal = savedCalibration(out) ?: tableCalibration(out)
+        if (cal.source != CalSource.NONE) { listenLag = cal.lagMs; state.lagSource = cal.source.name.lowercase() } else state.lagSource = "not measured"
+        startOrStop()
+    }
+
+    override fun output() = currentOutput(this)
+
+    override fun tableCalibration(o: AudioOutput) = LatencyTable.lookup(RouteKey(Build.MODEL, tableRoute(o)))
+
+    private fun tableRoute(o: AudioOutput) = if (o.external) o.key else "speaker"
+
+    override fun savedCalibration(o: AudioOutput): Calibration? {
+        val p = prefs.getString(KEY_CAL + o.key, null)?.split("|") ?: return null
+        val lag = p.getOrNull(0)?.toDoubleOrNull() ?: return null
+        return Calibration(lag, p.getOrNull(1)?.toDoubleOrNull() ?: 0.0, CalSource.EARCUP, p.getOrNull(2)?.toLongOrNull() ?: 0L)
+    }
+
+    override fun saveCalibration(o: AudioOutput, c: Calibration) {
+        prefs.edit().putString(KEY_CAL + o.key, "${c.lagMs}|${c.plusMinusMs}|${c.measuredUtcMs}").apply()
+    }
+
+    override fun earcupValue(pass: EarcupOutcome.Pass): Calibration {
+        val speaker = LatencyTable.lookup(RouteKey(Build.MODEL, "speaker"))
+        return Calibration(speaker.lagMs + pass.laterMs, speaker.plusMinusMs + 1.0 + pass.scatterMs, CalSource.EARCUP, System.currentTimeMillis())
+    }
+
+    override fun startEarcup(o: AudioOutput) {
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) beginEarcup(o)
+        else { earcupOutput = o; askForMic.launch(Manifest.permission.RECORD_AUDIO) }
+    }
+
+    private fun beginEarcup(o: AudioOutput) {
+        if (session != null || state.earcup != null) return
+        state.earcup = EarcupRun(applicationContext, o).also { it.start() }
+    }
+
+    override fun cancelEarcup() {
+        state.earcup?.cancel()
+        state.earcup = null
+    }
+
+    override fun resetEarcup() { state.earcup = null }
+
     private fun hasLocation() = checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
 
     private fun load() {
@@ -154,6 +222,7 @@ class MainActivity : ComponentActivity(), BenchActions {
         state.pitch = prefs.getString(KEY_PITCH, "2000") ?: "2000"
         state.lag = prefs.getString(KEY_LAG, "0") ?: "0"
         state.satellites = prefs.getBoolean(KEY_SATELLITES, true)
+        state.localTime = prefs.getBoolean(KEY_LOCAL_TIME, true)
         state.nudgeMode = if (prefs.getBoolean(KEY_NUDGE_MANUAL, false)) NudgeMode.MANUAL else NudgeMode.AUTO
         state.nudgePeriodS = prefs.getFloat(KEY_NUDGE_PERIOD, -1f).let { if (it > 0f) it.toDouble() else null }
     }
@@ -169,7 +238,7 @@ class MainActivity : ComponentActivity(), BenchActions {
             .apply()
     }
 
-    private enum class Page { NOW, BENCH, LOG, NUDGE }
+    private enum class Page { NOW, BENCH, LOG, NUDGE, SETTINGS, SIGNALS, CALIBRATION, EARCUP }
 
     companion object {
         /** Kept outside the activity, so a test run survives the screen being rebuilt. */
@@ -194,6 +263,8 @@ class MainActivity : ComponentActivity(), BenchActions {
         private const val KEY_LAG = "lag"
         private const val KEY_CHANNEL = "channel"
         private const val KEY_SATELLITES = "satellites"
+        private const val KEY_LOCAL_TIME = "localTime"
+        private const val KEY_CAL = "cal."
         private const val KEY_NUDGE_MANUAL = "nudgeManual"
         private const val KEY_NUDGE_PERIOD = "nudgePeriod"
     }
