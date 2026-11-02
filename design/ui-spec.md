@@ -1,4 +1,4 @@
-# UI spec (hand-off 05)
+# UI spec (hand-off 06)
 
 Field names come from Claude Code's "Fields that exist today" table in `feedback.md`, as of 1 Nov 2026. If one has been renamed since, use the new name.
 
@@ -55,7 +55,7 @@ Field names come from Claude Code's "Fields that exist today" table in `feedback
 | ARCHIVE · Storage bar | Rolling (accent) out of the limit, then Kept (`text`) as extra | Archive store | | later |
 | ARCHIVE · Open archive | A link | | Opens Archive | later |
 | DELIVERY · Download ahead on mobile data | A switch, on by default, with `About 72 MB an hour of listening` | A new setting | Off: downloads only on Wi-Fi | later |
-| DELIVERY · Share with nearby phones | A switch, with `Only on Wi-Fi, while charging and not playing` | A new setting | Default is a product decision (see the hand-off) | later |
+| DELIVERY · Share with other listeners | A switch, with `Only on Wi-Fi, while charging and not playing` | A new setting | On by default, set by the first-use prompt (see First use) | later |
 | DELIVERY · Sharing allowance | A storage figure, separate from the archive | A new setting | | later |
 | ADVANCED · Strict mode | A switch tagged `EVENTS ONLY`, off by default, plus a `My limit` slider (1–50 ms, default 5), dimmed while off | Not built (needs events) | Applies only inside an event, and can only tighten the event's own limit. On the radio it does nothing, and the caption says so. | later |
 
@@ -63,11 +63,11 @@ Field names come from Claude Code's "Fields that exist today" table in `feedback
 
 ![](screens/archive.png)
 
-**Archive rules (the user's decision, 2 Nov):**
+**Archive rules (the user's decisions, 2 Nov):**
 
 - **Keep modes:** Off (the default), Kept only, or Everything.
   - **Everything:** every file heard goes into a rolling archive capped by the size limit. When it's full, the oldest file that isn't kept is removed first (FIFO).
-  - **Keep overrides the limit:** a kept file is never removed and doesn't count toward the limit. It's shown as `extra`.
+  - **Keep overrides the limit (confirmed):** a kept file is never removed and doesn't count toward the limit. It's shown as `extra`.
   - **Kept only:** only files the listener keeps are stored, and the limit is disabled.
 - **Files, not cues:** what's kept is the published file, a single track or a whole set. Inside a set, Keep keeps the set.
 - **Joined part-way:** the rest of the file downloads on Wi-Fi, shown as `Finishing on Wi-Fi · n%`.
@@ -81,6 +81,24 @@ Field names come from Claude Code's "Fields that exist today" table in `feedback
 | Day groups | TODAY, then dates | File play times | Newest first | later |
 | Rows | Replay button, title, `artist · single`, `set, n tracks` or `show`, then `length · size · time heard` in mono; the keep mark on the right | Signed file record | Status line: `Playing now · track 9 of 14` (accent), `Finishing on Wi-Fi · 62%` (#5CE1FF), or `Oldest unkept · goes next` (muted) | later |
 | Replay bar | `REPLAY · NOT SYNCED` chip, title, play and pause, a scrubber with elapsed and remaining time | Offline playback | Replay can pause and seek, because it's off the timeline. Starting a replay stops live playback, and a later `Back to live` rejoins at the live point. Replay never touches flowtime. | later |
+
+## First use: sharing
+
+![](screens/first-use-sharing.png)
+
+The user's decision (2 Nov): on first use the listener chooses whether to share downloads with other listeners, and the default is on.
+
+| Element | Shows | States and taps |
+|---|---|---|
+| Sheet | A bottom sheet over Now playing, shown once at first launch, before any sharing starts | It must be answered: no swipe-away, and back doesn't dismiss it. Sharing never starts before the answer. |
+| Picture | Your phone in accent, linked to four outlined phones | Decorative, hidden from screen readers |
+| Title and body | `Pass the music on?`, then why it helps: everyone gets the music sooner, and the station needs fewer servers | |
+| Conditions | Three rows: only on Wi-Fi; only while charging and not playing; up to the sharing allowance, separate from the archive | The allowance shows the real current value |
+| Share with other listeners | Primary button: the default, with initial focus | Turns sharing on |
+| Not now | Secondary button | Leaves sharing off. Nothing asks again; Settings › Delivery can turn it on. |
+| Footnote | Only music files are shared; as with any peer-to-peer sharing, peers can see the phone's network address; how to change it later | This line must stay, because it's the honest part of the default |
+
+Peers are found across the network, not by distance, so the wording says **other listeners**, never "nearby".
 
 ## Badge states
 
