@@ -1,4 +1,4 @@
-# UI spec (hand-off 07)
+# UI spec (hand-off 08)
 
 Field names come from Claude Code's "Fields that exist today" table in `feedback.md`, as of 1 Nov 2026. If one has been renamed since, use the new name.
 
@@ -37,7 +37,7 @@ Field names come from Claude Code's "Fields that exist today" table in `feedback
 | Latest event | Time, lane mark and name, and one line of text, **directly under the badge** | `EventLog.latest()` | Tapping opens the Event log. A banner elsewhere links to its own event. | now |
 | Sync error budget | Bars on a log scale from 1 µs to 10 ms: flowtime, headphone lag, total, screenlag | `errAt` now; headphone-lag uncertainty and screenlag **later** | | partly |
 | Gap row | The rate nudge row: mode chip, the gap value, then two small lines (`gap · closes in 1.40 s` and `pitch +0.014%`) | `NudgeControl.gapAt`, `mode`, `secondsLeft`, `state.rate` | Opens Nudge control. The 60 s gap trace has left this screen to make room for the track; history belongs on Nudge control, **later**. | now |
-| Tiles | SOURCE, HEADPHONES, AHEAD (how much is downloaded ahead, in hours and minutes) | `FlowTime.chosen`, `GpsTime`, `Settings.lagMs`, download state (**later**) | SOURCE opens Time signals; HEADPHONES opens Headphone lag | partly |
+| Tiles | SOURCE, HEADPHONES, AHEAD (how much is downloaded ahead, in hours and minutes) | `FlowTime.chosen`, `GpsTime`, `Settings.lagMs`, download state (**later**) | SOURCE opens Time signals; HEADPHONES opens Headphone lag; AHEAD opens Buffer | partly |
 | Use satellites | A full-width row with a switch, never locked, one tap from the main screen. Shows `Position stays on this phone · off = Privacy mode`. | `GpsTime.active` | Off: the badge becomes Privacy mode. On: asks for location permission if needed; if refused, it returns to off. | now |
 
 ## Settings
@@ -117,6 +117,70 @@ The sharing row in Settings › Delivery. Sharing runs only on Wi-Fi, while char
 | Privacy mode (**parked**) | locked: dashed outline with a lock, `aria-disabled` | lock icon, `Off in Privacy mode`; the title in `textSecondary` | Satellites off. Sharing stops at once. No button to turn satellites on. The saved choice returns when satellites go back on. |
 
 In Settings the conditions line is the subtitle; in these states the status line takes its place while the switch is on or locked. Party windows need to come from the signed schedule (**later**); only the party option uses them.
+
+## Buffer
+
+![](screens/buffer.png)
+
+Opens from the AHEAD tile on Now playing. It shows the music around the playhead, everything downloaded ahead of it, the 1 s blocks arriving at the frontier, and where tracks and sets change.
+
+**One time axis** for this screen and every Buffer state, in a frame 390 wide (scale to the screen):
+
+| Zone | Time | x | Scale |
+|---|---|---|---|
+| Played | −5 s to now | 0–60 | 12 px a second |
+| Near | now to +12 s | 60–204 | 12 px a second, so each 1 s block is one 12 px tile |
+| Downloaded | +12 s to the frontier | 204–330 | log |
+| Not yet | the frontier to +24 h | 330–390 | log |
+
+Whenever the frontier is more than 12 s ahead it sits at x 330, so arriving blocks always have room to land. When it is within 12 s, the near zone shows it directly, and 204–390 becomes one log span to +24 h, all not yet. An axis break (`//`) marks where seconds turn to log. Axis labels: `−5 s`, `+5 s`, `+10 s`, then `1 m`, `10 m`, `1 h`, `6 h` where they fall short of the frontier, and `24 h` at the end.
+
+| Element | Shows | Source | Status |
+|---|---|---|---|
+| Track header | Set and track number, title, artist; BPM large on the right (mono) | File record and cue list; BPM **later** | partly |
+| Status chip | One of the Buffer states, words plus mark | Download state | later |
+| Set band | One pill per scheduled file (set, single or show), alternating two greys, named when 80 px or wider; dashed past the frontier | Signed schedule | later |
+| Playhead | A thin `text` line with a small marker, and flowtime above it in UK time (no local line here) | Flowtime | now |
+| Played | Four bars a second in `textMuted`, with no tile seams: played blocks are consumed | Waveform summary | later |
+| Near, downloaded | One tile per 1 s block, four accent bars each | Block store, waveform summary | later |
+| Downloaded, far | A loudness band in accent at 55% | Waveform summary | later |
+| Beat dots | One dot a beat under the near waveform, larger on the first beat of the bar | Beat grid | later |
+| Track and file lines | A track is a cut through the band plus a tick above it, drawn only 2 px or more from the last one. A new file is a full-height line at 50%. | Cue list, schedule | later |
+| Next track | Its countdown above its line (`2:41`) | Cue list | later |
+| Frontier | A dashed accent line, and `FRONTIER +6 h 12 m` top right | The first missing block on the timeline | later |
+| Not yet | A dashed rail out to +24 h | Schedule | later |
+| Blocks in flight | Tiles flying in from the right edge and shrinking onto the frontier, each with a fading trail. Solid: from the station (seed servers). Outline: from listeners. | Block arrivals, with source | later |
+| Legend | played, downloaded, not yet, from the station, from listeners | | |
+| Tiles | AHEAD (time to the frontier, then `no gaps` or `N gaps`), FILLING (arrival rate as a multiple of real time; `—` when steady), FROM STATION (share of this session's blocks, the rest from listeners) | Download state | later |
+| Up next | The next track in this set, then each scheduled file: countdown (`in m:ss` or `in h:mm:ss`), title, artist · kind · BPM, and `✓ ready` or `◐` with the percent downloaded. A short tick marks a track inside the current set; a filled square marks a new file. | Schedule, cue lists, block store | later |
+
+**Motion:**
+
+- **Full level:** redraw on every display frame (Choreographer), placed by flowtime at the frame's presentation time, the same as the clock. The music travels right to left into the playhead; the far zone drifts more slowly because it is log.
+- **Blocks in flight:** one tile per batch of arrivals, never one per block, with at most about eight on screen. Each flies for about 400 ms, easing out as it lands. More arrivals mean more tiles, up to the cap.
+- **Reduced level, or reduced motion:** step at 4 Hz, which moves exactly one bar per step. Tiles fade in at the frontier instead of flying.
+- **Minimal:** text only, once a second: the status, AHEAD and Up next.
+- **Cost:** draw from the waveform summary; never decode audio for the picture, and never touch the audio thread (lean timing path).
+
+**Needs from code:**
+
+1. **Waveform summary** per file: for example one peak every 250 ms, one byte each, about 14 KB an hour. The packager would make it at ingest and carry it in the signed file record, so the far zone works long before the audio is decoded.
+2. **BPM per track**, and a beat grid if possible, from the packager. This ties in with the open light-track question about beat detection. Until then, hide BPM and the beat dots.
+3. **Download state:** the frontier (the first missing block on the timeline), holes ahead of it, the arrival rate, and each block's source (station or listener).
+
+## Buffer states
+
+![](screens/buffer-states.png)
+
+| State | Chip | When | In the strip |
+|---|---|---|---|
+| Filling | ● accent, `Filling · 7 s ahead` (the time ahead) | Arriving faster than real time | Blocks flying in |
+| Full | ● accent, `Full · 24 h ahead` | The frontier has reached the end of the published schedule | About one block a second, as the station publishes |
+| Thin | ▲ amber, `Thin · 3 s ahead` | Under 10 s ahead and arriving slower than playback | Few or no blocks in flight |
+| Missing block | ▲ amber, `1 block missing · fetching` | A hole ahead of the frontier. It is fetched first. | A dashed amber tile. If it reaches the playhead, that second plays silent and the count carries on (playout step 6); the played zone then shows a flat red line marked `✕ SILENT`. |
+| Offline | ○ `textSecondary`, `Offline · plays for 6 h 12 m` | No station or listeners reachable | Nothing in flight; the downloaded music plays on in sync |
+
+When several apply, show the most urgent: Thin, then Missing block, then Offline, then Filling, then Full. The 10 s threshold is a starting value for the tests.
 
 ## Badge states
 
