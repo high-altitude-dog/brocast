@@ -1,4 +1,4 @@
-# UI spec (hand-off 03)
+# UI spec (hand-off 04)
 
 Field names come from Claude Code's "Fields that exist today" table in `feedback.md`, as of 1 Nov 2026. If one has been renamed since, use the new name.
 
@@ -13,7 +13,8 @@ Field names come from Claude Code's "Fields that exist today" table in `feedback
 - **Sync error:** the figure shown to the listener is `errAt(boot)` plus the absolute held gap (`NudgeControl.gapAt`). It will add the headphone-lag uncertainty **later**. Every ± in a badge is this number.
 - **Flowtime error and stream gap are separate.** Never add them together on screen, except in the badge figure above.
 - **Times** come from flowtime, never the system clock. Show `--:--:--` before there is a time source. The main clock and the event log show UK time (`Europe/London`, GMT or BST), branded **Teddington · Greenwich**. Local time sits beneath, using only the phone's time-zone setting, never its clock. Hide it when its offset equals UK time's. CSV logs stay in UTC ns.
-- **Tightening** (see Badge states) appears only when `EventDetector.tighteningFromNs` reports an improvement of at least 20% sustained for 10 s. Smaller changes update quietly, with no animation.
+- **Tightening** (see Badge states) appears once the error estimate has improved by at least 20% for 10 s, and stays for 10 s (Claude Code's `tighteningFromNs` behaviour, 2 Nov). Smaller changes update quietly, with no animation. When both figures share a unit, the unit is written once (`±11.4 → ±8.20 ms`); otherwise both are written out (`±11.4 ms → ±400 µs`).
+- **Track names** (title, artist, set or show) come from the stream, stamped by sample number. They switch when the new track's first sample reaches the ear (start + n / 48 kHz + D), never when the name arrives, so the name changes with the music. With no track name, show the set or show; with neither, show the station or event, with `Live` as the second line. Show the progress line only when the stream gives the track's start and length.
 - **Screen levels** (Full, Reduced, Minimal, Off): see the last section. Every screen follows them.
 - **Accessibility:** use words and a mark, never colour alone. Every tappable item is at least 44 × 44. Respect reduced motion: no sweep and no glow pulse. Screen-reader labels match the visible words.
 
@@ -25,15 +26,15 @@ Field names come from Claude Code's "Fields that exist today" table in `feedback
 
 | Element | Shows | Source | States and taps | Status |
 |---|---|---|---|---|
-| Header | Event or station name, `Live · D 60 s` | `StreamClient.manifest.dMs`; the name is **later** | Icon buttons (44 × 44) for Time signals, Headphone lag and Settings | now |
+| Header | Station or event name (eyebrow), `Live · D 60 s` | `StreamClient.manifest.dMs`; the name is **later** | Icon buttons (44 × 44) for Time signals, Headphone lag and Settings | now |
+| Now playing | Track title (20 px, bold, one line), `artist · set` (13 px, `textSecondary`), and a thin progress line with elapsed and remaining time | Stream track metadata (**later**; the prototype can show the manifest `source`) | Follows the Track names rule. Long names end with an ellipsis. | later |
 | Brocast clock | A dial. Along the top of the bezel, curved: `TEDDINGTON · GREENWICH`, with an accent meridian tick at 12 o'clock between the two names. Inside: the zone (GMT or BST), HH:MM:SS large, the fraction to the ns (digits finer than the error in `faded`), then local time beneath (`23:43:51 CET · local`). Along the bottom of the bezel, curved: `FLOWTIME ±error` in accent. | `FlowTime.fit().utcAt(boot)` at the frame's presentation time; `ZoneId.of("Europe/London")`; `ZoneId.systemDefault()` for the local line | Local line hidden when its offset equals UK time's. Screenlag correction is **later**. Draw the curved text with `drawTextOnPath`, or the Compose equivalent. | now |
 | Second sweep | An arc that fills once per flowtime second | The fraction of the current second | Off at Reduced level and with reduced motion | now |
 | Precision ring | A glow whose width shows the sync error on the budget's log scale; its figure is on the bottom bezel | Sync error | | now |
 | Sync badge | Words, the ± figure and the source | See Badge states | Tapping opens the error budget detail | now |
 | Latest event | Time, lane mark and name, and one line of text, **directly under the badge** | `EventLog.latest()` | Tapping opens the Event log. A banner elsewhere links to its own event. | now |
 | Sync error budget | Bars on a log scale from 1 µs to 10 ms: flowtime, headphone lag, total, screenlag | `errAt` now; headphone-lag uncertainty and screenlag **later** | | partly |
-| Stream gap card | Header: the gap now and whether it's closing. Trace: the last 60 s of gap. | `NudgeControl.gapAt`; the trace needs history, which is **later** | | partly |
-| Gap footer | Mode chip (AUTO or MANUAL), time left and pitch change | `NudgeControl.mode`, `secondsLeft`, `state.rate` | Tapping opens Nudge control | now |
+| Gap row | The rate nudge row: mode chip, the gap value, then two small lines (`gap · closes in 1.40 s` and `pitch +0.014%`) | `NudgeControl.gapAt`, `mode`, `secondsLeft`, `state.rate` | Opens Nudge control. The 60 s gap trace has left this screen to make room for the track; history belongs on Nudge control, **later**. | now |
 | Tiles | SOURCE, HEADPHONES, BUFFER (seconds in hand out of D) | `FlowTime.chosen`, `GpsTime`, `Settings.lagMs`, `StreamClient.buffered` | SOURCE opens Time signals; HEADPHONES opens Headphone lag | now |
 | Use satellites | A full-width row with a switch, never locked, one tap from the main screen. Shows `Position stays on this phone · off = Privacy mode`. | `GpsTime.active` | Off: the badge becomes Privacy mode. On: asks for location permission if needed; if refused, it returns to off. | now |
 
@@ -135,15 +136,16 @@ Android draws all three from one `MediaSession` and its media notification. The 
 
 | Slot | Content | Source | Updates |
 |---|---|---|---|
-| Title (`METADATA_KEY_TITLE`) | The station or event name, for example `Beach Sync Radio` | Event or station; **later** | On change |
-| Subtitle (`METADATA_KEY_ARTIST`) | Badge words, the ± figure and the source, for example `In sync ±3.2 ms · GPS` or `Privacy mode ±6.2 ms · NTP` | The badge state and sync error | Only under the redraw rule below |
+| Title (`METADATA_KEY_TITLE`) | The track, for example `Sundown Tide`; falls back as in the Track names rule | Stream track metadata | At heard time (Track names rule) |
+| Subtitle (`METADATA_KEY_ARTIST`) | `artist · set`, for example `Mara Okoye · Golden Hour Set` | Stream track metadata | At heard time |
+| Album (`METADATA_KEY_ALBUM`) | Badge words, the ± figure and the source, for example `In sync ±3.2 ms · GPS`. Car and watch displays show it. | The badge state and sync error | Only under the redraw rule below |
 | Artwork (`METADATA_KEY_ART`) | A 512 × 512 state tile, rendered by the app (`screens/notification-art.png`) | Badge state, ± figure | Only under the redraw rule |
 | Playback state | `STATE_PLAYING` or `STATE_STOPPED`; no duration, so no seek bar | `Playout.state` | On change |
 | Main button | Stop or Play. Play rejoins the live point at D; there's no pause. | | |
 | Custom action 1 | **Use satellites:** icon on (Material Symbols `satellite_alt`) or off (the same icon crossed through). Label `Satellites on` or `Satellites off (Privacy mode)`. | `GpsTime.active` | On change |
 | Content intent | Opens Now playing | | |
 
-**Redraw rule:** update the subtitle and artwork only when the badge state changes, or when the ± figure moves a step (1, 2, 5, 10, 20 ms) and holds it for 10 s. Never update every second.
+**Redraw rule:** update the album text and artwork only when the badge state changes, or when the ± figure moves a step (1, 2, 5, 10, 20 ms) and holds it for 10 s. Never update every second.
 
 **Artwork tile:** a dark ground (`bg`), the tick ring, the meridian tick and the `TEDDINGTON · GREENWICH` bezel, a static arc, the state mark, the state word, and the ± figure. Use the state's colour from `tokens.color.status`. Keep everything that matters in the middle 60%, because Android crops it and lays a scrim over it. Privacy mode is neutral at any error. Not in sync has no arc.
 
@@ -159,9 +161,9 @@ Android draws all three from one `MediaSession` and its media notification. The 
 | Start / Stop | START RUN: filled accent with dark text and a ▶. STOP RUN: a `text` outline with a ■. Both 52 high and full width. |
 | Settings | 100% opacity and editable while stopped; 55% and locked while running. Use satellites is never locked. |
 | Satellites switch, off | Track: a 1.5 px outline in `faint`; thumb: 18 px in `muted`, on the left. On: an accent track with a 22 px thumb in `bg`, on the right. The same on every screen. |
-| Rate nudge row | A 44 px row under the latest event: a mode chip (AUTO outlined in `faint`; MANUAL outlined and lettered in accent), then `gap · closes in · pitch`, or `gap · paused`, then `Nudge ›`. Opens Nudge control. |
+| Rate nudge row | A 48 px row: the mode chip (AUTO outlined in `faint`; MANUAL outlined and lettered in accent), the gap value in 14 px mono, two 11 px lines (`gap · closes in 1.40 s` over `pitch +0.014%`; Manual and paused: `gap · paused` over `period 20 s`), then a chevron. No gap: the value reads `in step` in `muted`, with no small lines. Opens Nudge control. The same row appears on Now playing. |
 | STREAM row | Stream mode only, after PLAYOUT: newest segment, seconds buffered, fetch errors, server−flowtime |
-| Error lines | One extra line under the row, in `warn` with ▲, cut to one line. Tapping it opens the event log for that lane. Applies to OUTPUT, NTP and STREAM. |
+| Error lines | One extra line under the row, in `warn` with ▲, cut to one line. The **whole status row** (label, value and error line) is the tap target, at least 44 px tall. It opens the event log at that row's lane: OUTPUT opens AUDIO, NTP and STREAM open NET. The row always shows the latest error text. If the text changes while the error continues, the log adds a line (`still failing: …`). |
 | Tightening | One line under the source detail in the flowtime card: `TIGHTENING` in accent, then `±from → ±to` in `muted` mono. Only under the tightening rule. |
 
 ---

@@ -37,26 +37,34 @@ body{margin:0;background:#0A0C0F}
     <div style="background: #12161B; border: 1px solid #222932; border-radius: 12px; display: flex; align-items: center; justify-content: space-between; padding: 4px 4px 4px 12px"><span style="font-size: 13px; color: #C4CBD2">Off · Privacy mode</span><span style="width: 52px; height: 44px; display: flex; align-items: center; justify-content: center"><span style="width: 46px; height: 26px; border-radius: 13px; border: 1.5px solid #4A5562; display: flex; align-items: center; padding: 2px; box-sizing: border-box"><span style="width: 18px; height: 18px; border-radius: 50%; background: #8B95A1"></span></span></span></div>
   </div>
 
-  <span style="font-size: 10.5px; letter-spacing: 0.16em; color: #8B95A1; margin-top: 4px">RATE NUDGE ROW · UNDER THE LATEST EVENT</span>
-  <a href="nudge-control.html" style="text-decoration: none; color: #ECEFF2; min-height: 44px; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: center; background: #12161B; border: 1px solid #222932; border-radius: 12px; padding: 0 12px; font-size: 12.5px">
-    <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.12em; padding: 3px 8px; border-radius: 6px; border: 1px solid #4A5562">AUTO</span>
-    <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis">gap <span style="font-family: 'JetBrains Mono', ui-monospace, monospace">0.2 ms</span> · closes in <span style="font-family: 'JetBrains Mono', ui-monospace, monospace">1.4 s</span> · <span style="font-family: 'JetBrains Mono', ui-monospace, monospace">+0.01%</span></span>
-    <span style="font-size: 12px; color: #8B95A1">Nudge ›</span>
-  </a>
-  <a href="nudge-control.html" style="text-decoration: none; color: #ECEFF2; min-height: 44px; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: center; background: #12161B; border: 1px solid #222932; border-radius: 12px; padding: 0 12px; font-size: 12.5px">
-    <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.12em; padding: 3px 8px; border-radius: 6px; border: 1px solid #C8FF4D; color: #C8FF4D">MANUAL</span>
-    <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis">gap <span style="font-family: 'JetBrains Mono', ui-monospace, monospace">5.0 ms</span> · paused</span>
-    <span style="font-size: 12px; color: #8B95A1">Nudge ›</span>
-  </a>
+  <span style="font-size: 10.5px; letter-spacing: 0.16em; color: #8B95A1; margin-top: 4px">RATE NUDGE ROW · AUTO, MANUAL, NO GAP</span>
+  <a href="nudge-control.html" aria-label="Gap 0.20 milliseconds, Auto" style="text-decoration: none; color: #ECEFF2; min-height: 48px; display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto; gap: 10px; align-items: center; background: #12161B; border: 1px solid #222932; border-radius: 12px; padding: 0 12px;">
+      <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.12em; padding: 3px 8px; border-radius: 6px; border: 1px solid #4A5562">AUTO</span>
+      <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 14px; font-weight: 600">0.20 ms</span>
+      <span style="display: flex; flex-direction: column; gap: 1px; min-width: 0; font-size: 11px; color: #8B95A1"><span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis">gap · closes in 1.40 s</span><span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis">pitch +0.014%</span></span>
+      <span style="display: flex; align-items: center; color: #8B95A1"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 5l7 7-7 7"></path></svg></span>
+    </a>
+  <a href="nudge-control.html" aria-label="Gap 5 milliseconds, Manual, paused" style="text-decoration: none; color: #ECEFF2; min-height: 48px; display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto; gap: 10px; align-items: center; background: #12161B; border: 1px solid #222932; border-radius: 12px; padding: 0 12px;">
+      <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.12em; padding: 3px 8px; border-radius: 6px; border: 1px solid #C8FF4D; color: #C8FF4D">MANUAL</span>
+      <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 14px; font-weight: 600">5.00 ms</span>
+      <span style="display: flex; flex-direction: column; gap: 1px; min-width: 0; font-size: 11px; color: #8B95A1"><span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis">gap · paused</span><span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis">period 20 s</span></span>
+      <span style="display: flex; align-items: center; color: #8B95A1"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 5l7 7-7 7"></path></svg></span>
+    </a>
+  <a href="nudge-control.html" aria-label="No gap, Auto" style="text-decoration: none; color: #ECEFF2; min-height: 48px; display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto; gap: 10px; align-items: center; background: #12161B; border: 1px solid #222932; border-radius: 12px; padding: 0 12px;">
+      <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.12em; padding: 3px 8px; border-radius: 6px; border: 1px solid #4A5562">AUTO</span>
+      <span style="font-size: 13px; color: #8B95A1">in step</span>
+      <span></span>
+      <span style="display: flex; align-items: center; color: #8B95A1"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 5l7 7-7 7"></path></svg></span>
+    </a>
 
   <span style="font-size: 10.5px; letter-spacing: 0.16em; color: #8B95A1; margin-top: 4px">STATUS GRID · STREAM ROW AND ERROR LINES</span>
   <div style="background: #12161B; border: 1px solid #222932; border-radius: 12px; border-radius: 14px; padding: 9px 14px; display: grid; grid-template-columns: 58px minmax(0, 1fr); gap: 5px 10px; font-size: 11.5px; align-items: baseline">
     <span style="font-size: 10px; letter-spacing: 0.14em; color: #8B95A1">STREAM</span>
     <span>#<span style="font-family: 'JetBrains Mono', ui-monospace, monospace">2911</span> · <span style="font-family: 'JetBrains Mono', ui-monospace, monospace">60 s</span> buffered · <span style="font-family: 'JetBrains Mono', ui-monospace, monospace">0</span> errors · server−flow <span style="font-family: 'JetBrains Mono', ui-monospace, monospace">+3.1 ms</span></span>
     <span style="font-size: 10px; letter-spacing: 0.14em; color: #8B95A1">NTP</span>
-    <span style="display: flex; flex-direction: column; gap: 2px"><span>ntp1.npl S1 · rtt <span style="font-family: 'JetBrains Mono', ui-monospace, monospace">24 ms</span> · NTP−GPS <span style="font-family: 'JetBrains Mono', ui-monospace, monospace">−1.2 ms</span></span><a href="event-log.html" style="color: #FFB547; text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-height: 22px; display: block">▲ ntp2.npl.co.uk: timed out after 2 s, retrying ntp3…</a></span>
+    <span style="display: flex; flex-direction: column; justify-content: center; gap: 2px; min-height: 44px"><span>ntp1.npl S1 · rtt <span style="font-family: 'JetBrains Mono', ui-monospace, monospace">24 ms</span> · NTP−GPS <span style="font-family: 'JetBrains Mono', ui-monospace, monospace">−1.2 ms</span></span><a href="event-log.html" style="color: #FFB547; text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block">▲ ntp2.npl.co.uk: timed out after 2 s, retrying ntp3…</a></span>
   </div>
-  <span style="font-size: 11px; color: #8B95A1">Stream mode adds the STREAM row after PLAYOUT. An error takes one extra line in amber with ▲, cut to one line; tap it for the full text in the event log.</span>
+  <span style="font-size: 11px; color: #8B95A1">Stream mode adds the STREAM row after PLAYOUT. An error adds one amber line with ▲. The whole row, at least 44 px tall, opens the event log at that lane.</span>
 
   <span style="font-size: 10.5px; letter-spacing: 0.16em; color: #8B95A1; margin-top: 4px">TIGHTENING · IN THE FLOWTIME CARD</span>
   <div style="background: #12161B; border: 1px solid #222932; border-radius: 12px; border-radius: 14px; padding: 10px 14px; display: flex; flex-direction: column; gap: 2px; align-items: flex-end">
