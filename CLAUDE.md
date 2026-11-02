@@ -79,12 +79,17 @@ To keep tokens low:
 | `android/.../GpsTime.kt` | GnssClock → UTC−boot samples, with full tracking on |
 | `android/.../NtpClient.kt` | SNTP to `ntp1`–`ntp3.npl.co.uk` every 16 s; `parseNtp` is pure |
 | `android/.../StreamClient.kt` | Manifest and segment fetch into a lock-free ring |
+| `android/.../FetchPlan.kt` | Which segment to fetch next, skipping any that can't arrive in time. Plain Kotlin, tested in `simtest/`. |
+| `android/.../Calibration.kt` | The arithmetic for the latency table, earcup test and two-phone handshake. Plain Kotlin, tested in `simtest/`. Nothing in the app uses it yet. |
 | `android/.../Session.kt` | One test run: wiring, the status panel, CSV logs |
+| `android/.../SessionService.kt` | The foreground service that keeps a run alive off screen, with a plain notice and a Stop button. Never touches the audio thread. The designed media notification isn't built yet. |
 | `android/.../Events.kt` | The plain event log: detects changes in the app's counters on a low-priority thread, never the audio thread. Plain Kotlin, tested in `simtest/`. |
 | `android/.../MainActivity.kt` | The screen |
 | `server/beachsync_server.py` | The stream server (stdlib only). `--clicks` or `--source FILE` (needs ffmpeg). `--library DIR` plays what the upload page has put on air. Serves `/manifest.json` and `/seg/<n>.pcm`. |
 | `server/brocast_admin.py` | The upload page for test sets (stdlib, needs ffmpeg). No password, so only ever behind an SSH tunnel. `server/test_library.py` tests it with the stream server. |
 | `measure/beachsync_measure.py` | Analyses a WAV recording (numpy). Modes: `ticks-stereo`, `ticks-tones`, `music-stereo`. |
+| `measure/quicktest.py` | The acoustic two-phone test as one command: use this first. Phones stay silent until the test, then tick for about 10 s at five pitches, giving the gap at each. It logs to `measure/results.csv`, which git ignores. `measure/test_pattern.py` tests its analysis. |
+| `android/.../TickWindowReceiver.kt` | Starts and stops the tick pattern's sound over adb, for `quicktest.py`. Only adb can send it. |
 | `simtest/SimTest.kt` | Desktop tests of the pure timing code. The commands are in its header. |
 | `README.md` | The human test guide, from build to results |
 
@@ -103,6 +108,9 @@ Since then, on this machine, on the `prototype-queue` branch:
 
 - `./gradlew assembleDebug` builds, and `simtest` passes 99 checks. `simtest` needs `Events.kt` and `Nudge.kt` too; screens need Gradle, because of the Compose plugin.
 - `simtest` now settles at about 2.5 µs with a 3 s tracking period, and about 7 µs rms with ±200 µs of stamp jitter.
+- Real music ran from the test server to the Pixel for 36 minutes on 2 Nov 2026, before the foreground service existed. Leaving the app froze it, and walking out of Wi-Fi range caused two silences of about 2 minutes.
+
+- An acoustic tick test on 2 Nov 2026, through both speakers beside a laptop microphone, on GPS at ±0.2 ms with no lag set, found the Galaxy about 19 ms behind the Pixel and steady to about 0.15 ms. Swapping the pitches flipped the sign. The speaker path is the likely cause, but that isn't proven yet.
 
 What's never been done:
 

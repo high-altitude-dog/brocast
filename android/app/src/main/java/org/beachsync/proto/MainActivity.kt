@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.media.AudioManager
+import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
@@ -29,18 +30,20 @@ class MainActivity : ComponentActivity(), BenchActions {
 
     private val locationPermissions = arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
 
-    private val askForStart = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
-        val granted = result[Manifest.permission.ACCESS_FINE_LOCATION] == true
-        if (!granted) satellitesOff()
-        begin(granted)
+    private val runStopped: () -> Unit = { state.session = null }
+
+    private val askForStart = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+        if (state.satellites && !hasLocation()) satellitesOff()
+        begin(state.satellites)
     }
 
     private val askForSwitch = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
-        if (result[Manifest.permission.ACCESS_FINE_LOCATION] == true) session?.setSatellites(true) else satellitesOff()
+        if (result[Manifest.permission.ACCESS_FINE_LOCATION] == true) satellitesInRun(true) else satellitesOff()
     }
 
     override fun onCreate(saved: Bundle?) {
         super.onCreate(saved)
+        onRunStopped = runStopped
         // The app is always dark, so the bars' icons stay light whatever the phone's own theme is.
         enableEdgeToEdge(SystemBarStyle.dark(Color.TRANSPARENT), SystemBarStyle.dark(Color.TRANSPARENT))
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -60,16 +63,25 @@ class MainActivity : ComponentActivity(), BenchActions {
         }
     }
 
+    override fun onDestroy() {
+        if (onRunStopped === runStopped) onRunStopped = null
+        super.onDestroy()
+    }
+
     override fun startOrStop() {
-        val running = session
-        if (running != null) {
-            running.stop()
-            session = null
-            state.session = null
+        if (session != null) {
+            stopRun()
+            SessionService.end(this)
             return
         }
         save()
-        if (state.satellites && !hasLocation()) askForStart.launch(locationPermissions) else begin(state.satellites)
+        val ask = ArrayList<String>()
+        if (state.satellites && !hasLocation()) ask.addAll(locationPermissions)
+        // Saying no only hides the notice: the run still stays alive off screen.
+        if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            ask.add(Manifest.permission.POST_NOTIFICATIONS)
+        }
+        if (ask.isEmpty()) begin(state.satellites) else askForStart.launch(ask.toTypedArray())
     }
 
     private fun begin(satellitesOn: Boolean) {
@@ -82,8 +94,14 @@ class MainActivity : ComponentActivity(), BenchActions {
             channel = state.channel,
             nudgeMode = state.nudgeMode,
             nudgePeriodS = state.nudgePeriodS,
+            // Only measure/quicktest.py sets this, for the launch it starts. It isn't saved, so a run from the screen never gets it.
+            tickPattern = when (intent?.getStringExtra("tickPattern")) { "A" -> Renderer.PATTERN_A; "B" -> Renderer.PATTERN_B; else -> Renderer.PATTERN_OFF },
+            // The same goes for these, from measure/musictest.py.
+            soloSlot = intent?.getIntExtra("soloSlot", 0) ?: 0,
+            soloCount = intent?.getIntExtra("soloCount", 0) ?: 0,
         )
-        val started = Session(this, settings, satellitesOn)
+        SessionService.run(this, satellitesOn)
+        val started = Session(applicationContext, settings, satellitesOn)
         started.start()
         session = started
         eventLog = started.events
@@ -95,7 +113,13 @@ class MainActivity : ComponentActivity(), BenchActions {
     override fun setSatellites(on: Boolean) {
         state.satellites = on
         prefs.edit().putBoolean(KEY_SATELLITES, on).apply()
-        if (on && !hasLocation()) askForSwitch.launch(locationPermissions) else session?.setSatellites(on)
+        if (on && !hasLocation()) askForSwitch.launch(locationPermissions) else satellitesInRun(on)
+    }
+
+    private fun satellitesInRun(on: Boolean) {
+        val running = session ?: return
+        SessionService.run(this, on)
+        running.setSatellites(on)
     }
 
     private fun satellitesOff() {
@@ -148,6 +172,15 @@ class MainActivity : ComponentActivity(), BenchActions {
 
         /** The latest run's events, kept so they can still be read after Stop. */
         var eventLog: EventLog? = null
+
+        /** Tells a live screen that the run stopped, including from the notification's Stop button. */
+        private var onRunStopped: (() -> Unit)? = null
+
+        fun stopRun() {
+            session?.stop()
+            session = null
+            onRunStopped?.invoke()
+        }
 
         private const val KEY_URL = "url"
         private const val KEY_STREAM = "stream"

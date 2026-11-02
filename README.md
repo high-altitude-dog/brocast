@@ -154,18 +154,29 @@ Send them to Claude with the `t*.csv` files from the measure script.
 
 ## Without an interface: the acoustic test
 
-1. Set phone A's **Tick pitch** to 1000 Hz and phone B's to 3000 Hz. Use tick mode with no adapters, so each phone plays through its own speaker.
+The quick way needs both phones on USB, either side of the centre of the laptop's screen and level with each other, facing it. The phones stay silent while they get a GPS lock, then click for about 10 s. Both play the same pitch, phone B 60 ms after phone A, and the pitch steps through 500, 1000, 2000, 4000 and 8000 Hz. So the clicks never overlap, the order says which phone is which, and the result shows the gap at each pitch. It only tells the phones apart at gaps under 30 ms. With a two-microphone laptop, averaging both microphones cancels the difference in distance too.
+
+```bash
+python3 measure/quicktest.py --prepare   # silent: start the phones and wait for GPS
+python3 measure/quicktest.py             # 10 s countdown, recording starts, about 10 s of ticks, silence, then the gap at each pitch
+python3 measure/quicktest.py --finish    # end the runs when you're done
+python3 measure/test_pattern.py          # tests the analysis on synthetic recordings
+```
+
+By hand, one click a second:
+
+1. Set phone A's **Tick pitch** to 1000 Hz and phone B's to 2500 Hz. Don't use 3000 Hz: it's the third harmonic of 1000 Hz, so a loud phone can be measured against itself and the gap reads close to zero. Use tick mode with no adapters, so each phone plays through its own speaker.
 2. Place the phones side by side, the same distance (about 30 cm) from the computer's microphone, in a quiet room.
 3. Record and analyse:
 
 ```bash
 arecord -f S16_LE -r 48000 -c 1 -d 120 tones.wav
-python3 measure/beachsync_measure.py ticks-tones tones.wav --fa 1000 --fb 3000
+python3 measure/beachsync_measure.py ticks-tones tones.wav --fa 1000 --fb 2500
 ```
 
 Sound takes 29 µs to travel each centimetre, so precision depends on the distances being equal. If phone B is further from the microphone, pass the extra distance with `--extra-b-cm`.
 
-The same works in **stream mode**, which tests the whole stream path (segment fetch, ring, position and rate nudge). Start the server with `--clicks-split`, which sends a 1000 Hz click on the left channel and a 3000 Hz click on the right. Set both phones to **Stream**, phone A's **Stream channel** to **Left** and phone B's to **Right**, then record and analyse exactly as above. Music (tests 4 and 5) still needs the interface.
+The same works in **stream mode**, which tests the whole stream path (segment fetch, ring, position and rate nudge). Start the server with `--clicks-split`, which sends a 1000 Hz click on the left channel and a 2500 Hz click on the right. Set both phones to **Stream**, phone A's **Stream channel** to **Left** and phone B's to **Right**, then record and analyse exactly as above. Music (tests 4 and 5) still needs the interface.
 
 ## What the test bench shows
 

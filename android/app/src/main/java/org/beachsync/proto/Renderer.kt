@@ -21,7 +21,10 @@ fun interface SegmentSource {
  * [channel] picks what stream mode plays: [BOTH] as sent, or only [LEFT] or [RIGHT] on both outputs. The
  * acoustic test uses one each, so a single microphone can tell two phones apart by the pitch of each channel.
  */
-class Renderer(private val clickHz: Double, private val source: SegmentSource?, private val channel: Int = BOTH) {
+class Renderer(
+    private val clickHz: Double, private val source: SegmentSource?, private val channel: Int = BOTH,
+    private val tickPattern: Int = PATTERN_OFF, private val soloSlot: Int = 0, private val soloCount: Int = 0,
+) {
     var pos = Double.NaN          // stream position (in samples) of the next frame to write
         private set
     var ratio = 1.0               // stream samples per output frame: 1 plus or minus the nudge
@@ -32,6 +35,8 @@ class Renderer(private val clickHz: Double, private val source: SegmentSource?, 
         private set
     var missingFrames = 0L
         private set
+    @Volatile var tickFromUtc = Long.MAX_VALUE    // the tick pattern's sounding window; silent until something sets it
+    @Volatile var tickUntilUtc = Long.MIN_VALUE
     private var integral = 0.0
     private var segN = Long.MIN_VALUE
     private var seg: ShortArray? = null
@@ -40,11 +45,33 @@ class Renderer(private val clickHz: Double, private val source: SegmentSource?, 
 
     /** Tick mode: a 5 ms tone burst starting exactly on every whole second of flowtime, as heard. */
     fun ticks(buf: FloatArray, frames: Int, earUtc0: Long) {
+        if (tickPattern != PATTERN_OFF) return patternTicks(buf, frames, earUtc0)
         val phase0 = Math.floorMod(earUtc0, NS_PER_S).toDouble()
         for (i in 0 until frames) {
             var t = phase0 + i * NS_PER_FRAME
             if (t >= 1e9) t -= 1e9
             val v = click(t, clickHz)
+            buf[2 * i] = v
+            buf[2 * i + 1] = v
+        }
+    }
+
+    /**
+     * The quick acoustic test (measure/quicktest.py): a click every [PATTERN_SLOT_NS] of flowtime, stepping through
+     * [PATTERN_HZ]. Both phones play the same pitch, with phone B [PATTERN_STAGGER_NS] after phone A, so the clicks never
+     * overlap, the order says which phone is which, and the recording shows the gap at each pitch. It stays silent
+     * outside the window [tickFromUtc, tickUntilUtc) in flowtime, so a phone can hold its GPS lock quietly until the test starts.
+     */
+    private fun patternTicks(buf: FloatArray, frames: Int, earUtc0: Long) {
+        if (earUtc0 < tickFromUtc || earUtc0 >= tickUntilUtc) return silence(buf, frames)
+        val cycle = PATTERN_SLOT_NS * PATTERN_HZ.size
+        val stagger = if (tickPattern == PATTERN_B) PATTERN_STAGGER_NS else 0L
+        val phase0 = Math.floorMod(earUtc0 - stagger, cycle).toDouble()
+        for (i in 0 until frames) {
+            var t = phase0 + i * NS_PER_FRAME
+            if (t >= cycle) t -= cycle
+            val slot = (t / PATTERN_SLOT_NS).toInt()
+            val v = click(t - slot * PATTERN_SLOT_NS, PATTERN_HZ[slot])
             buf[2 * i] = v
             buf[2 * i + 1] = v
         }
@@ -88,6 +115,31 @@ class Renderer(private val clickHz: Double, private val source: SegmentSource?, 
             p += ratio
         }
         pos = p
+        if (soloCount > 0) soloGate(buf, frames, earUtc0)
+    }
+
+    /**
+     * The music test (measure/musictest.py): phones take turns to be heard, each for [SOLO_WINDOW_NS], then all are silent
+     * for [SOLO_SILENCE_NS], which marks where the turns start. It only changes the level after rendering, so the stream's
+     * position and the rate nudge carry on exactly as in normal playback. Off unless [soloCount] is set, and silent outside
+     * the window [tickFromUtc, tickUntilUtc), so a phone can buffer and hold its GPS lock quietly until the test starts.
+     */
+    private fun soloGate(buf: FloatArray, frames: Int, earUtc0: Long) {
+        if (earUtc0 < tickFromUtc || earUtc0 >= tickUntilUtc) return silence(buf, frames)
+        val cycle = SOLO_WINDOW_NS * soloCount + SOLO_SILENCE_NS
+        val from = (soloSlot * SOLO_WINDOW_NS).toDouble()
+        val phase0 = Math.floorMod(earUtc0, cycle).toDouble()
+        for (i in 0 until frames) {
+            var t = phase0 + i * NS_PER_FRAME
+            if (t >= cycle) t -= cycle
+            val d = t - from
+            val gain = if (d < 0.0 || d >= SOLO_WINDOW_NS) 0f else {
+                val edge = min(d, SOLO_WINDOW_NS - d)
+                if (edge >= SOLO_FADE_NS) 1f else (0.5 - 0.5 * cos(PI * edge / SOLO_FADE_NS)).toFloat()
+            }
+            buf[2 * i] *= gain
+            buf[2 * i + 1] *= gain
+        }
     }
 
     fun silence(buf: FloatArray, frames: Int) { java.util.Arrays.fill(buf, 0, 2 * frames, 0f) }
@@ -103,6 +155,16 @@ class Renderer(private val clickHz: Double, private val source: SegmentSource?, 
         const val BOTH = 0
         const val LEFT = 1
         const val RIGHT = 2
+        const val PATTERN_OFF = 0
+        const val PATTERN_A = 1
+        const val PATTERN_B = 2
+        const val PATTERN_SLOT_NS = 200_000_000L
+        const val SOLO_WINDOW_NS = 400_000_000L
+        const val SOLO_SILENCE_NS = 200_000_000L
+        private const val SOLO_FADE_NS = 10_000_000.0
+        const val PATTERN_STAGGER_NS = 60_000_000L
+        private val PATTERN_HZ = doubleArrayOf(500.0, 1000.0, 2000.0, 4000.0, 8000.0)
+        val patternHz: List<Double> get() = PATTERN_HZ.toList()     // for tests; never called from the audio thread
         const val RATE = 48000
         const val RATE_L = 48000L
         const val NS_PER_S = 1_000_000_000L

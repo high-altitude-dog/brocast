@@ -61,6 +61,11 @@ class EventDetector {
     private var underruns = 0
     private var jumps = 0
     private var missingFrames = 0L
+    private var silent = false
+    private var silentSince = 0L
+    private var silentLast = 0L
+    private var silentFrames = 0L
+    private var silentReadings = 0
     private var fetchFailing = false
     private var fetchSince = 0L
     private var fetchErrorsAtStart = 0
@@ -131,8 +136,19 @@ class EventDetector {
             add(Lane.AUDIO, "Jump: more than 20 ms out, moved straight to the right point (×${r.jumps - jumps})")
         }
         jumps = r.jumps
+        // One line when a silence starts, and one when it ends if it lasted more than a single reading.
         if (r.missingFrames > missingFrames) {
-            add(Lane.AUDIO, "Silence: ${(r.missingFrames - missingFrames) / FRAMES_PER_MS} ms of audio wasn't here in time")
+            val lost = r.missingFrames - missingFrames
+            if (!silent) {
+                silent = true; silentSince = r.boot; silentFrames = 0L; silentReadings = 0
+                add(Lane.AUDIO, "Silence: ${lost / FRAMES_PER_MS} ms of audio wasn't here in time")
+            }
+            silentFrames += lost; silentReadings++; silentLast = r.boot
+        } else if (silent && r.boot - silentLast >= SILENCE_OVER_NS) {
+            silent = false
+            if (silentReadings > 1) {
+                add(Lane.AUDIO, "Audio back after ${(silentLast - silentSince) / 1_000_000_000L} s (${fmtDuration(silentFrames * 1e9 / (FRAMES_PER_MS * 1000))} missing)")
+            }
         }
         missingFrames = r.missingFrames
         if (r.audioError != null && r.audioError != audioError) add(Lane.AUDIO, "Audio error: ${r.audioError}")
@@ -172,6 +188,7 @@ class EventDetector {
     private companion object {
         const val GPS_LOST_NS = 5_000_000_000L
         const val FRAMES_PER_MS = 48L
+        const val SILENCE_OVER_NS = 3_000_000_000L   // this long with nothing missing ends a silence
         const val TIGHT_BETTER = 0.8
         const val TIGHT_WORSE = 1.25
         const val TIGHT_HOLD_NS = 10_000_000_000L

@@ -2,6 +2,32 @@
 
 Claude Desktop: read this before each design round. Newest notes go first.
 
+## 2026-11-02: design request: Calibration
+
+The user wants calibration designed by you and placed in Settings. Nothing here is measured on phones yet, so the accuracy figures are estimates and the copy shouldn't promise them. The latest acoustic tests put the Galaxy about 14–21 ms behind the Pixel on speaker, with both on GPS.
+
+**Where it goes:** add a `Calibration` row under Settings › LISTENING, showing the route, lag and where the value came from. I suggest it opens an expanded Headphone lag screen, so there's one home for this rather than two. The HEADPHONES tile and the existing Headphones row should lead to the same place. Your call on the layout and name.
+
+**Three ways a value gets set:**
+
+| Method | What the listener does | What the screen needs |
+|---|---|---|
+| Shared table | Nothing: the app looks up phone model and output | Source shown as `Table`, and a state for a phone or headset that isn't listed (lag 0, wide ±) |
+| Earcup test | Hold a headphone cup or bud against the phone's mic while it clicks through the speaker, then the headphones, for about 10 s | Mic permission, instructions, progress, result, Save and Try again, and failures: too quiet, too noisy, readings disagree |
+| Two-phone handshake | Two phones side by side take turns clicking for about 10 s, then one enters a short code from the other | Choosing roles, Start, entering or scanning the code, result, Save, and failures, including `no GPS or NTP good enough` |
+
+**Data each state can show:** route, lag in ms, ± in ms, source (`Table`, `Earcup`, `Handshake`, `Typed`), when it was measured, and for the handshake, the other phone's model. Typed entry stays as an advanced option.
+
+**Other states to design:**
+
+- **New headset:** a prompt, offering the earcup test and a Not now, when the app sees an output with no saved value.
+- **Bluetooth:** a note that its delay may change between connections, so a saved value may not hold.
+- **Applying a value:** a new value takes effect when playback next starts, because lag is fixed for a run today. Changing it during playback is a timing change that hasn't been agreed. Please show this, or tell me if you think it must apply live.
+- **Mic reassurance:** the mic is only on during a test, and no audio leaves the phone.
+- **Sync error budget:** the headphone lag bar can now use this ±.
+
+**Decision still open with the user:** whether Privacy mode allows the handshake. It shares only a short code between two people in person, so I'd expect yes.
+
 ## 2026-11-02: first run on a real phone, and hand-off 04 items
 
 The test bench has now run on the Pixel 10 Pro, and it matches the design closely. Screenshots aren't in the repo yet. Hand-off 04's nudge row, whole-row tap target and `still failing` lines are built, with these differences:

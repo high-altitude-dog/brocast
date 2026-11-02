@@ -14,7 +14,8 @@ import kotlin.math.roundToLong
 
 class Settings(
     val url: String, val stream: Boolean, val policy: Policy, val pitchHz: Double, val lagMs: Double, val channel: Int,
-    val nudgeMode: NudgeMode, val nudgePeriodS: Double?,
+    val nudgeMode: NudgeMode, val nudgePeriodS: Double?, val tickPattern: Int = Renderer.PATTERN_OFF,
+    val soloSlot: Int = 0, val soloCount: Int = 0,
 )
 
 /** A run of text in the status grid. Live numbers are [mono], so their digits don't jitter as they update. */
@@ -37,7 +38,7 @@ class Session(ctx: Context, val s: Settings, private val satellitesOn: Boolean) 
     val gps = GpsTime(ctx, gpsLog)
     val ntp = NtpClient(ntpLog)
     val stream = if (s.stream) StreamClient(s.url, lagNs) else null
-    val renderer = Renderer(s.pitchHz, stream, s.channel)
+    val renderer = Renderer(s.pitchHz, stream, s.channel, s.tickPattern, s.soloSlot, s.soloCount)
     val nudge = NudgeControl(s.nudgeMode, s.nudgePeriodS) { note(Lane.AUDIO, it) }
     val play = Playout(renderer, stream, lagNs, nudge)
     val folder: String = dir.absolutePath
@@ -120,7 +121,13 @@ class Session(ctx: Context, val s: Settings, private val satellitesOn: Boolean) 
         appendLine("phone: ${Build.MANUFACTURER} ${Build.MODEL} (${Build.DEVICE})")
         appendLine("android: ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT}), build ${Build.FINGERPRINT}")
         appendLine("gnss chip: ${gps.chip}; raw clock reports: ${gps.reportsRaw}; satellites at start: ${if (satellitesOn) "on" else "off"}")
-        appendLine("mode: ${if (s.stream) "stream from ${s.url}, ${channelName()} channel" else "tick at ${s.pitchHz} Hz"}")
+        appendLine("mode: ${when {
+            s.stream && s.soloCount > 0 -> "stream from ${s.url}, ${channelName()} channel, solo ${s.soloSlot} of ${s.soloCount}"
+            s.stream -> "stream from ${s.url}, ${channelName()} channel"
+            s.tickPattern == Renderer.PATTERN_A -> "tick pattern A"
+            s.tickPattern == Renderer.PATTERN_B -> "tick pattern B"
+            else -> "tick at ${s.pitchHz} Hz"
+        }}")
         appendLine("time source: ${s.policy}; headphone lag: ${s.lagMs} ms")
     }
 
@@ -139,6 +146,7 @@ class Session(ctx: Context, val s: Settings, private val satellitesOn: Boolean) 
             play.state, renderer.posErrUs, (renderer.ratio - 1) * 1e6, renderer.jumps,
             play.underruns, renderer.missingFrames, play.aheadMs, play.stampDevUs,
             st?.serverMinusFlowMs, nudge.gapAt(boot), nudge.state.rateAt(boot) * 1e6,
+            st?.buffered, st?.fetchMs,
         )
     }
 
@@ -240,7 +248,7 @@ class Session(ctx: Context, val s: Settings, private val satellitesOn: Boolean) 
         const val STATUS_HEADER = "boot_ns,flow_utc_ns,source,err_ns,gps_err_ns,ntp_err_ns,gold,sats_used,sats_seen," +
             "gps_scatter_ns,boot_clock_ppm,gps_age_ms,ntp_minus_gps_us,ntp_rtt_ms,ntp_bound_ms," +
             "state,pos_err_us,nudge_ppm,jumps,underruns,missing_frames,ahead_ms,stamp_jitter_us,server_minus_flow_ms," +
-            "held_gap_ns,gap_rate_ppm"
+            "held_gap_ns,gap_rate_ppm,buffered_s,fetch_ms"
 
         private fun fmtMs(ms: Double) = fmtDuration(ms * 1e6)
 

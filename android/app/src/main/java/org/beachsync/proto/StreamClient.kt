@@ -27,6 +27,8 @@ class StreamClient(private val baseUrl: String, private val lagNs: Long) : Threa
     @Volatile var lastError: String? = null
     @Volatile var buffered = 0
     @Volatile var serverMinusFlowMs = Double.NaN
+    @Volatile var fetchMs = Double.NaN
+    private var fetchEstNs = 300_000_000L   // how long a segment takes to arrive; used only on this thread
 
     override fun segment(n: Long): ShortArray? {
         val s = ring.get(slot(n))
@@ -57,26 +59,50 @@ class StreamClient(private val baseUrl: String, private val lagNs: Long) : Threa
         manifest = m
         val fit = FlowTime.fit()
         if (fit != null) serverMinusFlowMs = (j.getLong("server_utc_ns") - fit.utcAt(b1 + (b4 - b1) / 2)) / 1e6
-        val first: Long
-        val last: Long
-        if (fit != null) {
-            val heard = Math.floorDiv(fit.utcAt(b4) + lagNs - m.dMs * 1_000_000L - m.startNs, 1_000_000_000L)
-            first = maxOf(m.oldest, heard - 1)
-            last = minOf(m.newest, heard + BUFFER_S)
-        } else {
-            first = maxOf(m.oldest, m.newest - minOf(BUFFER_S.toLong(), m.dMs / 1000))
-            last = m.newest
-        }
-        var have = 0
-        for (n in first..last) {
-            if (!running) return
-            if (segment(n) == null) {
+        // Work the window out afresh before each fetch, so a slow link never spends its time on segments already past.
+        while (running) {
+            val now = SystemClock.elapsedRealtimeNanos()
+            val f = FlowTime.fit()
+            val first: Long
+            val last: Long
+            val useful: Long
+            val heard: Long
+            if (f != null) {
+                val heardNs = f.utcAt(now) + lagNs - m.dMs * 1_000_000L - m.startNs
+                heard = Math.floorDiv(heardNs, NS_PER_S)
+                first = maxOf(m.oldest, heard - 1)
+                last = minOf(m.newest, heard + BUFFER_S)
+                useful = Math.floorDiv(heardNs + fetchEstNs + fetchEstNs / 2, NS_PER_S)
+            } else {
+                first = maxOf(m.oldest, m.newest - minOf(BUFFER_S.toLong(), m.dMs / 1000))
+                last = m.newest
+                heard = first
+                useful = first
+            }
+            buffered = contiguous(maxOf(heard, first), last)
+            val n = FetchPlan.next(first, last, useful) { segment(it) != null } ?: return
+            val t0 = SystemClock.elapsedRealtimeNanos()
+            try {
                 ring.set(slot(n), Seg(n, pcm(get("/seg/$n.pcm"))))
                 fetched++
+            } finally {
+                noteFetch(SystemClock.elapsedRealtimeNanos() - t0)
             }
-            have++
+            if (SystemClock.elapsedRealtimeNanos() - b4 > MANIFEST_MAX_AGE_NS) return
         }
-        buffered = have
+    }
+
+    /** How many segments are here in a row from [from]: how long the audio could carry on if fetching stopped now. */
+    private fun contiguous(from: Long, last: Long): Int {
+        var n = from
+        while (n <= last && segment(n) != null) n++
+        return (n - from).toInt()
+    }
+
+    /** Rises at once when fetches slow down and falls gently, so one lucky fetch doesn't undo the margin. */
+    private fun noteFetch(ns: Long) {
+        fetchEstNs = maxOf(ns, (fetchEstNs * 7 + ns * 3) / 10).coerceAtMost(FETCH_EST_MAX_NS)
+        fetchMs = ns / 1e6
     }
 
     private fun get(path: String): ByteArray {
@@ -104,5 +130,8 @@ class StreamClient(private val baseUrl: String, private val lagNs: Long) : Threa
     private companion object {
         const val BUFFER_S = 60             // seconds of audio to hold ahead of the one being heard
         const val RING = BUFFER_S + 4       // holds the whole window (1 s behind to BUFFER_S ahead) without collisions
+        const val NS_PER_S = 1_000_000_000L
+        const val MANIFEST_MAX_AGE_NS = 5_000_000_000L   // while catching up, re-read the manifest this often
+        const val FETCH_EST_MAX_NS = 10_000_000_000L
     }
 }

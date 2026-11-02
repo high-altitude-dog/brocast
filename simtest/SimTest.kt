@@ -1,7 +1,7 @@
 // Desktop tests of the app's pure timing code: NTP parsing, the GPS and NTP fits, and the playout loop.
 // Needs the Kotlin compiler (kotlinc) and the Android SDK's android.jar. From the beachsync-prototype folder:
 //   P=android/app/src/main/java/org/beachsync/proto; J=$ANDROID_HOME/platforms/android-35/android.jar
-//   kotlinc -cp $J -d /tmp/simtest simtest/SimTest.kt $P/Flow.kt $P/Renderer.kt $P/NtpClient.kt $P/CsvLog.kt $P/Events.kt $P/Nudge.kt
+//   kotlinc -cp $J -d /tmp/simtest simtest/SimTest.kt $P/Flow.kt $P/Renderer.kt $P/NtpClient.kt $P/CsvLog.kt $P/Events.kt $P/Nudge.kt $P/FetchPlan.kt $P/Calibration.kt
 //   java -cp /tmp/simtest:$J:<kotlinc folder>/lib/kotlin-stdlib.jar SimTestKt
 import org.beachsync.proto.*
 import kotlin.math.abs
@@ -293,6 +293,72 @@ fun testTickTiming() {
     check(buf[0] == 0f && buf[2] != 0f && abs(buf[2] - Renderer.click(10_416.67, 2000.0)) < 1e-4, "click starts between frames 0 and 1, at the right phase")
 }
 
+fun testTickPattern() {
+    println("Tick pattern: a click every 200 ms of flowtime, stepping through the pitches, with phone B 60 ms after phone A")
+    val t0 = 1_761_955_200_000_000_000L     // a whole second, so slot 0 starts here on any phone
+    val slot = Renderer.PATTERN_SLOT_NS
+    val stagger = Renderer.PATTERN_STAGGER_NS
+    val a = Renderer(2000.0, null, tickPattern = Renderer.PATTERN_A)
+    val b = Renderer(2000.0, null, tickPattern = Renderer.PATTERN_B)
+    fun frame(r: Renderer, utc: Long): Float { val buf = FloatArray(2); r.ticks(buf, 1, utc); return buf[0] }
+    val into = 1_000_000L     // 1 ms into the click
+    check(frame(a, t0 + into) == 0f, "silent until the window is set")
+    a.tickFromUtc = t0 + slot; a.tickUntilUtc = t0 + 2 * slot
+    check(frame(a, t0 + into) == 0f, "silent before the window")
+    check(frame(a, t0 + slot + into) != 0f, "sounds inside the window")
+    check(frame(a, t0 + 2 * slot + into) == 0f, "silent again after the window")
+    for (r in listOf(a, b)) { r.tickFromUtc = Long.MIN_VALUE; r.tickUntilUtc = Long.MAX_VALUE }
+    for ((n, hz) in Renderer.patternHz.withIndex()) {
+        val at = t0 + n * slot + into
+        check(abs(frame(a, at) - Renderer.click(into.toDouble(), hz)) < 1e-4 && frame(b, at) == 0f, "slot $n: phone A clicks at $hz Hz and phone B is silent")
+        check(abs(frame(b, at + stagger) - Renderer.click(into.toDouble(), hz)) < 1e-4 && frame(a, at + stagger) == 0f, "slot $n: phone B clicks 60 ms later, at the same pitch")
+    }
+    check(frame(a, t0 + 50_000_000L) == 0f && frame(b, t0 + 50_000_000L) == 0f, "silent between clicks")
+    for (r in listOf(a, b)) {
+        val buf = FloatArray(2 * 48000)
+        r.ticks(buf, 48000, t0 + 500_000_000L)     // a chunk that crosses the cycle boundary
+        val on = (0 until 48000).filter { buf[2 * it] != 0f }
+        check(on.map { ((it + 24000) % 48000) / 9600 }.distinct().size == 5, "five clicks a second, across the cycle boundary")
+    }
+    val off = Renderer(2000.0, null)
+    check(abs(frame(off, t0 + into - Math.floorMod(t0, 1_000_000_000L)) - Renderer.click(into.toDouble(), 2000.0)) < 1e-4, "with no pattern, ticks are unchanged")
+}
+
+fun testSoloGate() {
+    println("Solo gate: phones take turns to be heard, and the stream's position is untouched")
+    val seg = ShortArray(96000) { 8192 }
+    val start = 1_761_955_200_000_000_000L
+    val d = 21_000_000_000L
+    // A whole number of 1 s cycles (two 400 ms turns and 200 ms of silence), so turn 0 starts here.
+    val t0 = start + d + 2_000_000_000L - Math.floorMod(start + d + 2_000_000_000L, 1_000_000_000L)
+    fun level(r: Renderer, utc: Long): Float {
+        val buf = FloatArray(2)
+        r.stream(buf, 1, utc, start, d)
+        return buf[0]
+    }
+    val a = Renderer(2000.0, SegmentSource { seg }, soloSlot = 0, soloCount = 2)
+    val b = Renderer(2000.0, SegmentSource { seg }, soloSlot = 1, soloCount = 2)
+    val plain = Renderer(2000.0, SegmentSource { seg })
+    val mid = 200_000_000L
+    check(level(a, t0 + mid) == 0f, "silent until the window is set")
+    for (r in listOf(a, b)) { r.tickFromUtc = Long.MIN_VALUE; r.tickUntilUtc = Long.MAX_VALUE }
+    check(level(a, t0 + mid) == 0.25f && level(b, t0 + mid) == 0f, "first turn: phone A is heard and phone B isn't")
+    check(level(a, t0 + 400_000_000L + mid) == 0f && level(b, t0 + 400_000_000L + mid) == 0.25f, "second turn: phone B is heard and phone A isn't")
+    check(level(a, t0 + 900_000_000L) == 0f && level(b, t0 + 900_000_000L) == 0f, "then both are silent, which marks the start")
+    val fade = level(a, t0 + 5_000_000L)
+    check(abs(fade - 0.125f) < 0.01f, "each turn fades in, so it doesn't click")
+    for (r in listOf(a, b)) { r.tickFromUtc = Long.MIN_VALUE; r.tickUntilUtc = t0 }
+    check(level(a, t0 + mid) == 0f, "silent again after the window")
+    val g = Renderer(2000.0, SegmentSource { seg }, soloSlot = 1, soloCount = 2)
+    val bufG = FloatArray(480)
+    val bufP = FloatArray(480)
+    g.stream(bufG, 240, t0 + mid, start, d)
+    plain.stream(bufP, 240, t0 + mid, start, d)
+    check(g.pos == plain.pos && g.ratio == plain.ratio && g.missingFrames == plain.missingFrames, "the gate changes the level only, not the position or the nudge")
+    val off = Renderer(2000.0, SegmentSource { seg })
+    check(level(off, t0 + mid) == 0.25f && level(off, t0 + 900_000_000L) == 0.25f, "with no gate, playback is unchanged")
+}
+
 fun testChannel() {
     println("Stream channel: Left or Right only plays that channel on both outputs")
     val seg = ShortArray(96000) { if (it % 2 == 0) 8192 else -16384 }   // left 0.25, right -0.5
@@ -340,6 +406,18 @@ fun testEvents() {
     check(d.update(later(156, route = "USB headset")).single().text == "Audio output: USB headset", "first output route is logged")
     check(d.update(later(157)).isEmpty(), "losing the route reading logs nothing")
     check(d.update(later(158, route = "speaker")).single().text == "Audio output changed to speaker", "route change is logged")
+
+    println("Event log: a long silence is two lines, not one a second")
+    val q = EventDetector()
+    check(q.update(reading(10, missing = 48000)).single().text.contains("1000 ms"), "the start of a silence is logged")
+    check((11L..59L).all { q.update(reading(it, missing = 48000 * (it - 9))).isEmpty() }, "the rest of it logs nothing")
+    val r = EventDetector()
+    r.update(reading(10, missing = 48000))
+    for (t in 11L..20L) r.update(reading(t, missing = 48000 * (t - 9)))
+    check(r.update(reading(21, missing = 48000 * 11)).isEmpty(), "1 s without loss doesn't end a silence")
+    check(r.update(reading(22, missing = 48000 * 12)).isEmpty(), "more loss carries the same silence on")
+    check(r.update(reading(25, missing = 48000 * 12)).single().text == "Audio back after 12 s (12.0 s missing)", "the end gives its length and the audio lost")
+    check(r.update(reading(26, missing = 48000 * 12)).isEmpty(), "the end is logged once")
 
     println("Durations: adaptive units at three significant figures")
     for ((ns, want) in listOf(70.0 to "70 ns", 3_000.0 to "3.00 µs", 38_400.0 to "38.4 µs", 800_000.0 to "800 µs", 3_200_000.0 to "3.20 ms", 1_400_000_000.0 to "1.40 s", -5_000_000.0 to "5.00 ms", Double.NaN to "—")) {
@@ -390,7 +468,91 @@ fun testEvents() {
     check(log.latest()?.text == "e3" && log.recent(10).map { it.text } == listOf("e3", "e2"), "the screen gets the newest first, within its limit")
 }
 
+/**
+ * Plays [seconds] of stream after an outage that left the buffer empty, on a link where each fetch takes [fetchS].
+ * Returns (seconds until the first sound, the share of the stream heard). Fetches one at a time, as StreamClient does.
+ */
+fun recovery(fetchS: Double, seconds: Int, skipAhead: Boolean): Pair<Double, Double> {
+    val arrived = HashMap<Long, Double>()
+    var t = 0.0
+    while (t < seconds) {
+        val heard = kotlin.math.floor(t).toLong()
+        val useful = if (skipAhead) kotlin.math.floor(t + 1.5 * fetchS).toLong() else heard - 1
+        val n = FetchPlan.next(heard - 1, heard + 60, useful) { arrived.containsKey(it) } ?: break
+        t += fetchS
+        arrived[n] = t
+    }
+    var heardS = 0.0
+    var firstSound = Double.NaN
+    for (n in 0 until seconds.toLong()) {
+        val at = arrived[n] ?: continue
+        val part = (n + 1 - maxOf(n.toDouble(), at)).coerceAtLeast(0.0)
+        if (part > 0 && firstSound.isNaN()) firstSound = maxOf(n.toDouble(), at)
+        heardS += part
+    }
+    return firstSound to heardS / seconds
+}
+
+fun testFetchPlan() {
+    println("Fetching: skip what can't arrive in time, so the audio comes back soon after the link does")
+    val have = setOf(10L, 11L, 12L, 14L)
+    check(FetchPlan.next(9, 20, 10) { it in have } == 13L, "fills the first hole it can still reach")
+    check(FetchPlan.next(9, 20, 15) { it in have } == 15L, "skips holes that will have passed")
+    check(FetchPlan.next(9, 15, 15) { it in have + 15 } == 9L, "then goes back for the rest of the window")
+    check(FetchPlan.next(10, 12, 10) { it in have } == null, "nothing to do when the window is full")
+
+    val (oldFirst, _) = recovery(0.9, 300, skipAhead = false)
+    val (newFirst, newShare) = recovery(0.9, 300, skipAhead = true)
+    println("         link at 0.9 s a segment: sound after %.1f s, was %.1f s".format(newFirst, oldFirst))
+    check(newFirst <= 3.0, "a link just above real time is heard again within 3 s")
+    check(oldFirst > 5.0, "starting from the second being heard took far longer (why this exists)")
+    check(newShare > 0.95, "and then plays with almost nothing missing")
+    val (slowFirst, slowShare) = recovery(1.1, 300, skipAhead = true)
+    val (_, oldSlowShare) = recovery(1.1, 300, skipAhead = false)
+    println("         link at 1.1 s a segment: heard %.0f%%, was %.0f%%".format(slowShare * 100, oldSlowShare * 100))
+    check(slowFirst <= 3.0 && slowShare > 0.75, "a link below real time still plays most of the stream")
+    check(oldSlowShare < 0.05, "where starting from the second being heard played almost nothing")
+}
+
+fun testCalibration() {
+    println("Calibration arithmetic")
+    fun near(a: Double, b: Double) = abs(a - b) < 1e-9
+    fun steady(ms: Double) = summarise(DoubleArray(9) { ms + (it - 4) * 0.01 })
+
+    // Output latencies and mic latencies the test knows, and the handshake isn't told.
+    val outA = 45.0; val outB = 25.0; val micA = 80.0; val micB = 33.0; val dist = 1.2
+    val atA = steady((outA + micA) - (outB + dist + micA))
+    val atB = steady((outA + dist + micB) - (outB + micB))
+    val h = handshake(atA, atB, 0.2)!!
+    check(near(h.laterMs, 20.0), "handshake finds the output difference, whatever the mics and distance: ${h.laterMs}")
+    check(near(h.distanceMs, dist), "handshake also recovers the distance: ${h.distanceMs}")
+    check(near(lagFromHandshake(1.5, h, 7L).lagMs, 21.5), "a phone that's later gets more lag, on top of its current lag")
+    check(handshake(null, atB, 0.2) == null, "a phone that heard nothing gives no handshake")
+    check(handshake(summarise(doubleArrayOf(20.0, 20.0)), atB, 0.2) == null, "too few readings give no handshake")
+    check(handshake(summarise(DoubleArray(9) { 20.0 + it * 3 }), atB, 0.2) == null, "scattered readings give no handshake")
+    check(handshake(steady(0.0), steady(40.0), 0.2) == null, "phones too far apart give no handshake")
+
+    val speaker = Calibration(20.0, 3.0, CalSource.TABLE)
+    val cup = lagFromEarcup(speaker, steady(100.0), steady(250.0), 9L)!!
+    check(near(cup.lagMs, 170.0) && cup.source == CalSource.EARCUP, "earcup adds the headphones' extra delay to the speaker's value: ${cup.lagMs}")
+    check(cup.plusMinusMs > speaker.plusMinusMs, "earcup's ± includes the speaker value's error")
+    check(lagFromEarcup(speaker, null, steady(250.0), 9L) == null, "an earcup test that heard nothing gives no value")
+
+    check(LatencyTable.lookup(RouteKey("SM-A166B", "speaker")).source == CalSource.TABLE, "a listed route comes from the table")
+    val unknown = LatencyTable.lookup(RouteKey("SM-A166B", "Bluetooth"))
+    check(unknown.source == CalSource.NONE && unknown.lagMs == 0.0 && unknown.plusMinusMs >= 100.0, "an unlisted route claims nothing")
+    check(chooseCalibration(cup, speaker) == cup && chooseCalibration(null, speaker) == speaker, "a saved value beats the table")
+
+    check(handshakeCode(-20.73) == "-0207" && parseHandshakeCode("-0207") == -20.7, "the short code carries a negative value to 0.1 ms")
+    check(handshakeCode(1000.0) == null, "a value too large for the code gives no code")
+    check(parseHandshakeCode("12a4") == null && parseHandshakeCode("123") == null, "a mistyped code is refused")
+}
+
 fun main() {
+    testCalibration()
+    testFetchPlan()
+    testTickPattern()
+    testSoloGate()
     testNtp(); testGps(); testGpsWeighting(); testGpsEstimate(); testNtpFit(); testPlayout(); testTickTiming(); testChannel(); testEvents(); testNudge()
     println(if (failures == 0) "ALL PASSED" else "$failures FAILED")
 }
