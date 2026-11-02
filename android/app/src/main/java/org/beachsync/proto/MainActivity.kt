@@ -19,11 +19,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import org.beachsync.proto.ui.BenchActions
 import org.beachsync.proto.ui.BenchState
+import org.beachsync.proto.ui.NowPlaying
 import org.beachsync.proto.ui.PlainEventLog
 import org.beachsync.proto.ui.PlainNudge
 import org.beachsync.proto.ui.TestBench
 
-/** The test bench: settings, Start/Stop and the live status. The run itself lives in [Session]. */
+/** Opens on Now playing. The test scripts launch straight into the test bench. The run itself lives in [Session]. */
 class MainActivity : ComponentActivity(), BenchActions {
     private val prefs by lazy { getSharedPreferences("proto", MODE_PRIVATE) }
     private val state = BenchState()
@@ -52,13 +53,17 @@ class MainActivity : ComponentActivity(), BenchActions {
         state.session = session
         state.eventLog = eventLog
         setContent {
-            var page by remember { mutableStateOf(Page.BENCH) }
+            val fromTestScript = intent?.hasExtra("tickPattern") == true || intent?.hasExtra("soloSlot") == true
+            val home = if (fromTestScript) Page.BENCH else Page.NOW
+            var page by remember { mutableStateOf(home) }
+            var from by remember { mutableStateOf(home) }   // where the event log and nudge screens go back to
             var logLane by remember { mutableStateOf<Lane?>(null) }
-            BackHandler(page != Page.BENCH) { page = Page.BENCH }
+            BackHandler(page != home) { page = if (page == Page.LOG || page == Page.NUDGE) from else home }
             when (page) {
-                Page.BENCH -> TestBench(state, this, { logLane = it; page = Page.LOG }, { page = Page.NUDGE })
-                Page.LOG -> PlainEventLog(state, logLane) { page = Page.BENCH }
-                Page.NUDGE -> PlainNudge(state, this) { page = Page.BENCH }
+                Page.NOW -> NowPlaying(state, this, { logLane = null; from = Page.NOW; page = Page.LOG }, { from = Page.NOW; page = Page.NUDGE }, { page = Page.BENCH })
+                Page.BENCH -> TestBench(state, this, { logLane = it; from = Page.BENCH; page = Page.LOG }, { from = Page.BENCH; page = Page.NUDGE })
+                Page.LOG -> PlainEventLog(state, logLane) { page = from }
+                Page.NUDGE -> PlainNudge(state, this) { page = from }
             }
         }
     }
@@ -164,7 +169,7 @@ class MainActivity : ComponentActivity(), BenchActions {
             .apply()
     }
 
-    private enum class Page { BENCH, LOG, NUDGE }
+    private enum class Page { NOW, BENCH, LOG, NUDGE }
 
     companion object {
         /** Kept outside the activity, so a test run survives the screen being rebuilt. */

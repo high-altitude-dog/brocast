@@ -106,12 +106,12 @@ fun rememberTick(ms: Long): State<Long> = produceState(Session.nowBoot(), ms) {
 }
 
 private const val CLOCK_MS = 100L    // the design's cap of ten UI updates a second
-private const val STATUS_MS = 500L
+internal const val STATUS_MS = 500L
 private const val LOCKED_ALPHA = 0.55f
-private val UK = ZoneId.of("Europe/London")
-private val CLOCK_DIGITS = DateTimeFormatter.ofPattern("HH:mm:ss").withZone(UK)
-private val CLOCK_ZONE = DateTimeFormatter.ofPattern("z", Locale.UK).withZone(UK)
-private val LOCAL_DIGITS = DateTimeFormatter.ofPattern("HH:mm:ss z", Locale.UK)
+internal val UK = ZoneId.of("Europe/London")
+internal val CLOCK_DIGITS = DateTimeFormatter.ofPattern("HH:mm:ss").withZone(UK)
+internal val CLOCK_ZONE = DateTimeFormatter.ofPattern("z", Locale.UK).withZone(UK)
+internal val LOCAL_DIGITS = DateTimeFormatter.ofPattern("HH:mm:ss z", Locale.UK)
 
 /** "22:43:29", the flowtime of an event in UK time, or dashes before there was a time source. */
 fun eventTime(e: Event): String = e.utc?.let { CLOCK_DIGITS.format(Instant.ofEpochSecond(0, it)) } ?: "--:--:--"
@@ -236,7 +236,7 @@ private const val WARN_ABOVE_NS = 5_000_000.0   // 5 ms, from the badge rules in
 
 /** "TIGHTENING ±11.4 → ±0.40 ms", flowtime's own error, with the first unit dropped when both figures share it. */
 @Composable
-private fun TighteningLine(fromNs: Double, toNs: Double) {
+internal fun TighteningLine(fromNs: Double, toNs: Double) {
     val from = fmtDuration(fromNs)
     val to = fmtDuration(toNs)
     val figures = "±" + (if (from.substringAfter(' ') == to.substringAfter(' ')) from.substringBefore(' ') else from) + " → ±" + to
@@ -260,7 +260,7 @@ private fun zoneLine(now: Instant): String {
 }
 
 /** Zones with no abbreviation read as "GMT-05:00", which squeezes the card, so this makes it "GMT-5". */
-private fun shortZone(line: String): String {
+internal fun shortZone(line: String): String {
     val at = line.indexOf("GMT")
     if (at < 0 || line.length < at + 9) return line
     val minutes = line.substring(at + 7, at + 9)
@@ -347,14 +347,14 @@ private fun UnitField(label: String, value: String, unit: String, enabled: Boole
 
 /** Never locked: this stays live whatever else is happening. */
 @Composable
-private fun SatellitesRow(on: Boolean, onChange: (Boolean) -> Unit) {
+internal fun SatellitesRow(on: Boolean, onChange: (Boolean) -> Unit, detail: String = "Never locked · position stays on phone") {
     Row(
         Modifier.fillMaxWidth().heightIn(min = Tokens.Space.touchTarget.dp).toggleable(on, role = Role.Switch, onValueChange = onChange),
         Arrangement.SpaceBetween, Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             BasicText("Use satellites", style = Tokens.Text.bodyStrong.style())
-            BasicText("Never locked · position stays on phone", style = Tokens.Text.small.style())
+            BasicText(detail, style = Tokens.Text.small.style())
         }
         SatellitesSwitch(on)
     }
@@ -376,7 +376,7 @@ fun SatellitesSwitch(on: Boolean) {
 }
 
 @Composable
-private fun RunButton(running: Boolean, onClick: () -> Unit) {
+internal fun RunButton(running: Boolean, onClick: () -> Unit, startLabel: String = "START RUN", stopLabel: String = "STOP RUN") {
     val tint = if (running) Ink.text else Ink.onAccent
     var base = Modifier.fillMaxWidth().heightIn(min = 52.dp)
     base = if (running) base.border(Tokens.Stroke.emphasis.dp, Ink.text, RoundedCornerShape(Tokens.Radius.pill.dp))
@@ -390,7 +390,7 @@ private fun RunButton(running: Boolean, onClick: () -> Unit) {
             else drawPath(androidx.compose.ui.graphics.Path().apply { moveTo(0f, 0f); lineTo(size.width, size.height / 2); lineTo(0f, size.height); close() }, tint)
         }
         Spacer(Modifier.width(10.dp))
-        BasicText(if (running) "STOP RUN" else "START RUN", style = Tokens.Text.badge.style(tint).copy(fontSize = 15.sp))
+        BasicText(if (running) stopLabel else startLabel, style = Tokens.Text.badge.style(tint).copy(fontSize = 15.sp))
     }
 }
 
@@ -419,8 +419,8 @@ private fun Chevron(tint: Color, size: Dp) {
 }
 
 @Composable
-private fun EventRow(log: EventLog?, openLog: () -> Unit) {
-    rememberTick(STATUS_MS).value
+internal fun EventRow(log: EventLog?, tickMs: Long = STATUS_MS, openLog: () -> Unit) {
+    rememberTick(tickMs).value
     val last = log?.latest()
     LinkRow(openLog) {
         if (last == null) {
@@ -454,8 +454,8 @@ private fun fmtPitch(rate: Double): String {
 }
 
 @Composable
-private fun NudgeRow(state: BenchState, openNudge: () -> Unit) {
-    val boot by rememberTick(STATUS_MS)
+internal fun NudgeRow(state: BenchState, openNudge: () -> Unit, tickMs: Long = STATUS_MS) {
+    val boot by rememberTick(tickMs)
     val manual = state.nudgeMode == NudgeMode.MANUAL
     val s = state.session
     val gap = s?.nudge?.gapAt(boot) ?: 0L

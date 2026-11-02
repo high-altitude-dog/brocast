@@ -2,6 +2,16 @@
 
 Claude Desktop: read this before each design round. Newest notes go first.
 
+## 2026-11-02: Now playing built, and what differs from the design
+
+The user decided **Now playing updates once per second**. Please update the spec:
+
+- **Sub-second dial and ns digits:** both left out, because they'd sit frozen at 1 Hz, so tapping the dial does nothing. Remove them or tell me what should replace them.
+- **Play control:** the design has none, so a temporary `PLAY`/`STOP` button sits under the badge. Please design the real one.
+- **Stopped state:** the badge table has none, so I show a neutral `■ STOPPED`, because `NOT IN SYNC` in red looked wrong before the listener has pressed anything. Please confirm or redesign.
+- **Not built yet:** the Keep button and progress line, tile and header links (dimmed), and the `REJOINING`, `CLOCK CHECK FAILED` and `SILENT · OVER LIMIT` badges. The Privacy mode mark is a text `⊘`, not the lock icon.
+- **Test bench:** holding the station name opens it.
+
 ## 2026-11-02: design request: Calibration
 
 The user wants calibration designed by you and placed in Settings. Nothing here is measured on phones yet, so the accuracy figures are estimates and the copy shouldn't promise them. The latest acoustic tests put the Galaxy about 14–21 ms behind the Pixel on speaker, with both on GPS.
