@@ -1,6 +1,6 @@
 # Beach Sync prototype
 
-Beach Sync is a phone-only silent disco. Groups of about 100 people, on many beaches, hear one live stream at exactly the same instant. It runs on Android phones and their GPS time, with no local hardware. This repo is the first prototype: it tests how closely two phones agree. The full design is in `docs/design.md`, a snapshot of the living design doc (<https://claude.ai/artifact/1qiZnSEZMoea8ch2Uhe8MV>). The snapshot has no diagrams.
+Beach Sync is a 24-hour radio station and silent discos on many beaches, on one system. Every listener hears the same stream at exactly the same instant, on Android phones with no local hardware. Teddington NPL time is the master timekeeper, reached through each phone's GPS, and everything else is non-geographic. The target is millions of listeners with no per-listener traffic cost to the host. This repo is the first prototype: it tests how closely two phones agree. The full design is in `docs/design.md`, a snapshot of the living design doc (<https://claude.ai/artifact/1qiZnSEZMoea8ch2Uhe8MV>). The snapshot has no diagrams.
 
 ## The one rule
 
@@ -25,6 +25,27 @@ UI and visual design happens in Claude Desktop. Code happens here. Work passes b
 
 - **Edit nothing in `design/` except `feedback.md`.**
 - Each hand-off is committed, so `git diff` shows what changed in the design. Read that diff before building.
+- Claude Desktop owns screens and visuals. Claude Code owns code and the written spec's engineering. Don't do each other's work.
+
+## Live channel with Claude Desktop
+
+Two append-only logs in `comms/`, which git ignores. Each side writes one and reads the other. This section is the protocol, so never put messages in this file.
+
+| File | Written by | Read by |
+|---|---|---|
+| `comms/to-code.log` | Claude Desktop | Claude Code |
+| `comms/to-desktop.log` | Claude Code | Claude Desktop |
+
+Format, one line per message, under 200 characters: `HH:MM TAG text`. Tags: `BLOCK` (needs an answer before you can continue), `CLAIM` (starting this, so don't overlap), `DONE` (finished, with a path or commit), `ASK` (a question that can wait), `FYI`.
+
+To keep tokens low:
+
+- **Send only what changes the other side's work.** No greetings, acknowledgements, progress chatter or repeats.
+- **Point, don't paste.** Give a file, commit or section name; long content goes in a file.
+- **Read only new lines:** `tail -n +<next line>` or `tail -n 20`, never the whole log, and never re-read files just because a message arrived.
+- **Wait without spending tokens.** Claude Code runs one background wait that exits when `to-code.log` grows, and restarts it after handling a message. No polling from the model.
+- **Claim before starting** shared work, and check the other log first.
+- **The user decides.** Disagreements go to the user in one line; don't debate in the logs.
 
 ## Terms (use these, as the design doc does)
 
@@ -76,12 +97,16 @@ What's been verified, which happened before this repo reached this machine:
   - The playout loop settles at 2–3 µs with a ±80 ppm audio clock.
 - The server and the measure script work against synthetic recordings.
 
+Since then, on this machine, on the `prototype-queue` branch:
+
+- `./gradlew assembleDebug` builds, and `simtest` passes 80 checks.
+- `simtest` now settles at about 2.5 µs with a 3 s tracking period, and about 7 µs rms with ±200 µs of stamp jitter.
+
 What's never been done:
 
-- **A Gradle/AGP build.** The original environment couldn't reach Google Maven.
-- **A run on a real phone.**
+- **A verified run of the current code on a real phone.** The rate nudge, satellites switch, weighted fit and event log have only run in simulation or compilation.
 
-Expect small build fixes. Don't change timing behaviour to make a build pass.
+Don't change timing behaviour to make a build pass.
 
 ## This machine
 
@@ -89,7 +114,7 @@ Expect small build fixes. Don't change timing behaviour to make a build pass.
 - `~/Android` and `~/.android` exist, so the SDK is probably at `~/Android/Sdk`. Write `sdk.dir=<path>` into `android/local.properties`.
 - File copying may have dropped the executable bit, so run `chmod +x android/gradlew` first.
 - Build with `cd android && ./gradlew assembleDebug`. The APK lands at `app/build/outputs/apk/debug/app-debug.apk`.
-- The user's UK Debian VM on Google Cloud can host the server for tests over mobile data.
+- The user is setting up a new VM to host the server for tests over mobile data. Until then, both phones can use the same Wi-Fi as this machine.
 
 ## The test rig
 

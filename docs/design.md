@@ -1,14 +1,38 @@
 # Beach Sync App Design
 
-Oct 30, 2026 · @Alex
+Nov 1, 2026 · @Alex
 
 ## Summary and scope
 
-Each listener's Android phone reads UTC from its own GPS chip and plays a time-stamped stream exactly D seconds behind the source. Every phone on every beach therefore plays the same sample at the same instant, with no equipment on the beach. The target is within about 5 ms of plan with wired headphones; Bluetooth listeners will be looser, about 30–60 ms.
+Each listener's Android phone plays a time-stamped stream exactly D seconds behind the source, so every phone everywhere plays the same sample at the same instant, with no equipment on the beach. Teddington NPL time is the master timekeeper, reached through each phone's own GPS chip. One system runs a 24-hour radio station and silent discos on many beaches. The target is within about 5 ms of plan with wired headphones and satellites on; Bluetooth listeners will be looser, about 30–60 ms, and phones with satellites off about 5–10 ms with a nearby time server (estimate).
 
-- **In scope:** Android 10 or later phones whose GPS chip reports GPS time (raw GPS measurements; about 90–95% of UK Android phones), a live or pre-recorded audio stream, any number of beaches, wired, USB-C and Bluetooth headphones.
-- **Out of scope:** iPhones (apps cannot read GPS time), Android phones without raw GPS measurements, any hardware at the beach, video.
+- **In scope:** Android 10 or later phones, with satellites on or off; a 24-hour station and silent discos on any number of beaches; pre-recorded audio first and live shows later; any country; millions of listeners with no per-listener traffic cost to the host; wired, USB-C and Bluetooth headphones.
+- **Out of scope:** iPhones for now (see Backlog), any hardware at the beach, video.
 - **Related:** the same idea as Synced Video and Audio Playout Design (one shared clock plus a published timeline), but with the clock in each phone instead of in a site server.
+
+### Where each decision stands
+
+As of 1 November 2026. Decided items are settled, Proposed items await agreement, and To test items are the chosen direction but unproven on real phones.
+
+| Area | Position | Status |
+| --- | --- | --- |
+| Product | A 24-hour radio station and multiple beach silent discos on one system | Decided |
+| Reach | Not limited to the UK; everything except the time reference is non-geographic | Decided |
+| Time reference | Teddington NPL time is the master timekeeper | Decided |
+| Scale | Millions of listeners, with no per-listener traffic cost to the host | Decided |
+| Source | Pre-recorded to begin with; live may follow | Decided |
+| Buffer and D | 60 seconds | Decided |
+| Use satellites | An On/Off switch available at any point | Decided |
+| No usable GPS | Keep playing and show the larger error; events limit the error rather than require GPS | Decided |
+| Rate nudge | Auto by default; Manual has a log slider set to a recommended period, and Go | Decided |
+| Names | No pkdns; domain names only for DHT starter nodes and NTP | Decided |
+| Moving location | Streams and seeds can change location periodically | Decided |
+| Screens | Jetpack Compose, designed in Claude Desktop and handed over through `design/` | Decided |
+| Delivery | Signed blocks through a peer swarm with fixed-capacity seeds, replacing the CDN | To test |
+| Transport | Pears building blocks first (Hyperswarm, HyperDHT, Hypercore), with Iroh as the comparison | To test |
+| Block size | 1 second, fetched in bursts | Proposed |
+| Download ahead | Phones fetch ahead on Wi-Fi and seed only while charging and not playing | Proposed |
+| Automatic screen levels | Each phone steps its visuals down for heat, missed frames, underruns and battery | Proposed |
 
 ## Design rule: a lean timing path
 
@@ -33,6 +57,9 @@ The goal is to drive the spread (standard deviation) of every listener's audio l
 | AAudio timestamp quality | Some phones may report coarse or jumpy positions (not measured) | Smooth timestamps with a line fit; measure per model in the GPS time probe |
 | Stratum-1 and stratum-2 NTP | Small, and only while NTP is in charge: a stratum-2 server adds its upstream hop's error | The ranking counts root distance, so a stratum-2 server wins only when it is likely more accurate |
 | UI updates, telemetry, event log | None while kept off the timing path; heavy CPU load can still delay the callback | Cap the UI at 10 updates a second; batch telemetry |
+| Manual rate nudge | A held gap is deliberate sync error, for as long as the listener leaves it open | Decided: Auto by default; a held gap counts in the sync error estimate |
+| Swarm work on the phone | Competes with the audio for CPU, and a crash would stop the audio if it shared the process (not measured) | Proposed: separate process at low priority, seeding only when not playing; the spread must not widen on the rig |
+| Visuals and heat | Short audio-thread stalls cause clicks, worst on a cheap phone in the sun with the screen on (not measured) | Proposed: automatic screen levels that cut visuals before audio is affected |
 
 ## Clocks and terms
 
@@ -53,8 +80,8 @@ Three ideas carry the whole design. **Flowtime** says what time it truly is. **A
 | GPS chip clock | The GPS receiver's own clock | Mapped onto the boot clock by the phone's GPS link. |
 | Gold, Silver | Labels for how a phone links GPS time to its boot clock | Gold: the GPS chip stamps each reading on the boot clock itself (typically under 1 ms). Silver: the app stamps the reading when it arrives (about 1–5 ms, narrowed by a per-model correction). Descriptive only: no decision uses the label, only the sync error estimate. |
 | Device table | What we know about each phone type | Cloud table keyed by phone model, chip, Android version and firmware build: starting guesses and per-model corrections (Silver delay, miclag, screenlag, time-stamp trust). Each phone's own measurements always override it. |
-| Stream stamp | When a sample was captured | The UTC time the cloud ingest gives each sample, counted from the sample number so it never jitters. |
-| D | How far behind live everyone plays | The fixed playout delay: a sample stamped t is heard at flowtime t + D, on every phone and every beach. 21 s by default. |
+| Stream stamp | When a sample was captured | The UTC time the packager gives each sample, counted from the sample number so it never jitters. |
+| D | How far behind live everyone plays | The fixed playout delay: a sample stamped t is heard at flowtime t + D, on every phone and every beach. 60 s by default. With blocks published ahead, a phone can buffer further ahead than D. |
 | Audio clock | The sound chip's own tick | The sample clock that drives the phone's audio output. It runs slightly fast or slow, which the playout engine corrects with its rate nudge. |
 | Android output time stamp | When a sample leaves the phone | A pair reported by Android's audio system: frame F reached the audio hardware's output at time T on the phone's clock. The engine converts T to the boot clock, then reads flowtime at that instant. |
 | Headphone lag | The extra delay after the sound leaves the phone | Time the sound reaches the ear minus the time Android's output time stamp says it left the phone. It covers the Bluetooth link, the headset's buffering and decoding, a USB dongle, and the DAC wherever it sits outside the phone; for a 3.5 mm jack it is close to zero. Measured per phone model, headset model and codec. Listeners see the same name on screen. |
@@ -69,7 +96,7 @@ One sample, followed from Android to the ear:
 1. Android's output time stamp says frame 4,800,000 leaves the phone at boot-clock 1,000.000 s.
 2. Flowtime at that instant is 22:00:00.000 GMT.
 3. Headphone lag for this phone and Bluetooth headset is 182 ms, so the sound reaches the ear at flowtime 22:00:00.182.
-4. With D = 21 s, the sample due at the ear then is the one stamped 21:59:39.182.
+4. With D = 60 s, the sample due at the ear then is the one stamped 21:59:00.182.
 5. The playout engine puts that stream sample into frame 4,800,000. Every other phone does the same sum with its own numbers and lands on the same sample at the same instant.
 
 **One owner per number.** Android owns the output time stamp, the time service owns flowtime, calibration owns headphone lag, and the controller owns D. So when headphones change only headphone lag changes, when GPS drops out only flowtime's source changes, and when Android resizes its buffers only the time stamp changes. Each error stays in one place and can be fixed on its own.
@@ -84,36 +111,44 @@ A sample captured at UTC time t plays at exactly t + D on every phone. The strea
 
 Phones never wait for each other or for the network: a late segment becomes silence, and the phone rejoins at the right point.
 
-## Cloud side
+The diagram above still shows the CDN. Peer delivery replaces it, as Publishing and delivery describes below; the phone and satellite parts still hold.
 
-The cloud stamps the stream once and a CDN delivers it. The stamps need not be exactly UTC: an error there shifts every phone by the same amount, so only the phones' agreement matters.
+## Publishing and delivery
+
+The packager stamps the audio once into a signed log, and peers and seed servers carry it to every phone. The stamps need not be exactly UTC: an error there shifts every phone by the same amount, so only the phones' agreement matters. Delivery is the chosen direction, but it is unproven on real phones.
 
 | Part | Job | Notes |
 | --- | --- | --- |
-| Ingest | Takes the source (a DJ feed over SRT or RTMP, an Icecast URL, or files) and decodes it to 48 kHz PCM | A standby ingest in a second region takes over on failure |
-| Stamper and encoder | Cuts the PCM into 20 ms Opus packets, groups them into 1 s segments, numbers them, and records the stream's start time in UTC | A segment's time = start time + number × 1 s, counted from samples, never re-read from the clock |
-| Rate lock | Resamples a live source so 48,000 samples always span 1 s of server time | A sound card 50 ppm off would otherwise drift the stamps by 180 ms an hour |
-| Manifest | Small JSON: stream id, start time (UTC, ns), sample rate, segment length, newest segment number | Short cache life (about 1 s) |
-| CDN | Serves the segments to every beach | Segments never change, so they cache well |
-| Controller API | Holds each event: stream id, playout delay D, state (scheduled, live, stopped), lowest app version, and an optional maximum sync error | Phones poll it every 5–10 s while live; a push message announces changes |
+| Packager | Builds the schedule from the library, encodes it into 20 ms Opus packets, and groups them into 1 s blocks | Runs ahead of time with no live input, so it can move between batches. Publishing about 24 hours ahead gives blocks time to spread. |
+| Timeline | A fixed start time, set once against NPL time. Block n is heard at start + n seconds + D. | Counted from samples, never re-read from a clock, so moving or restarting a machine can't shift it |
+| Signed log | One Hypercore per stream, where block number n is second n of the timeline | The publisher's Ed25519 key is the stream's identity, and the signed Merkle tree replaces a manifest and separate hashes. One active writer only, because two writers or a stale backup could fork the log. |
+| Seed servers | Hold signed blocks and no secret key | Fixed capacity with a hard cap, from any provider. To move one: start the new seed, let it sync and announce, then retire the old one. |
+| Swarm | Peers find each other by topic over HyperDHT and share blocks directly | Seeders are phones on Wi-Fi, charging and not playing. Phones on mobile data download only. Many sub-topics avoid one overloaded DHT topic. |
+| Starter nodes | First contact with the DHT | Saved peers first, then domain names across several domains, then built-in IP addresses |
+| Controller | Holds each event: stream, D, state, stop commands, announcements and an optional maximum sync error | A small signed state. Its polling rate needs setting for millions of phones. |
+| Time servers | NPL for the packager; regional servers that follow NPL time for phones without GPS, chosen from a signed list | Phones can't poll NPL directly at this scale: 62,500 queries a second per million phones at the prototype's 16 s interval |
 | Telemetry (opt-in) | Receives each phone's sync quality, buffer health, errors and measured headset delays | No location is sent, only time quality |
+| Live ingest (later) | Takes a DJ feed over SRT or RTMP, decodes it and locks its rate to 48,000 samples a second | Needed only for live shows. A standby would continue the same numbering, and a planned handover is needed to move it. |
 
-At Opus 96 kbps stereo a phone downloads about 43 MB an hour. The cloud also hosts the NTP server directory and its health probes, the headphone lag table for headsets, the miclag and screenlag tables for phone models, and the device table. The ingest also produces the light track for the screen light show. D defaults to 21 s, as in the main design, and can drop after field tests.
+At Opus 96 kbps stereo a phone downloads about 43 MB an hour, so 1 million listeners need 96 Gbps, or 43 TB an hour. The swarm is how that avoids a per-listener cost: capacity grows with listeners, while seed servers stay a fixed cost. As arithmetic, a phone seeding at 1 Mbps for 8 hours supplies about 84 listener-hours. Published offload figures of about 55–78% are vendor claims for large live streams, and the same vendor reports peer connectivity below 30–40% for mobile-heavy audiences, and no data exists yet for this download-ahead design. The host also keeps the NTP server directory and its health probes, the headphone lag table for headsets, the miclag and screenlag tables for phone models, and the device table. D is 60 s, which sets the timeline offset and how long a live show would lag.
 
 ## App architecture
 
-One Android app (Kotlin) with its timing-critical audio path in C++. Eight modules, each with one job:
+One Android app (Kotlin) with its timing-critical audio path in C++. Eleven modules, each with one job:
 
 | Module | Job | Android building blocks |
 | --- | --- | --- |
-| Eligibility | On first run, checks the phone is Android 10+ and its GPS chip reports raw measurements; after the first fix, labels its GPS link (Gold or Silver) and starts measuring its sync error estimate; turns away only phones without raw GPS measurements | `GnssCapabilities`, `GnssClock` flags |
-| GPS time service | Computes flowtime, the app's best match to UK national time UTC(NPL), from GPS, the holdover clock and NTP | `GnssMeasurementsEvent`, `GnssClock` |
-| Stream client | Reads the manifest, fetches segments ahead into a buffer keyed by UTC, drops anything that arrives too late | HTTP client (OkHttp or Cronet) |
-| Decoder | Turns Opus segments into 48 kHz PCM with the same bundled decoder on every phone | libopus |
+| Eligibility | On first run, checks the phone is Android 10+ and whether its GPS chip reports raw measurements. It turns nobody away: other phones run on internet or nearby-phone time. After the first fix, it labels the GPS link (Gold or Silver). | `GnssCapabilities`, `GnssClock` flags |
+| GPS time service | Computes flowtime, the app's best match to UK national time UTC(NPL), from GPS, the holdover clock and NTP. GPS runs only while Use satellites is on. | `GnssMeasurementsEvent`, `GnssClock` |
+| Swarm client | Finds peers, fetches 1 s blocks ahead in bursts, checks the log's signatures and stores them. Seeds only on Wi-Fi, charging and not playing. Runs in a separate Android process at low priority, away from the audio. | Hyperswarm and Hypercore on Bare, through Bare Kit (to test) |
+| Decoder | Keeps blocks stored as Opus and decodes only a few seconds ahead into 48 kHz PCM, with the same bundled decoder on every phone | libopus |
 | Playout engine | Works out when each output buffer will reach the headphone socket and fills it with the stream samples due at that moment | Oboe over AAudio |
+| Gap control | Decides how a gap closes when flowtime moves: Auto, or Manual with Go. Publishes one immutable state that the audio thread reads. | Plain Kotlin |
 | Output route | Detects wired, USB or Bluetooth output, applies its reported delay, the model default or the microphone calibration, and the person's manual nudge | `AudioDeviceCallback` |
-| Session service | Keeps playback, GPS and networking alive with the screen off | Foreground service, types `mediaPlayback` and `location` |
-| UI | Join by QR code or link; shows GPS lock, sync grade, buffer, output route, volume | Jetpack Compose |
+| Session service | Keeps playback, networking and, when on, GPS alive with the screen off | Foreground service: `mediaPlayback`, adding `location` only when Use satellites is on |
+| Event log | Turns changes in the app's counters into plain-language events, on a low-priority thread | Plain Kotlin |
+| Screen levels | Steps visuals between Full, Reduced, Minimal and Off for heat, missed frames, underruns and battery | `PowerManager` thermal status and headroom, `Choreographer` |
+| UI | Join by QR code or link; shows sync, satellites switch, gap control, buffer, output route, volume and event log | Jetpack Compose, on the UI thread only |
 
 The app never trusts the phone's wall clock, which can be a second off and can jump. All timing runs on the boot clock and the GPS model.
 
@@ -136,7 +171,7 @@ t_{UTC}(t_{boot}) &\approx a + b \cdot t_{boot}
    - **Gold:** the chip's own boot-clock stamp (`GnssClock.getElapsedRealtimeNanos`, Android 10+ on chips that support it). Expected well under 1 ms.
    - **Silver:** the time the event reached the app. Expected about 1–5 ms (one developer's estimate), narrowed by a per-model average-delay correction from the device table.
 3. Discard an event when the bias uncertainty is large. Reset the line when the chip's discontinuity counter changes.
-4. Fit a (the gap) and b (the drift rate) over the last 60 good events, with a robust fit so one bad event cannot drag it. Hand the pair to the audio thread without locking, and save it to storage every minute.
+4. Fit a (the gap) and b (the drift rate) over the last 60 good events, with a robust fit so one bad event cannot drag it, weighting each event by the chip's own uncertainty so a better signal counts straight away. Hand the pair to the audio thread without locking, and save it to storage every minute.
 5. Take the leap-second count from the chip when it reports one, else from the controller.
 
 ### The holdover clock
@@ -149,6 +184,8 @@ The line from step 4 is the app's own GPS-derived clock: the phone's boot clock 
 - **It re-locks smoothly.** When GPS returns, the playout engine closes a gap of up to 20 ms with its inaudible rate nudge, not a jump.
 
 Its error grows with how much the crystal's rate changes after GPS is lost, mainly through temperature. 1 ppm of rate change adds 0.06 ms a minute: 0.6 ms after 10 minutes and 3.6 ms after an hour. At 5 ppm that becomes 3 ms and 18 ms. The ppm figures are estimates for the bench test's 10-minute dropout to measure.
+
+The holdover clock's error bound grows at 5 ppm, or 5,000 ns a second, as a starting value until phones measure real drift. The first version assumed 20 ns a second, which would have delayed NTP's takeover by days to months and badly understated the error.
 
 ### Choosing a time source
 
@@ -171,25 +208,48 @@ NTP also does two jobs while GPS is in charge:
 
 Do not mix leap-smearing servers (Google's) with non-smearing ones. Cost: a burst of pings at start-up, then a few packets every few minutes.
 
+### Without satellites
+
+Some people keep GPS off for privacy, which is very reasonable, so this is a first-class mode with the best experience we can design. A phone with no usable GPS keeps playing and shows its true, larger error.
+
+These estimates assume filtering leaves uneven network delay with a standard deviation of 30% of half the round trip. Takeover times come from a Monte Carlo simulation of 300 phones per row, through the real fit code, with no network changes and no shared carrier bias. None of this is measured on phones yet.
+
+| Round trip to time server | Standard deviation between phones | About 95% within | NTP takes over after (median) | Best possible with 1 ppm drift |
+| --- | --- | --- | --- | --- |
+| 30 ms | 4.5 ms | ±9 ms | 71 min | 67 min |
+| 60 ms | 9 ms | ±18 ms | 2.4 h | 2.1 h |
+| 100 ms | 15 ms | ±30 ms | 3.9 h | 2.7 h |
+| 150 ms | 22 ms | ±45 ms | 5.8 h | 3.8 h |
+| 300 ms | 45 ms | ±90 ms | 11.5 h | 6.2 h |
+
+These ways of improving on that are all proposed, and the nearby-phone method is the largest gain:
+
+- **Nearby phones with GPS:** at events, sync from phones close by over Wi-Fi Aware, with a target of 1–3 ms. Allow two hops at most, and compare at least two peers against NTP so one bad peer can't shift the time. Peers learn only that a phone is nearby.
+- **Holdover after peer sync:** carry that time on between contacts, growing at about 0.06 ms a minute per ppm.
+- **Network correction table:** GPS phones report the NTP-versus-GPS gap by network, as opt-in telemetry. Other phones download the whole table and pick locally, so nothing is revealed.
+- **Longer averaging:** reduces noise for radio listening, but not bias.
+
+Turning GPS off doesn't hide a rough location if swarm peers can see the phone's IP address. So this mode defaults to no seeding or announcing and a new key each session, offers download from seed servers only (subject to the capacity cap), and states plainly what peers and servers can see.
+
 ### Choosing NTP servers
 
 The app uses stratum-1 servers (wired directly to a GPS or atomic reference) and stratum-2 servers (one hop from one), chosen near the listener and ranked by their likely error.
 
-1. **Directory.** The cloud keeps a list of public stratum-1 and stratum-2 servers with their location, stratum and access policy, and probes each one every few minutes. Servers whose policy rules out app traffic, or that fail the probes, are left out. The app downloads the whole list, so it picks servers without sending its position anywhere.
-2. **Location.** From the GPS fix once there is one. Before the first fix, the controller gives a rough region from the connecting IP address. On mobile data that can be the carrier's gateway city, so it is only a starting point.
-3. **Candidates.** The 10 directory servers nearest by distance. Distance is only a hint: network routes can be long.
+1. **Directory.** The publisher keeps a signed list of public stratum-1 and stratum-2 servers and any regional servers that follow NPL time, with their stratum and access policy, and probes each one every few minutes. Servers whose policy rules out app traffic, or that fail the probes, are left out. The list can change as servers move.
+2. **Location.** None needed. The app downloads the whole list and uses no GPS fix or IP-based region, so picking a server reveals nothing.
+3. **Candidates.** Try a sample of the list, then concentrate on the fastest. Geography is only a hint, because network routes can be long.
 4. **Ping by NTP.** Query each candidate a few times. The NTP round trip is the ping time that matters, because half of it bounds the error. Discard any reply that is not stratum 1 or 2, any kiss-o'-death, and any server that disagrees with the rest.
 5. **Keep 4–5.** Rank by half the round trip plus the server's root distance (its own reported error against the reference clock, which covers a stratum-2 server's extra hop). Use the best 4–5, so one bad server can be outvoted even while another is unreachable. Keep the rest as spares.
 6. **Re-rank** every 30 minutes and whenever the phone changes network, because round trips change.
-7. **Be a polite client.** Never query one server more often than once every 4 seconds (NIST's published rule), back off on kiss-o'-death, and spread the fleet so thousands of phones never land on one server.
+7. **Be a polite client.** Never query one server more often than once every 4 seconds (NIST's published rule), back off on kiss-o'-death, and spread the fleet so millions of phones never land on one server.
 
 **Why stratum 2 is allowed.** Stratum counts hops from a reference clock; it does not measure accuracy at the listener. There the uneven network path, bounded by half the round trip, dominates, so a nearby stratum-2 server often beats a distant stratum-1 server. Allowing stratum 2 also gives far more servers to choose from in every region, and the ranking in step 5 still counts its extra hop.
 
-**UK atomic clocks first.** Flowtime's target is UTC(NPL), the UK's national time scale, generated at NPL in Teddington from hydrogen masers and caesium clocks and kept within a few nanoseconds of world UTC.
+**Teddington is the master timekeeper.** Flowtime's target is UTC(NPL), the UK's national time scale, generated at NPL in Teddington from hydrogen masers and caesium clocks and kept within a few nanoseconds of world UTC. This is the one fixed reference. Everything else is non-geographic, and listeners can be anywhere.
 
-- **GPS already delivers it.** GPS broadcasts UTC as kept by the US Naval Observatory, and Galileo as kept by five European national labs. These differ from UTC(NPL) by nanoseconds (BIPM publishes the figures monthly), so a phone's GPS time matches UK atomic time far more closely than the app needs.
-- **NPL's own NTP servers come first for NTP.** NPL runs five free public stratum-1 servers, ntp1 to ntp5.npl.co.uk at three locations. They are synchronised to NPL's atomic clocks independently of GPS and kept within ±50 ns of UTC(NPL). For UK listeners the directory lists them first, ahead of other stratum-1 and stratum-2 servers. NPL publishes no rate limit or app policy, so the project should agree app traffic at this scale with NPL first.
-- **The listener sees UK time.** Every brocast clock shows flowtime in UK civil time, GMT or BST, with the label.
+- **GPS already delivers it, anywhere.** GPS broadcasts UTC as kept by the US Naval Observatory, and Galileo as kept by five European national labs. These differ from UTC(NPL) by nanoseconds (BIPM publishes the figures monthly), so a phone's GPS time matches Teddington far more closely than the app needs. Strictly, phones follow NPL time through GPS, not from NPL itself.
+- **NPL's own NTP servers set the reference.** NPL runs five free public stratum-1 servers, ntp1 to ntp5.npl.co.uk at three locations, synchronised to NPL's atomic clocks independently of GPS and kept within ±50 ns of UTC(NPL). The packager uses them. Phones can't all poll them at scale, and NPL publishes no rate limit or app policy, so the project should agree any app traffic with NPL first.
+- **The listener sees Teddington time.** Every brocast clock shows flowtime in UK civil time, GMT or BST, with the label, wherever the listener is.
 
 ## Playout engine
 
@@ -202,14 +262,26 @@ n = (t_{flow,\,ear} - D - t_{stream\,start}) \times 48\,000
 1. Open an Oboe output stream on AAudio in low-latency mode, 48 kHz float stereo, so Android does no resampling of its own.
 2. In each callback, read the AAudio timestamp: frame F reached the output at monotonic time T. The buffer's first frame, number W, then leaves at T + (W − F) / 48,000 s.
 3. Convert monotonic time to boot-clock time. The gap between the two only changes when the phone sleeps, so read it once a second.
-4. Add headphone lag (see Clocks and terms) plus the person's nudge to get the ear time. Turn that into flowtime, then into stream sample n.
+4. Add headphone lag (see Clocks and terms) plus the person's nudge to get the ear time. Turn that into flowtime, then into stream sample n, less any gap being held.
 5. Compare n with where playback actually is:
    - under 20 ms off: nudge the playback rate, up to 0.1%, which is inaudible. The nudge is proportional to the gap, plus an integral part that learns how fast this phone's audio clock runs, so the gap settles at zero rather than at an offset
-   - no dead band: in the prototype's simulation, a 0.1 ms dead band left each phone parked about 0.1 ms off. The integral version settles at 2–3 µs, or 13 µs rms with ±200 µs of jitter in Android's output time stamps
+   - the tracking period is 3 s. In the prototype's simulation it settles at about 2.5 µs, or about 7 µs rms with ±200 µs of jitter in Android's output time stamps, half the jitter of a 1 s period
+   - no dead band: a 0.1 ms dead band left each phone parked about 0.1 ms off
    - over 20 ms off (start, after a dropout, after a headphone change): jump to n with a short fade
 6. If the samples for n have not arrived, play silence for that buffer and keep counting. Never wait and never play late.
 
 The 0.1 ms and 20 ms thresholds are starting values for the tests.
+
+### Closing a gap
+
+Tracking the audio clock and closing a gap are separate jobs. A phone's audio clock can be 80 ppm off, or 4.8 ms a minute, so tracking is always on. A gap appears when flowtime itself moves, and it closes in Auto straight away or in Manual on Go.
+
+- **No step:** when flowtime moves, the new fit plus a held gap gives exactly the same stream position, and the gap then closes at a constant rate over the chosen period.
+- **No overshoot:** the closing rate goes straight into the playback rate, so tracking never has to chase it. In simulation, 5 ms and 15 ms gaps closed with no jumps, staying within 15 µs of target.
+- **Rate limit:** closing stays at or below 0.09%, leaving room to track the audio clock. A 5 ms gap takes at least 5.6 s.
+- **Small corrections:** routine GPS and NTP updates under 0.1 ms are absorbed silently.
+- **Large gaps:** above 20 ms, Auto jumps with a fade. Manual lets the listener slide or jump.
+- **Audio thread:** it reads one immutable state holding the fit and its gap, with no locks or allocation.
 
 **Output delay by route.** For wired headphones the AAudio timestamp should already cover the phone's output path. For Bluetooth, Android adds the headset's own delay report to that timestamp only when both the phone and the headset support it, so the app adds two more layers.
 
@@ -248,31 +320,40 @@ With wired headphones a Gold phone should land within about 2–5 ms of plan; th
 
 The Bluetooth row comes from one developer's AirPods measurements on iPhone, where the reported delay was 161 ms and the real one drifted from about 220 ms down to 155 ms over 20–30 minutes. Android headsets are untested. During a GPS outage the holdover clock adds the drift error described above. Before the first GPS lock, and after very long outages, a phone runs on NTP at about 5–30 ms.
 
+Phones with satellites off or no usable GPS follow the figures in Without satellites. A gap being held adds to the sync error estimate until it closes.
+
 ## Event flow and failure handling
 
-A listener scans a code, waits for a GPS lock, and joins mid-track at the right point. No failure ever makes a phone play late; it plays silence and rejoins instead.
+A radio listener opens the app and hears the station within seconds. At an event, a listener scans a code and joins the same timeline. A phone plays at once on the best time it has, and no failure ever makes it play late: it plays silence and rejoins instead.
 
-1. **Before the event:** install from Google Play. The app checks eligibility at once; the grade (Gold or Silver) needs one outdoor fix.
-2. **Join:** open the app and scan the event's QR code or tap its link. The app loads the event from the controller.
-3. **Lock:** the session service starts GPS and fills the buffer. The screen shows satellites and a “step into open sky” hint until locked.
-4. **Play:** output starts at the stream point due now, usually mid-track. With strict mode on, it waits for a GPS lock first.
-5. **Live:** the app polls the controller, keeps the buffer full, and shows the sync grade.
-6. **End:** the stream ends on a stamped sample, so every phone on every beach stops on the same sample. The app then releases GPS.
+1. **Before listening:** install the app. On Wi-Fi, the phone can fetch ahead and seed while charging, if the listener allows it. Nothing asks for location at install.
+2. **Choose:** Use satellites and no satellites are offered as equal choices. The explanation appears once, and the app never asks again.
+3. **Join:** open the app for the station, or scan an event's QR code or tap its link. The event may be the main station or, if allowed, its own stream (open question).
+4. **Play:** output starts within seconds at the stream point due now, usually mid-track, on the best time available. With strict mode on, it waits until the error is under the listener's limit.
+5. **Live:** the app keeps 60 s of audio in hand, and with satellites on the error tightens as GPS locks. The screen shows the sync grade and any tightening.
+6. **End:** an event's stream ends on a stamped sample, so every phone stops on the same sample. The station carries on.
 
 | What happens | What the app does | What the listener sees |
 | --- | --- | --- |
 | GPS lost | Runs on the holdover clock; switches to NTP once NTP's error estimate is smaller | “Holding”, then “Internet time” |
-| Mobile data lost for less than D | Plays on from the buffer | nothing |
-| Mobile data lost for longer than D | Silence, then rejoins at the right point | “reconnecting” |
+| Use satellites turned off | GPS stops at once; flowtime carries on from the last fit, then the best source | “Privacy mode”; the music doesn't stop |
+| Use satellites turned on | Starts a fresh GPS fit; the gap closes under Auto or waits for Go | Tightening, once the estimate improves |
+| Flowtime moves | Holds the gap, then closes it by Auto or Go | The gap and time left |
+| Mobile data or peers lost for under 60 s | Plays on from the buffer and looks for other peers | nothing |
+| Mobile data lost for over 60 s, with nothing stored | Silence, then rejoins at the right point | “reconnecting” |
+| A seed server moves or fails | Finds another seed or peer by topic | nothing |
+| No peer can supply a block and seeds are at their cap | Waits for a peer (proposed; open question) | “Waiting for audio” |
 | Headphones changed | Re-reads the route delay, jumps to the right point with a fade | new route badge |
 | Phone call or another app takes the audio | Stops output, rejoins at the right point afterwards | music back in sync |
 | Phone's clock or time zone changed | Nothing: timing never uses the wall clock | nothing |
 | App killed by the system | The foreground service makes this rare; on restart it rejoins | a short gap |
-| Source fails | Standby ingest carries on the same numbering; otherwise stamped silence | silence |
+| Stream source fails, later for live shows | Standby ingest carries on the same numbering; otherwise stamped silence | silence |
 
 ## What the listener sees
 
 One badge answers “am I in sync?” at a glance, always in words with an estimated error, never by colour alone. Beneath it, every correction, check and exception the app makes is shown, not hidden.
+
+**Where screens are designed.** Screens are designed in Claude Desktop and built in Jetpack Compose. This document sets what each screen must do. Layout and visuals belong to `design/ui-spec.md` in the code repository, which overrides the mock-ups below where they differ.
 
 **UI direction.** Give listeners as much information as possible, presented with frontier, instrument-grade visuals rather than settings lists. The badge stays readable at a glance; everything behind it is dense, live and honest about its own error. Proposed visuals:
 
@@ -300,6 +381,7 @@ The values are examples. The badge's words and colour follow the table below.
 | Silent: over the limit ± n ms | amber | the sync error estimate is above the listener's strict-mode limit or the organiser's maximum |
 | Clock check failed | red | GPS and NTP disagree by more than 50 ms |
 | Not in sync | red | no time source, or no stream |
+| Privacy mode ± n ms | neutral | Use satellites is off. It is a choice rather than a fault, so it shows the true error without amber fault wording |
 
 Every badge's ± figure is the phone's sync error estimate, and the colour follows that one number. So an uncalibrated wireless headset shows amber even on a perfect GPS clock, and a phone that loses GPS turns amber exactly when its drift starts to matter.
 
@@ -323,6 +405,8 @@ While an exception lasts, a banner says what is happening and what to do:
 | Clock check failed | “Clock check failed: GPS and internet time differ by n s. Using internet time; reported to the organisers.” |
 | Bluetooth headphones | “Bluetooth: using the typical delay for this headset. Tap Calibrate for tighter sync.” |
 
+In Privacy mode, none of the GPS banners appear and nothing asks the listener to turn satellites on. Over an organiser's limit, the screen offers what could help, such as “Sync from nearby phones”.
+
 Tapping the badge opens a details view with the sync error budget (for example ±3.2 ms = flowtime ±0.4 + headphone lag ±2.8) and the raw numbers (offset, drift, error estimates, satellites, NTP round trips, buffer, output delay, app version) and a button to copy them for support.
 
 **Strict mode** is a listener setting, off by default.
@@ -330,6 +414,71 @@ Tapping the badge opens a details view with the sync error budget (for example �
 - **Off:** the app plays whenever it has flowtime, including on NTP before the first GPS lock and after a very long outage. The badge shows the sync error estimate and its colour.
 - **On:** the app plays only while the sync error estimate is under the listener's own limit, set with a slider from 1 to 50 ms (5 ms when first switched on). Over the limit it stays silent, shows the estimate and the fix (open sky, wired headphones, calibrate), and rejoins at the right point once it is back under.
 - **Organiser maximum:** an event can set a maximum sync error through the controller. It works like strict mode for every phone at that event, and a listener's own limit can only be tighter.
+
+### Use satellites
+
+An On/Off switch sits on the main screen, one tap away, and works at any point, including during playback and at events. It is never locked or changed automatically, and the setting persists between sessions.
+
+| Change | What happens | What the listener hears |
+| --- | --- | --- |
+| On to Off | GPS stops at once and position data is discarded. Holdover carries on, then NTP takes over once its error is smaller. | Nothing |
+| Off to On, first time | Android's permission prompt appears only now. If it's denied, the switch stays Off and the music carries on. | Nothing |
+| Off to On, with permission | GPS starts a fresh fit, and flowtime changes source by the usual rule: 20% better for 10 s | Usually nothing |
+
+If Location is off for the whole phone, the app says so and links to those settings. If permission is permanently denied, it links to the app's settings page.
+
+### Rate nudge control
+
+The control sets how a gap closes. Auto is the default, so nobody has to understand any of this to be in sync.
+
+- **Auto:** a gap starts closing straight away at the chosen or recommended period.
+- **Manual:** a gap is held and shown. **Go** starts closing it and becomes **Pause** while closing. **Jump** moves straight there.
+- **Period:** a log slider from 1 s to 5 min, set to a recommended period. The readout shows the real time left and the pitch change, such as 5 ms over 60 s at 0.14 cents.
+- **Recommended period:** at events, the fastest allowed. Listening alone, about 1 minute for a typical gap. These are starting values to test.
+- **Honest error:** a held gap counts in the badge. A held gap doesn't grow by itself, and it clears on the next rejoin.
+- **Event limits:** if a held gap takes the phone over an organiser's limit, it goes silent under the existing rule and offers Go.
+
+### Tightening
+
+When the error estimate improves by at least 20% and holds for 10 s, the screen shows the phone tightening and the event log records it, such as “Sync tightened from ±3.2 to ±0.8 ms, 9 satellites”. The trigger is the estimate, never the satellite count.
+
+- **Tightening is in flowtime:** the stream already tracks flowtime to microseconds, so a better flowtime opens a gap, and the stream then follows it. The screen shows both.
+- **Where it shows:** a satellite lights up in the sky plot as it starts being used, the precision ring and the sync trace's band narrow, and the rate nudge gauge moves until the gap closes, then the label reads “Tight”.
+- **Real change only:** if satellites arrive and nothing improves, the count updates quietly with no animation.
+- **Likely size (estimates):** 5–30 ms down to under 1 ms on Gold from NTP to first lock, up to several ms when GPS returns from holdover, and often only microseconds from few satellites to many once locked.
+- **Satellites off:** the same display works for NTP and nearby-phone sync, without the sky plot.
+
+### Event log
+
+The event log is one tap away and is built as an instrument rather than a plain list.
+
+- **Opening it:** the newest event sits under the badge, and tapping it opens the log. One swipe up does the same, tapping a banner jumps to its event, and the playback notification has an “Event log” action.
+- **Timeline scope:** lanes for CLOCK, AUDIO, NETWORK, OUTPUT and SCREEN run over the sync error trace, so you can see what caused each change in sync. Pinch to zoom from one minute to 24 hours, with repeats grouped, such as “Underrun × 3 in 2 min”.
+- **Linked list:** the list under the scope follows it, and each selects events in the other.
+- **Event detail:** what happened, how it affected the sound, what the app did and what you can do, with the numbers before and after.
+- **Precise times:** timestamps use the clock's digits, fading where they stop meaning anything, and are labelled as Teddington time.
+- **Staying safe:** a low-priority thread reads the audio thread's counters, so the log can't add jitter. The scope draws only while visible and falls back to plain text at Minimal.
+- **Storage:** events stay on the phone in a rolling store, such as 7 days, and leave only if the listener copies them or has opted in to telemetry.
+
+The log must open in two taps or fewer from any screen, and a new event must appear within about a second.
+
+### Automatic screen levels
+
+Each phone chooses its own level, so visuals give way before audio is affected. These are proposed, along with the thresholds below as starting values.
+
+| Level | What the phone shows | When |
+| --- | --- | --- |
+| Full | Clock at display rate, live traces, sky plot, full light show if opted in | Capable phone, cool, no audio problems |
+| Reduced | Slower updates, no animated visuals, simple full-screen colours for the light show | Warming up, low battery, or missed frames |
+| Minimal | Badge and status text, about once a second, with the light show off | Hot, battery saver, or audio underruns |
+| Off | Nothing drawn | Screen off or app not visible |
+
+- **Fast down, slow up:** drop a level at once on an underrun or heat warning, and go back up after a clear period, such as 60 s.
+- **Order of cuts:** defer non-urgent swarm work first when the buffer is healthy, then cut visuals. Audio is never reduced.
+- **Light show:** the controller can reduce or remove flashes but can never turn the show on without opt-in. It also switches off when the sync error is too large, because an off-beat flash looks worse than none.
+- **Clock honesty:** a lower level changes how often the clock updates, not its accuracy or its error estimate.
+- **Listener control:** listeners can choose a lower level or ask for full, but step-downs for audio underruns and heat still apply.
+- **Stays visible:** each change goes in the event log, such as “Reduced visuals: phone is hot”.
 
 ### Time signals screen
 
@@ -381,9 +530,9 @@ The brocast clock is the app's very best attempt at displaying flowtime: every f
 
 Every phone can light its screen on the same beat on every beach, turning the crowd into one display. It uses the same timing as the brocast clock, so a flash leaves every screen within flowtime's accuracy plus the screen-delay error: a few ms on a Gold phone (estimate).
 
-1. **Light track.** The cloud sends a light track alongside the audio: cues (colour, brightness, pattern) stamped on the same timeline as the audio samples. Cues come from beat detection at ingest, or live from a lighting operator. Each cue is a few bytes.
+1. **Light track.** The packager publishes a light track alongside the audio: cues (colour, brightness, pattern) stamped on the same timeline as the audio samples. Cues come from beat detection when packaging, or live from a lighting operator. Each cue is a few bytes.
 2. **Timing.** A cue stamped t lights at flowtime t + D. The app draws it on the frame whose expected presentation time is nearest, corrected for that model's screenlag, exactly as the brocast clock does.
-3. **Patterns.** Full-screen colour and brightness, plus patterns that depend on where the phone is on the beach, such as a wave rolling across the crowd. Each phone works out its own part from its GPS position, which never leaves the phone.
+3. **Patterns.** Full-screen colour and brightness, plus patterns that depend on where the phone is on the beach, such as a wave rolling across the crowd. Each phone works out its own part from its GPS position, which never leaves the phone. With satellites off, these fall back to whole-screen patterns or a section the listener picks.
 4. **Off the audio path.** The show runs on the UI thread with the brocast clock. The audio engine never waits for it, and the show skips a frame rather than delay one.
 
 **Safety.** Flashing light can trigger seizures in people with photosensitive epilepsy, so the show follows the WCAG “three flashes” rule:
@@ -395,24 +544,28 @@ Every phone can light its screen on the same beat on every beach, turning the cr
 
 ## Permissions, privacy, battery
 
-The app asks for precise location only because Android requires it to read GPS measurements. The phone's position never leaves the phone.
+The app asks for precise location only if the listener turns Use satellites on, because Android requires it to read GPS measurements. The phone's position never leaves the phone.
 
-- **Permissions:** precise location, notifications (for the session service's notice), internet, microphone (asked only when the listener starts a calibration), Bluetooth connect (to read the headset's name), and foreground service types `mediaPlayback` and `location`. Because GPS runs only inside a visible session service, the app should not need background location; confirm this against Google Play policy.
+- **Permissions:** notifications (for the session service's notice), internet, microphone (asked only when the listener starts a calibration), Bluetooth connect (to read the headset's name), and foreground service type `mediaPlayback`. Precise location and the `location` service type are added only while Use satellites is on. Nearby-phone sync would use Android's nearby-device permissions, declared as never used for location (to confirm). Because GPS runs only inside a visible session service, the app should not need background location; confirm this against Google Play policy.
 - **Store listing:** Google Play asks apps to justify location use. The wording: “used only to read satellite time; your position is not stored or sent”.
-- **Privacy:** the app may have to request GPS position updates to keep the chip running; it discards the positions. Calibration recordings never leave the phone and are discarded after the measurement. Telemetry is opt-in and carries time quality, buffer health, errors and measured headset delays, nothing else.
-- **Battery:** GPS, mobile data and audio together for hours. Not yet measured; set a target before the field trials.
-- **Data:** about 43 MB an hour at Opus 96 kbps.
+- **Privacy:** the app may have to request GPS position updates to keep the chip running; it discards the positions. Swarm peers can see a phone's IP address, which gives a rough location, so the app says so plainly and Privacy mode limits it (see Without satellites). Peers use a new key for each day's swarm, so a stable key can't track a phone. Calibration recordings never leave the phone and are discarded after the measurement. Telemetry is opt-in and carries time quality, buffer health, errors and measured headset delays, nothing else.
+- **Battery:** GPS, data and audio together for hours. Not yet measured; set a target before the field trials. GPS may not need polling continuously, especially for radio listening; this is being kept in view, with drift and re-lock time to measure first. Output chunks of 5 ms mean 200 wake-ups a second, and longer chunks may be possible for radio, if the rig shows the spread stays the same.
+- **CPU:** average load looks low: Opus decode is an estimated 2% of one core or less. Short stalls on the audio thread are the risk. Not yet measured on phones.
+- **Data:** about 43 MB an hour at Opus 96 kbps. A full day is about 1 GB, and a 60 s buffer about 720 KB.
 
 ## Test plan and build phases
 
 Prove the GPS clock on real phones first; everything else rests on it. Each phase ends on a measured result.
 
-1. **GPS time probe.** A small app logs each phone's grade and how steady its GPS-to-boot-clock link is. Run it on 10 or more popular UK models (Samsung Galaxy A and S, Pixel, Motorola, Xiaomi). Done when every model has a grade and a measured spread.
-2. **Two-phone bench test.** Play the same stream on two phones and record both wired outputs into one two-channel recorder; measure the gap by cross-correlation. Done when a Gold pair stays within 5 ms for an hour, including a 10-minute GPS dropout. The same rig measures each model's screenlag with a light sensor on the screen, or slow-motion video for a first look.
-3. **Bluetooth test.** Same rig, a microphone on each earcup of several common headsets. Done when the leftover delay per headset is known, the model defaults are set, and both in-app calibrations (the phone's own microphone and a neighbour's phone) agree with the rig to within a few ms.
-4. **Cloud pipeline.** Ingest, stamper, CDN and the NTP server directory, run with a live source for 24 hours. Done when the stamps hold to the sample and the rate lock keeps up.
-5. **Field trial.** One beach with 10–20 phones, then two beaches far apart. The test team carries a GPS-timed recorder at each beach to measure the phones; it is a test tool, not part of the product.
-6. **Public beta** at a small event, with telemetry on.
+1. **GPS time probe.** A small app logs each phone's grade and how steady its GPS-to-boot-clock link is. Run it on 10 or more popular Android models, across the target countries. Done when every model has a grade and a measured spread.
+2. **Two-phone bench test.** Play the same stream on two phones and record both wired outputs into one two-channel recorder; measure the gap by cross-correlation. Done when a Gold pair stays within 5 ms for an hour, including a 10-minute GPS dropout, which the Use satellites switch makes one tap. The same rig checks the 3 s tracking period, Manual and Auto gap closing, and the 5 ppm holdover figure against real drift. It also measures each model's screenlag with a light sensor on the screen, or slow-motion video for a first look.
+3. **Without satellites.** Log the app's NTP-versus-GPS gap outdoors on mobile data and Wi-Fi, against nearby servers, including network changes. Run a full session with permission denied and with Location off, with no prompts or GPS banners. Then sync one phone from another with satellites off, and measure the spread.
+4. **Bluetooth test.** Same rig, a microphone on each earcup of several common headsets. Done when the leftover delay per headset is known, the model defaults are set, and both in-app calibrations (the phone's own microphone and a neighbour's phone) agree with the rig to within a few ms.
+5. **Transport test.** Embed Bare, Hypercore and Hyperswarm in a separate process, with no relays. Record APK growth, direct connection rate, time to connect and time per block across home Wi-Fi and mobile data, with Iroh as the comparison. Mobile-to-mobile is the known weak spot. Done when the swarm's connection results decide the transport.
+6. **Load test.** On the Galaxy, as the weaker phone, compare underruns and spread for at least an hour: baseline, swarm running, and background load, with the screen on and off and Compose screens showing. Done when normal use has no underruns and the spread is no wider than baseline.
+7. **Publishing and scale.** Run the packager, signed log, seed servers and NTP directory for 24 hours. Move a seed, lose a seed, move the publisher, and resume from a stale copy to see how a fork is detected. Simulate seed capacity, late joiners, churn and sub-topics at hundreds of thousands of peers, including gossip or block-list traffic. Done when stamps hold to the sample and the swarm covers demand.
+8. **Field trial.** One beach with 10–20 phones, then two beaches far apart. The test team carries a GPS-timed recorder at each beach to measure the phones; it is a test tool, not part of the product.
+9. **Public beta** of the station and a small event, with telemetry on.
 
 ## Backlog
 
@@ -420,12 +573,14 @@ Ideas kept for later, not in the first build.
 
 - **Global moments:** a countdown on every brocast clock to a drop that hits every beach at the same instant, with a live count of phones in sync (for example “4,812 phones on 9 beaches in sync”) from opt-in telemetry.
 - **iPhone support:** iPhones are half of UK phones but cannot read GPS time, so they would run flowtime on NTP (about 5–30 ms) with an honest, wider sync error estimate; later perhaps tighter via Wi-Fi Aware from nearby Android phones. Parked for now; the reach cost is the main reason to revisit it.
+- **Bluetooth control mesh:** a local backup for signed stop commands, announcements and schedule changes at events when the mobile network is congested. It suits small messages, not audio: 100 phones relaying 96 kbps would need about 9.6 Mbps of transmissions, against about 1.2 Mbps for a good single link. It must be shown not to disturb Bluetooth headphones first.
+- **Nearby handover:** a phone that arrives without the download gets it from a neighbour over Wi-Fi, checked against the signed log.
 
 ## Open questions
 
-- [ ] Is the source a live DJ or performer, or a pre-recorded or existing stream? A live DJ on one beach needs a monitor delayed by D.
-- [ ] What playout delay D can the field trial support? 21 s is safe; lower means a closer feel to live.
-- [ ] Do the music licences cover streaming to many beaches at once?
+- [x] Is the source a live DJ or performer, or a pre-recorded or existing stream? Answered: pre-recorded to begin with. A live DJ later would need a monitor delayed by D.
+- [x] What playout delay D can the field trial support? Answered: D and the buffer are 60 s, with a lower D possible for live shows later.
+- [ ] Do the music licences cover a 24-hour station across countries and many beaches at once, stored copies on phones, and phones redistributing audio?
 - [ ] How do Bluetooth listeners get looser sync explained: a badge only, or a calibration screen?
 - [ ] How strong is mobile coverage at the target beaches on a busy day?
 - [ ] Google Play distribution or direct download?
@@ -435,6 +590,15 @@ Ideas kept for later, not in the first build.
 * [ ] First headset delay table: measure the 20 most common models in the lab, or start empty and fill it from calibrations?
 
 - [ ] Light track: automatic beat detection, a live lighting operator, or both?
+
+* [ ] Can beach events have their own programme as a separate signed log, or do they play the main station? Recommended: allow both.
+* [ ] When peers can't supply a block and the seeds are at their cap, should a listener wait, or should paid overflow serve them? Recommended: wait, the only option that keeps host cost fixed.
+* [ ] How late can a schedule change once blocks are published, given that published Hypercore blocks can't be swapped?
+* [ ] Which time servers do phones without GPS use, given that they can't all poll NPL? Recommended: regional servers following NPL time, in a signed list.
+* [ ] Should GPS poll intermittently for radio listening and close to continuously at events?
+* [ ] Do Pears' building blocks hold up on real phones, or does Iroh's connection record beat them? If Iroh wins, its relays are needed for hole punching and raise a cost and a domain name question.
+* [ ] Does each seed need a separate provider, and how much fixed seed capacity is enough?
+* [ ] What does a phone that can't report raw GPS do? Proposed: run the same way as satellites off, rather than being turned away.
 
 ## Sources
 
@@ -455,3 +619,9 @@ Ideas kept for later, not in the first build.
 * [Android Developers: Choreographer.FrameTimeline](https://developer.android.com/reference/android/view/Choreographer.FrameTimeline) (expected presentation time per frame, API level 33)
 
 - [W3C: Understanding WCAG 2.3.1, Three Flashes or Below Threshold](https://www.w3.org/WAI/WCAG21/Understanding/three-flashes-or-below-threshold)
+
+* [Pears docs](https://docs.pears.com/), [HyperDHT](https://github.com/holepunchto/hyperdht), [Hyperswarm](https://github.com/holepunchto/hyperswarm), [Hypercore](https://github.com/holepunchto/hypercore), [Bare](https://github.com/holepunchto/bare) and [Bare Kit](https://github.com/holepunchto/bare-kit)
+* [Iroh hole punching docs](https://docs.iroh.computer/concepts/holepunching), [Iroh relay docs](https://docs.iroh.computer/concepts/relays) and [Iroh issue 4647](https://github.com/n0-computer/iroh/issues/4647) (direct path dying under upload on Android, with hyperdht as a control)
+* [MNTP: Enhancing Time Synchronization for Mobile Devices](https://cs.colgate.edu/~jsommers/pubs/imc16.pdf) (unfiltered SNTP on 4G: 192 ms mean, 55 ms standard deviation)
+* [Large-scale measurement of decentralised NAT traversal](https://arxiv.org/pdf/2510.27500) (libp2p hole punching: 70% ± 7.1%)
+* [BlazingCDN on P2P CDNs](https://blog.blazingcdn.com/en-us/next-generation-content-delivery-the-potential-of-p2p-cdns) (vendor offload claims)
