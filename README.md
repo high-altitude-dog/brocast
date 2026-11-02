@@ -178,10 +178,12 @@ The top card shows flowtime in UK time, with local time beneath when it differs,
 | **GAP** | Any gap between the stream and flowtime, its nudge mode, and when it closes |
 | **NTP** | Server, stratum and round trip. **NTP−GPS** shows how far NTP's answer is from GPS, which tells you how good NTP alone would be. |
 | **GPS** | The scatter of the fit, how fast the phone's boot clock runs in ppm, and **delivery**, how late GPS reports reach the app, which matters for Silver phones |
-| **STREAM** | In stream mode: the channel, the server's newest segment, seconds buffered, fetch errors, and the server's clock minus flowtime |
+| **STREAM** | In stream mode: the server's newest segment, seconds buffered, fetch errors, and the server's clock minus flowtime |
 | **LOG** | The name of this run's log files |
 
 Gold means the chip stamps the boot clock, and Silver means each report is stamped on arrival. They show in the top card with the satellite count.
+
+An error adds one amber line under its row, cut to one line. Tap it to read the event log for that lane.
 
 ## Use satellites
 

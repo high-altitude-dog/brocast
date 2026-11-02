@@ -40,8 +40,10 @@ import androidx.compose.ui.semantics.setProgress
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import org.beachsync.proto.Lane
 import org.beachsync.proto.NudgeControl
 import org.beachsync.proto.NudgeMode
 import org.beachsync.proto.Session
@@ -83,10 +85,13 @@ private fun PlainButton(text: String, enabled: Boolean, modifier: Modifier = Mod
 }
 
 @Composable
-fun PlainEventLog(state: BenchState, back: () -> Unit) {
+fun PlainEventLog(state: BenchState, lane: Lane?, back: () -> Unit) {
     rememberTick(500L).value
-    PlainFrame("Event log", back) {
-        val events = state.eventLog?.recent(200).orEmpty()
+    var filter by remember(lane) { mutableStateOf(lane) }
+    val only = filter
+    PlainFrame(if (only != null) "Event log · ${only.name}" else "Event log", back) {
+        if (only != null) PlainButton("Show all", true) { filter = null }
+        val events = state.eventLog?.recent(200).orEmpty().filter { only == null || it.lane == only }
         if (events.isEmpty()) {
             BasicText("No events yet", style = Tokens.Text.body.style(Ink.muted))
         } else {

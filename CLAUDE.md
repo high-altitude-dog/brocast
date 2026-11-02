@@ -100,7 +100,7 @@ What's been verified, which happened before this repo reached this machine:
 
 Since then, on this machine, on the `prototype-queue` branch:
 
-- `./gradlew assembleDebug` builds, and `simtest` passes 90 checks. `simtest` needs `Events.kt` and `Nudge.kt` too; screens need Gradle, because of the Compose plugin.
+- `./gradlew assembleDebug` builds, and `simtest` passes 91 checks. `simtest` needs `Events.kt` and `Nudge.kt` too; screens need Gradle, because of the Compose plugin.
 - `simtest` now settles at about 2.5 µs with a 3 s tracking period, and about 7 µs rms with ±200 µs of stamp jitter.
 
 What's never been done:

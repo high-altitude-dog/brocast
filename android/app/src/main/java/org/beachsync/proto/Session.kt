@@ -20,7 +20,8 @@ class Settings(
 /** A run of text in the status grid. Live numbers are [mono], so their digits don't jitter as they update. */
 class StatusPart(val text: String, val mono: Boolean = false, val good: Boolean = false)
 
-class StatusRow(val label: String, val parts: List<StatusPart>)
+/** A row of the status grid. An [error] takes its own line, and tapping it opens the event log for [errorLane]. */
+class StatusRow(val label: String, val parts: List<StatusPart>, val error: String? = null, val errorLane: Lane? = null)
 
 /** One test run: the time sources, the stream, the audio thread, the event log and four CSV logs. */
 class Session(ctx: Context, val s: Settings, private val satellitesOn: Boolean) {
@@ -175,8 +176,7 @@ class Session(ctx: Context, val s: Settings, private val satellitesOn: Boolean) 
             t(" · underruns "), n(play.underruns.toString()),
         )
         if (play.state != "streaming" && play.state != "ticking") output.add(t(" · ${play.state}"))
-        play.error?.let { output.add(t(" · error: $it")) }
-        rows.add(StatusRow("OUTPUT", output))
+        rows.add(StatusRow("OUTPUT", output, play.error, Lane.AUDIO))
 
         val posNs = renderer.posErrUs * 1e3
         rows.add(StatusRow("PLAYOUT", listOf(
@@ -184,19 +184,28 @@ class Session(ctx: Context, val s: Settings, private val satellitesOn: Boolean) 
             t(" · jumps "), n(renderer.jumps.toString()), t(" · missing "), n(renderer.missingFrames.toString()),
         )))
 
+        val st = stream
+        if (st != null) {
+            val m = st.manifest
+            val parts = if (m == null) listOf(t("connecting to ${s.url}")) else listOf(
+                t("#"), n(m.newest.toString()), t(" · "), n("${st.buffered} s"), t(" buffered · "), n(st.errors.toString()),
+                t(" errors · server−flow "), n(fmtSigned(st.serverMinusFlowMs * 1e6)),
+            )
+            rows.add(StatusRow("STREAM", parts, st.lastError, Lane.NET))
+        }
+
         val gap = nudge.gapAt(boot)
         val mode = if (nudge.mode == NudgeMode.AUTO) "Auto" else "Manual"
         rows.add(StatusRow("GAP", when {
             gap == 0L -> listOf(n("0"), t(" · $mode"))
             nudge.state.closing -> listOf(n(fmtDuration(gap.toDouble())), t(" · $mode · closes in "), n(fmtDuration(nudge.secondsLeft(boot) * 1e9)))
-            else -> listOf(n(fmtDuration(gap.toDouble())), t(" · $mode · held"))
+            else -> listOf(n(fmtDuration(gap.toDouble())), t(" · $mode · paused"))
         }))
 
-        val ntpParts = if (ntp.samples == 0) mutableListOf(t(ntp.lastError ?: "asking ${ntp.host}")) else mutableListOf(
+        val ntpParts = if (ntp.samples == 0) listOf(t("asking ${ntp.host}")) else listOf(
             t("${ntp.host} S${ntp.stratum} · rtt "), n(fmtMs(ntp.rttMs)), t(" · NTP−GPS "), n(fmtSigned(ntp.minusGpsUs * 1e3)),
         )
-        if (ntp.samples > 0) ntp.lastError?.let { ntpParts.add(t(" · last error: $it")) }
-        rows.add(StatusRow("NTP", ntpParts))
+        rows.add(StatusRow("NTP", ntpParts, ntp.lastError, Lane.NET))
 
         val fitted = FlowTime.gps
         rows.add(StatusRow("GPS", when {
@@ -207,17 +216,6 @@ class Session(ctx: Context, val s: Settings, private val satellitesOn: Boolean) 
                 t(" · delivery "), n(fmtMs(gps.deliveryMs)),
             )
         }))
-
-        val st = stream
-        if (st != null) {
-            val m = st.manifest
-            val parts = if (m == null) mutableListOf(t(st.lastError ?: "connecting to ${s.url}")) else mutableListOf(
-                t("${channelName()} · newest "), n("#${m.newest}"), t(" · buffered "), n("${st.buffered} s"),
-                t(" · errors "), n(st.errors.toString()), t(" · server−flow "), n(fmtMs(st.serverMinusFlowMs)),
-            )
-            if (m != null) st.lastError?.let { parts.add(t(" · last error: $it")) }
-            rows.add(StatusRow("STREAM", parts))
-        }
 
         rows.add(StatusRow("LOG", listOf(n("$name-*.csv"))))
         return rows

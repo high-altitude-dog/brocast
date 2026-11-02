@@ -354,12 +354,13 @@ fun testEvents() {
     fun tight(t: Long, err: Double, sats: Int = 9) =
         td.update(Reading(t * s, null, Source.GPS, err, t * s, 0, 0, 0L, null, 0, null, null, null, sats)).filter { it.text.startsWith("Sync") }
     check(tight(200, 3.2e6).isEmpty(), "the first estimate is only a baseline")
-    check(tight(201, 0.8e6).isEmpty() && !td.tighteningFromNs.isNaN(), "an improvement shows as under way while it's confirmed")
+    check(tight(201, 0.8e6).isEmpty() && td.tighteningFromNs.isNaN(), "an improvement doesn't show while it's being confirmed")
     check(tight(205, 0.8e6).isEmpty(), "and isn't logged before 10 s")
     check(tight(211, 0.8e6).single().text == "Sync tightened from ±3.20 ms to ±800 µs, 9 satellites", "after 10 s it's logged once, with the figures")
-    check(td.tighteningFromNs.isNaN(), "and the status panel stops showing it")
-    check(tight(212, 0.8e6).isEmpty(), "it isn't repeated")
+    check(td.tighteningFromNs == 3.2e6, "and the screens show it from then, with the figure it improved on")
+    check(tight(212, 0.8e6).isEmpty() && td.tighteningFromNs == 3.2e6, "it isn't repeated, and still shows")
     check(tight(213, 0.75e6, sats = 14).isEmpty() && tight(230, 0.75e6, sats = 14).isEmpty(), "more satellites with little improvement log nothing")
+    check(td.tighteningFromNs.isNaN(), "and the screens stop showing it after 10 s")
     check(tight(231, 5e6).isEmpty(), "getting worse logs nothing here")
     check(tight(232, 2e6).isEmpty() && tight(240, 5e6).isEmpty() && tight(251, 2e6).isEmpty(), "a brief improvement that doesn't last logs nothing")
     val quiet = EventDetector()

@@ -47,10 +47,11 @@ class MainActivity : ComponentActivity(), BenchActions {
         state.eventLog = eventLog
         setContent {
             var page by remember { mutableStateOf(Page.BENCH) }
+            var logLane by remember { mutableStateOf<Lane?>(null) }
             BackHandler(page != Page.BENCH) { page = Page.BENCH }
             when (page) {
-                Page.BENCH -> TestBench(state, this, { page = Page.LOG }, { page = Page.NUDGE })
-                Page.LOG -> PlainEventLog(state) { page = Page.BENCH }
+                Page.BENCH -> TestBench(state, this, { logLane = it; page = Page.LOG }, { page = Page.NUDGE })
+                Page.LOG -> PlainEventLog(state, logLane) { page = Page.BENCH }
                 Page.NUDGE -> PlainNudge(state, this) { page = Page.BENCH }
             }
         }

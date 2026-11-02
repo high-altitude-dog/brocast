@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
@@ -38,7 +39,9 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
@@ -46,24 +49,29 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import org.beachsync.proto.Event
 import org.beachsync.proto.EventLog
 import org.beachsync.proto.FlowTime
+import org.beachsync.proto.Lane
 import org.beachsync.proto.NudgeMode
 import org.beachsync.proto.Policy
 import org.beachsync.proto.Renderer
 import org.beachsync.proto.Session
+import org.beachsync.proto.StatusPart
 import org.beachsync.proto.fmtDuration
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import kotlin.math.abs
 
 /** The test bench's settings, as Compose state. MainActivity loads and saves them. */
 class BenchState {
@@ -109,7 +117,7 @@ private val LOCAL_DIGITS = DateTimeFormatter.ofPattern("HH:mm:ss z", Locale.UK)
 fun eventTime(e: Event): String = e.utc?.let { CLOCK_DIGITS.format(Instant.ofEpochSecond(0, it)) } ?: "--:--:--"
 
 @Composable
-fun TestBench(state: BenchState, actions: BenchActions, openLog: () -> Unit, openNudge: () -> Unit) {
+fun TestBench(state: BenchState, actions: BenchActions, openLog: (Lane?) -> Unit, openNudge: () -> Unit) {
     val running = state.session != null
     Column(
         Modifier.fillMaxSize().background(Ink.bg).safeDrawingPadding().imePadding().verticalScroll(rememberScrollState())
@@ -137,9 +145,9 @@ fun TestBench(state: BenchState, actions: BenchActions, openLog: () -> Unit, ope
             SatellitesRow(state.satellites, actions::setSatellites)
         }
         RunButton(running, actions::startOrStop)
-        EventRow(state.eventLog, openLog)
-        NudgeLink(state, openNudge)
-        StatusGrid(state)
+        EventRow(state.eventLog) { openLog(null) }
+        NudgeRow(state, openNudge)
+        StatusGrid(state, openLog)
     }
 }
 
@@ -157,16 +165,29 @@ private fun Header(state: BenchState) {
             Modifier.border(Tokens.Stroke.emphasis.dp, tint, RoundedCornerShape(Tokens.Radius.pill.dp)).padding(horizontal = 12.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Box(Modifier.size(8.dp).background(tint, CircleShape))
+            if (s != null) RunningDot() else Box(Modifier.size(8.dp).background(Ink.muted, RoundedCornerShape(2.dp)))
             Spacer(Modifier.width(8.dp))
-            BasicText(if (s != null) "RUNNING" else "STOPPED", style = Tokens.Text.badge.style().copy(fontSize = 12.sp))
+            BasicText(if (s != null) "RUNNING" else "STOPPED", style = Tokens.Text.badge.style(if (s != null) Ink.text else Ink.textSecondary).copy(fontSize = 12.sp))
             if (s != null) {
                 val seconds = (tick - s.startBoot).coerceAtLeast(0) / 1_000_000_000L
                 Spacer(Modifier.width(8.dp))
-                BasicText("%d:%02d".format(Locale.ROOT, seconds / 60, seconds % 60), style = Tokens.Text.valueSmall.style())
+                BasicText("%02d:%02d".format(Locale.ROOT, seconds / 60, seconds % 60), style = Tokens.Text.valueSmall.style())
             }
         }
     }
+}
+
+/** The accent dot with a soft glow, static so it costs nothing per frame. */
+@Composable
+private fun RunningDot() {
+    Box(
+        Modifier.size(8.dp).drawBehind {
+            val r = size.minDimension / 2
+            val glow = r + 10.dp.toPx()
+            drawCircle(Brush.radialGradient(0f to Ink.accent.copy(alpha = 0.6f), 1f to Color.Transparent, center = center, radius = glow), glow)
+            drawCircle(Ink.accent, r)
+        },
+    )
 }
 
 @Composable
@@ -204,7 +225,7 @@ private fun ClockCard(state: BenchState) {
                     BasicText(s.sourceName(boot) + figure, style = Tokens.Text.value.style(tint))
                     BasicText(s.sourceDetail(), style = Tokens.Text.small.style())
                     val from = s.tighteningFromNs()
-                    if (!from.isNaN()) BasicText("TIGHTENING from ±" + fmtDuration(from), style = Tokens.Text.small.style(Ink.accent))
+                    if (!from.isNaN() && fit != null) TighteningLine(from, fit.errAt(boot))
                 }
             }
         }
@@ -212,6 +233,23 @@ private fun ClockCard(state: BenchState) {
 }
 
 private const val WARN_ABOVE_NS = 5_000_000.0   // 5 ms, from the badge rules in design/ui-spec.md
+
+/** "TIGHTENING ±11.4 → ±0.40 ms", flowtime's own error, with the first unit dropped when both figures share it. */
+@Composable
+private fun TighteningLine(fromNs: Double, toNs: Double) {
+    val from = fmtDuration(fromNs)
+    val to = fmtDuration(toNs)
+    val figures = "±" + (if (from.substringAfter(' ') == to.substringAfter(' ')) from.substringBefore(' ') else from) + " → ±" + to
+    BasicText(
+        buildAnnotatedString {
+            append("TIGHTENING ")
+            pushStyle(SpanStyle(fontFamily = Tokens.Text.valueSmall.style().fontFamily, fontWeight = FontWeight.Normal, letterSpacing = 0.sp, color = Ink.muted))
+            append(figures)
+            pop()
+        },
+        style = Tokens.Text.small.style(Ink.accent).copy(fontSize = 10.5.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.12.em),
+    )
+}
 
 /** "GMT · local 23:43:51 CET", with the local part left out when it matches UK time. */
 private fun zoneLine(now: Instant): String {
@@ -307,12 +345,22 @@ private fun SatellitesRow(on: Boolean, onChange: (Boolean) -> Unit) {
             BasicText("Use satellites", style = Tokens.Text.bodyStrong.style())
             BasicText("Never locked · position stays on phone", style = Tokens.Text.small.style())
         }
-        Row(
-            Modifier.width(46.dp).heightIn(min = 26.dp, max = 26.dp).background(if (on) Ink.accent else Ink.grid, RoundedCornerShape(Tokens.Radius.switchTrack.dp)).padding(2.dp),
-            horizontalArrangement = if (on) Arrangement.End else Arrangement.Start,
-        ) {
-            Box(Modifier.size(22.dp).background(if (on) Ink.onAccent else Ink.muted, CircleShape))
-        }
+        SatellitesSwitch(on)
+    }
+}
+
+/** The track and thumb, the same on every screen. Off is an outline with a smaller thumb, so it reads without colour. */
+@Composable
+fun SatellitesSwitch(on: Boolean) {
+    val shape = RoundedCornerShape(Tokens.Radius.switchTrack.dp)
+    val track = Modifier.width(46.dp).height(26.dp)
+    Row(
+        (if (on) track.background(Ink.accent, shape).padding(2.dp)
+        else track.border(Tokens.Stroke.emphasis.dp, Ink.faint, shape).padding(horizontal = 3.5.dp)),
+        horizontalArrangement = if (on) Arrangement.End else Arrangement.Start,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.size(if (on) 22.dp else 18.dp).background(if (on) Ink.bg else Ink.muted, CircleShape))
     }
 }
 
@@ -336,7 +384,7 @@ private fun RunButton(running: Boolean, onClick: () -> Unit) {
 }
 
 @Composable
-private fun LinkRow(onClick: () -> Unit, content: @Composable RowScope.() -> Unit) {
+private fun LinkRow(onClick: () -> Unit, chevron: Boolean = true, content: @Composable RowScope.() -> Unit) {
     Row(
         Modifier.fillMaxWidth().heightIn(min = Tokens.Space.touchTarget.dp).background(Ink.surface, RoundedCornerShape(Tokens.Radius.tile.dp))
             .border(Tokens.Stroke.card.dp, Ink.border, RoundedCornerShape(Tokens.Radius.tile.dp))
@@ -344,8 +392,10 @@ private fun LinkRow(onClick: () -> Unit, content: @Composable RowScope.() -> Uni
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) { content() }
-        Spacer(Modifier.width(8.dp))
-        Chevron(Ink.text, 16.dp)
+        if (chevron) {
+            Spacer(Modifier.width(8.dp))
+            Chevron(Ink.text, 16.dp)
+        }
     }
 }
 
@@ -376,19 +426,58 @@ private fun EventRow(log: EventLog?, openLog: () -> Unit) {
     }
 }
 
-/** Not in the hand-off yet: the only route to the rate nudge controls until that screen is built. */
+private fun partsText(parts: List<StatusPart>) = buildAnnotatedString {
+    val mono = Tokens.Text.valueSmall.style().fontFamily
+    for (part in parts) {
+        if (part.mono) {
+            pushStyle(SpanStyle(fontFamily = mono, color = if (part.good) Ink.accent else Ink.text))
+            append(part.text)
+            pop()
+        } else append(part.text)
+    }
+}
+
+/** "+0.01%": the playback rate change while a gap closes. Very slow closes keep more places, so they don't read as zero. */
+private fun fmtPitch(rate: Double): String {
+    val percent = abs(rate) * 100
+    return (if (rate < 0) "−" else "+") + (if (percent >= 0.01) "%.2f%%" else "%.4f%%").format(Locale.ROOT, percent)
+}
+
+/** "gap 0.20 ms · closes in 1.40 s · +0.01%", or "gap 5.00 ms · paused". */
+private fun nudgeParts(s: Session?, boot: Long): List<StatusPart> {
+    val gap = s?.nudge?.gapAt(boot) ?: 0L
+    if (s == null || gap == 0L) return listOf(StatusPart("no gap"))
+    val figure = StatusPart(fmtDuration(gap.toDouble()), mono = true)
+    val closing = s.nudge.state
+    if (!closing.closing) return listOf(StatusPart("gap "), figure, StatusPart(" · paused"))
+    return listOf(
+        StatusPart("gap "), figure, StatusPart(" · closes in "), StatusPart(fmtDuration(s.nudge.secondsLeft(boot) * 1e9), mono = true),
+        StatusPart(" · "), StatusPart(fmtPitch(closing.rate), mono = true),
+    )
+}
+
 @Composable
-private fun NudgeLink(state: BenchState, openNudge: () -> Unit) {
+private fun NudgeRow(state: BenchState, openNudge: () -> Unit) {
     val boot by rememberTick(STATUS_MS)
-    val gap = state.session?.nudge?.gapAt(boot) ?: 0L
-    val mode = if (state.nudgeMode == NudgeMode.AUTO) "Auto" else "Manual"
-    LinkRow(openNudge) {
-        BasicText("Rate nudge · $mode · " + if (gap == 0L) "no gap" else "gap " + fmtDuration(gap.toDouble()), style = Tokens.Text.body.style())
+    val manual = state.nudgeMode == NudgeMode.MANUAL
+    LinkRow(openNudge, chevron = false) {
+        BasicText(
+            if (manual) "MANUAL" else "AUTO",
+            Modifier.border(Tokens.Stroke.card.dp, if (manual) Ink.accent else Ink.faint, RoundedCornerShape(6.dp)).padding(horizontal = 8.dp, vertical = 3.dp),
+            Tokens.Text.badge.style(if (manual) Ink.accent else Ink.text).copy(fontSize = 11.sp),
+        )
+        Spacer(Modifier.width(10.dp))
+        BasicText(
+            partsText(nudgeParts(state.session, boot)), Modifier.weight(1f), Tokens.Text.body.style().copy(fontSize = 12.5.sp),
+            overflow = TextOverflow.Ellipsis, maxLines = 1,
+        )
+        Spacer(Modifier.width(10.dp))
+        BasicText("Nudge ›", style = Tokens.Text.small.style(Ink.muted).copy(fontSize = 12.sp))
     }
 }
 
 @Composable
-private fun StatusGrid(state: BenchState) {
+private fun StatusGrid(state: BenchState, openLog: (Lane?) -> Unit) {
     val boot by rememberTick(STATUS_MS)
     val s = state.session
     Card {
@@ -396,23 +485,21 @@ private fun StatusGrid(state: BenchState) {
             BasicText("Stopped. Set up both phones the same way, then press Start on each.", style = Tokens.Text.body.style(Ink.muted))
             return@Card
         }
-        val mono = Tokens.Text.valueSmall.style().copy(fontSize = 11.5.sp)
+        val text = Tokens.Text.body.style().copy(fontSize = 11.5.sp)
         for (row in s.statusRows(boot)) {
             Row(Modifier.fillMaxWidth()) {
                 BasicText(row.label, Modifier.width(58.dp), Tokens.Text.cardLabel.style().copy(fontSize = 10.sp, letterSpacing = 1.4.sp))
                 Spacer(Modifier.width(10.dp))
-                BasicText(
-                    buildAnnotatedString {
-                        for (part in row.parts) {
-                            if (part.mono) {
-                                pushStyle(SpanStyle(fontFamily = mono.fontFamily, color = if (part.good) Ink.accent else Ink.text))
-                                append(part.text)
-                                pop()
-                            } else append(part.text)
-                        }
-                    },
-                    Modifier.weight(1f), Tokens.Text.body.style().copy(fontSize = 11.5.sp),
-                )
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    BasicText(partsText(row.parts), style = text)
+                    row.error?.let { error ->
+                        BasicText(
+                            "▲ $error",
+                            Modifier.fillMaxWidth().heightIn(min = 22.dp).clickable(role = Role.Button) { openLog(row.errorLane) },
+                            text.copy(color = Ink.warn), overflow = TextOverflow.Ellipsis, maxLines = 1,
+                        )
+                    }
+                }
             }
         }
     }
