@@ -199,6 +199,6 @@ It checks once a second and records each change once: time source changes, GPS f
 These tests ran on the app's timing code, outside a phone:
 
 - **NTP parsing:** recovered a known offset to 1 ns, and refused replies with the wrong nonce and kiss-o'-death replies.
-- **GPS fit:** the data had 3.2 ppm of drift and 30 ns of scatter. The fit measured the drift to within 0.0001 ppm and tracked to within 23 ns. It ignored a one-off 5 ms outlier, and reset once on a real 2 ms step. After 60 s of holdover it was 6 ns out, against a bound of ±1.3 µs.
+- **GPS fit:** the data had 3.2 ppm of drift and 30 ns of scatter. The fit measured the drift to within 0.0001 ppm and tracked to within 23 ns. It ignored a one-off 5 ms outlier, and reset once on a real 2 ms step. After 60 s of holdover it was 6 ns out, against a bound of ±300 µs.
 - **Playout loop:** with the audio clock running ±80 ppm off, the heard-time error settled at 2–3 µs. With ±200 µs of jitter in the output time stamps it was 13 µs rms.
 - **Server and measure script:** checked against synthetic recordings with known gaps.

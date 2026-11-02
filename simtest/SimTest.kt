@@ -79,7 +79,7 @@ fun testGps() {
 }
 
 fun testGpsEstimate() {
-    println("GPS error estimate: Silver's link delay is counted")
+    println("GPS error estimate: Silver's link delay is counted, and holdover's bound grows at 5 ppm")
     val x0 = 1_761_955_200_000_000_000L
     fun fitted(link: Double): ClockFit {
         val f = GpsFitter()
@@ -91,6 +91,18 @@ fun testGpsEstimate() {
     val silver = fitted(GpsFitter.SILVER_LINK_NS)
     check(gold.err0 < 1e6, "Gold starts under 1 ms (±${"%.0f".format(gold.err0)} ns)")
     check(silver.err0 >= 5e6 && silver.err0 < 5.1e6, "Silver starts at about 5 ms (±${"%.2f".format(silver.err0 / 1e6)} ms)")
+    val hour = gold.boot0 + 3600 * 1_000_000_000L
+    check(abs(gold.errAt(hour) - 18e6) < 1e5, "an hour of holdover adds about 18 ms (±${"%.2f".format(gold.errAt(hour) / 1e6)} ms)")
+
+    // NTP at ±15 ms takes over once GPS's bound is 25% worse: about 62.5 minutes, not days
+    FlowTime.reset(Policy.AUTO)
+    FlowTime.gps = gold
+    FlowTime.reselect(gold.boot0)
+    FlowTime.ntp = ClockFit(gold.boot0, x0, 0.0, 15e6, 0.0)
+    var t = 0L
+    while (FlowTime.chosen != Source.NTP && t < 86400) { t += 1; FlowTime.reselect(gold.boot0 + t * 1_000_000_000L) }
+    check(t in 3700..3800, "NTP at ±15 ms takes over after ${t / 60} minutes")
+    FlowTime.reset(Policy.AUTO)
 }
 
 fun testNtpFit() {

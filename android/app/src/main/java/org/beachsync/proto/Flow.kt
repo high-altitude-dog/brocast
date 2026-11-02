@@ -175,13 +175,14 @@ class GpsFitter(private val window: Int = 60) {
         last = line
         val se = line.se(0.0)
         val err0 = 2 * sqrt(se * se + uncNs * uncNs) + 50.0 + linkNs   // 50 ns for what the chip cannot see
-        val growth = (2 * line.slopeSe() + 20.0) / 1e9         // plus 20 ns/s for the crystal wandering
+        val growth = (2 * line.slopeSe() + HOLDOVER_DRIFT_NS_PER_S) / 1e9
         return ClockFit(b, o + line.at(0.0).roundToLong(), line.slope / 1e9, err0, growth)
     }
 
     companion object {
         const val MIN = 5
         const val SILVER_LINK_NS = 5_000_000.0        // the design's 1-5 ms Silver link, at its upper end
+        const val HOLDOVER_DRIFT_NS_PER_S = 5000.0    // 5 ppm of rate change: a starting value until phones measure it
     }
 }
 
