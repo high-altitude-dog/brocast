@@ -10,6 +10,22 @@ The whole point is to drive the spread of when listeners hear each sound to near
 - **`Flow.kt` and `Renderer.kt` stay plain Kotlin,** with no `android.*` imports, so `simtest/` can test them on a desktop.
 - **Flag any change that could add jitter or bias to heard time** before making it.
 
+Compose screens follow the same rule. They run on the UI thread, read state the timing code already publishes, and never call into the audio thread.
+
+## Design hand-off
+
+UI and visual design happens in Claude Desktop. Code happens here. Work passes between them through `design/`:
+
+| File | Written by | What it is |
+|---|---|---|
+| `design/tokens.json` | Claude Desktop | Colours, type, spacing and corner radii: the single source for the look. Turn it into the app's theme; don't copy values by hand. |
+| `design/screens/` | Claude Desktop | Each screen as a PNG and standalone HTML, showing exactly what to build |
+| `design/ui-spec.md` | Claude Desktop | What each element shows, which app field it comes from, its states, and what tapping it does |
+| `design/feedback.md` | Claude Code | Designs that ask for data the app doesn't have or that Android can't do. Phone screenshots can go here too (`adb exec-out screencap -p`). |
+
+- **Edit nothing in `design/` except `feedback.md`.**
+- Each hand-off is committed, so `git diff` shows what changed in the design. Read that diff before building.
+
 ## Terms (use these, as the design doc does)
 
 | Term | Meaning |
@@ -33,7 +49,7 @@ The whole point is to drive the spread of when listeners hear each sound to near
 
 | Path | What it is |
 |---|---|
-| `android/` | The app: Kotlin, no AndroidX, programmatic UI, package `org.beachsync.proto`. AGP 8.7.3, Kotlin 2.0.21, Gradle 8.11.1, compileSdk/targetSdk 35, minSdk 31. |
+| `android/` | The app: Kotlin, package `org.beachsync.proto`. AGP 8.7.3, Kotlin 2.0.21, Gradle 8.11.1, compileSdk/targetSdk 35, minSdk 31. Jetpack Compose (and the AndroidX it needs) is allowed for screens only; the rest stays free of AndroidX. Today's screen is still programmatic test controls. |
 | `android/.../Flow.kt` | `ClockFit`, `FlowTime` (source choice, with 20%-better-for-10-s hysteresis), line fits, `GpsFitter`, `NtpFitter` |
 | `android/.../Renderer.kt` | Tick and stream rendering, and the PI rate nudge that tracks the audio clock (±0.1% at most, jump if more than 20 ms out) |
 | `android/.../Nudge.kt` | How a gap closes when flowtime moves: Auto, Manual, Go and the period. The audio thread only reads one immutable `NudgeState`. Plain Kotlin, tested in `simtest/`. |
