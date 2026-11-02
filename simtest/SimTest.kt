@@ -78,6 +78,21 @@ fun testGps() {
     check(e < 100, "after the step it tracks again: off by ${"%.0f".format(e)} ns")
 }
 
+fun testGpsEstimate() {
+    println("GPS error estimate: Silver's link delay is counted")
+    val x0 = 1_761_955_200_000_000_000L
+    fun fitted(link: Double): ClockFit {
+        val f = GpsFitter()
+        var fit: ClockFit? = null
+        for (i in 0 until 60) { val b = 5_000_000_000L + i * 1_000_000_000L; f.add(b, x0, 10.0, fit, link)?.let { fit = it } }
+        return fit!!
+    }
+    val gold = fitted(0.0)
+    val silver = fitted(GpsFitter.SILVER_LINK_NS)
+    check(gold.err0 < 1e6, "Gold starts under 1 ms (±${"%.0f".format(gold.err0)} ns)")
+    check(silver.err0 >= 5e6 && silver.err0 < 5.1e6, "Silver starts at about 5 ms (±${"%.2f".format(silver.err0 / 1e6)} ms)")
+}
+
 fun testNtpFit() {
     println("NTP fit: 3 ppm drift, round trips 15-60 ms, asymmetric paths")
     val rnd = Random(2)
@@ -223,6 +238,6 @@ fun testEvents() {
 }
 
 fun main() {
-    testNtp(); testGps(); testNtpFit(); testPlayout(); testTickTiming(); testChannel(); testEvents()
+    testNtp(); testGps(); testGpsEstimate(); testNtpFit(); testPlayout(); testTickTiming(); testChannel(); testEvents()
     println(if (failures == 0) "ALL PASSED" else "$failures FAILED")
 }

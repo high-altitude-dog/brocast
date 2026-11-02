@@ -90,7 +90,8 @@ class GpsTime(ctx: Context, private val log: CsvLog) {
         val erUnc = if (isGold && c.hasElapsedRealtimeUncertaintyNanos()) c.elapsedRealtimeUncertaintyNanos else 0.0
         val before = FlowTime.gps
         val resid = if (before != null) (off - (before.utcAt(boot) - boot)).toDouble() else Double.NaN
-        val fit = fitter.add(boot, off, sqrt(biasUnc * biasUnc + erUnc * erUnc), before)
+        val link = if (isGold) 0.0 else GpsFitter.SILVER_LINK_NS
+        val fit = fitter.add(boot, off, sqrt(biasUnc * biasUnc + erUnc * erUnc), before, link)
         if (fit != null) FlowTime.gps = fit
         val line = fitter.last
         rmsNs = line?.rms ?: Double.NaN

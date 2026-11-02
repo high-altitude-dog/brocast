@@ -143,8 +143,11 @@ class GpsFitter(private val window: Int = 60) {
     var last: Line? = null
         private set
 
-    /** Adds a sample; returns the new fit, or null while there is not enough data. [uncNs] is the chip's own 1-sigma figure. */
-    fun add(b: Long, o: Long, uncNs: Double, current: ClockFit?): ClockFit? {
+    /**
+     * Adds a sample; returns the new fit, or null while there is not enough data. [uncNs] is the chip's own
+     * 1-sigma figure. [linkNs] is what the chip cannot see: the bound on how late a Silver phone stamps a report.
+     */
+    fun add(b: Long, o: Long, uncNs: Double, current: ClockFit?, linkNs: Double = 0.0): ClockFit? {
         if (current != null && n >= MIN) {
             val dev = abs((o - (current.utcAt(b) - b)).toDouble())
             val limit = maxOf(1e6, 6 * (last?.rms ?: 0.0))
@@ -171,12 +174,15 @@ class GpsFitter(private val window: Int = 60) {
         if (line.span < 3.0) return null
         last = line
         val se = line.se(0.0)
-        val err0 = 2 * sqrt(se * se + uncNs * uncNs) + 50.0   // 50 ns for what the chip cannot see
+        val err0 = 2 * sqrt(se * se + uncNs * uncNs) + 50.0 + linkNs   // 50 ns for what the chip cannot see
         val growth = (2 * line.slopeSe() + 20.0) / 1e9         // plus 20 ns/s for the crystal wandering
         return ClockFit(b, o + line.at(0.0).roundToLong(), line.slope / 1e9, err0, growth)
     }
 
-    companion object { const val MIN = 5 }
+    companion object {
+        const val MIN = 5
+        const val SILVER_LINK_NS = 5_000_000.0        // the design's 1-5 ms Silver link, at its upper end
+    }
 }
 
 /**
