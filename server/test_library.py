@@ -116,13 +116,17 @@ def main():
             m = json.loads(call(STREAM, "GET", "/manifest.json")[1])
             check(m["source"] == "Typed" and m["start_utc_ns"] > before["start_utc_ns"], "the stream server follows, with a new start time")
             check(m["newest"] >= 0, f"and is live (newest segment {m['newest']})")
-            with open(os.path.join(lib, "sets", b["id"], "audio.pcm"), "rb") as f:
-                pcm = f.read()
-            status, seg = call(STREAM, "GET", f"/seg/{m['newest']}.pcm")
-            frames = len(pcm) // 4
-            first = (m["newest"] * 48000) % frames
-            want = (pcm + pcm)[first * 4:(first + 48000) * 4]
-            check(status == 200 and seg == want, "its segments are exactly the transcoded audio")
+            status, seg = call(STREAM, "GET", f"/seg/{m['newest']}.opus")
+            check(status == 200 and 100 < len(seg) < 40000, f"its blocks are compressed ({len(seg)} bytes for 1 s)")
+            check(call(STREAM, "GET", f"/seg/{m['newest']}.pcm")[0] == 404, "and raw audio isn't available at all")
+            with open(os.path.join(lib, "sets", b["id"], "set.opus"), "rb") as f:
+                whole = f.read()
+            check(call(STREAM, "GET", "/on_air.opus") == (200, whole), "the whole compressed file downloads")
+            status, listed = call(STREAM, "GET", "/library.json")
+            items = json.loads(listed)["editions"][-1]["items"] if status == 200 else []
+            check(any(i["id"] == b["id"] and i["sha256"] and i["seconds"] >= 3 for i in items), "the library lists it, with its hash")
+            check(call(STREAM, "GET", f"/file/{b['id']}.opus") == (200, whole), "and phones can download it once")
+            check(call(STREAM, "GET", "/file/../meta.opus")[0] in (400, 404), "a bad file id is refused")
             check(api("DELETE", "/api/sets/" + b["id"])[0] == 400, "a set on air can't be deleted")
             check(api("DELETE", "/api/air")[0] == 200, "it can be taken off air")
             time.sleep(0.1)

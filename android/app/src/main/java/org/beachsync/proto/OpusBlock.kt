@@ -32,25 +32,3 @@ object OpusBlock {
         return h
     }
 }
-
-/** How many frames [late] is after [original], searching up to [maxLag] either way, and how well they match from 0 to 1. Stereo, compared on the left channel. */
-fun bestLag(late: ShortArray, original: ShortArray, maxLag: Int): Pair<Int, Double> {
-    val frames = minOf(late.size, original.size) / 2
-    val span = 8000
-    val start = maxLag
-    if (frames < start + span + maxLag) return 0 to 0.0
-    var best = 0
-    var top = Double.NEGATIVE_INFINITY
-    for (lag in -maxLag..maxLag) {
-        var sum = 0.0
-        for (k in start until start + span) sum += late[2 * (k + lag)].toDouble() * original[2 * k]
-        if (sum > top) { top = sum; best = lag }
-    }
-    var a = 0.0
-    var b = 0.0
-    for (k in start until start + span) {
-        a += late[2 * (k + best)].toDouble() * late[2 * (k + best)]
-        b += original[2 * k].toDouble() * original[2 * k]
-    }
-    return best to if (a > 0 && b > 0) top / Math.sqrt(a * b) else 0.0
-}

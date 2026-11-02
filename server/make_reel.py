@@ -15,16 +15,17 @@ import sys
 import time
 import urllib.parse
 import urllib.request
-import wave
-import io
 
 TITLE = "Test reel"
 SECONDS = 10
 
 READER = """
-import json, os, sys
+import json, os, subprocess, sys
 root = "/library/sets"
-out = sys.stdout.buffer
+# Compressed here, on the server, so only an Opus file ever crosses the network.
+enc = subprocess.Popen(["ffmpeg", "-v", "error", "-f", "s16le", "-ar", "48000", "-ac", "2", "-i", "-", "-c:a", "libopus", "-b:a", "160k",
+                        "-vbr", "on", "-frame_duration", "20", "-f", "ogg", "-"], stdin=subprocess.PIPE)
+out = enc.stdin
 names = []
 for d in sorted(os.listdir(root)):
     try:
@@ -42,6 +43,8 @@ for d in sorted(os.listdir(root)):
     with open(pcm, "rb") as f:
         f.seek(((size - want) // 2) // 4 * 4)
         out.write(f.read(want))
+enc.stdin.close()
+enc.wait()
 print(json.dumps(names), file=sys.stderr)
 """ % (TITLE, SECONDS)
 
@@ -63,19 +66,12 @@ def main():
     if run.returncode:
         sys.exit("couldn't read the sets: " + run.stderr.decode()[-400:])
     names = json.loads(run.stderr.decode().strip().splitlines()[-1])
-    pcm = run.stdout
-    print(f"{len(names)} sets, {len(pcm) / 192000:.0f} s:")
+    print(f"{len(names)} sets, {len(names) * SECONDS} s, {len(run.stdout) / 1e6:.1f} MB:")
     for i, n in enumerate(names):
         print(f"  {i + 1}. {n}")
 
-    buf = io.BytesIO()
-    with wave.open(buf, "wb") as w:
-        w.setnchannels(2)
-        w.setsampwidth(2)
-        w.setframerate(48000)
-        w.writeframes(pcm)
-    q = urllib.parse.urlencode({"name": "test-reel.wav", "title": TITLE, "artist": "Beach Sync", "set": "Music test"})
-    set_id = call(a.admin, "/api/upload?" + q, "PUT", buf.getvalue())["id"]
+    q = urllib.parse.urlencode({"name": "test-reel.opus", "title": TITLE, "artist": "Beach Sync", "set": "Music test"})
+    set_id = call(a.admin, "/api/upload?" + q, "PUT", run.stdout)["id"]
     print("uploaded as", set_id)
 
     for _ in range(120):

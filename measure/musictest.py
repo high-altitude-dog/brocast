@@ -151,14 +151,17 @@ def manifest(url):
     return m, (m["server_utc_ns"] / 1e9) - (t0 + time.time()) / 2
 
 
-def fetch_source(url, first, last):
-    """The stream's own audio as one mono track, from segment first to segment last."""
-    parts = []
-    for n in range(first, last + 1):
-        with urllib.request.urlopen(f"{url}/seg/{n}.pcm", timeout=10) as r:
-            x = np.frombuffer(r.read(), dtype="<i2").astype(np.float64).reshape(-1, 2)
-        parts.append(x.mean(axis=1) / 32768)
-    return np.concatenate(parts)
+def fetch_source(url, first, last, loop_seconds):
+    """The stream's own audio as one mono track, from segment first to segment last. It downloads the compressed file and
+    decodes it here. The decoder removes Opus's fixed delay, so the phones sit 6.5 ms later than this: the same for every phone."""
+    with tempfile.TemporaryDirectory() as folder:
+        path = os.path.join(folder, "on_air.opus")
+        urllib.request.urlretrieve(f"{url}/on_air.opus", path)
+        raw = subprocess.run(["ffmpeg", "-v", "error", "-i", path, "-ac", "1", "-ar", str(RATE), "-f", "f32le", "-"], check=True, capture_output=True).stdout
+    x = np.frombuffer(raw, dtype="<f4").astype(np.float64)
+    loop = np.zeros(loop_seconds * RATE)
+    loop[:min(len(x), len(loop))] = x[:len(loop)]
+    return np.take(loop, np.arange(first * RATE, (last + 1) * RATE), mode="wrap")
 
 
 def main():
@@ -227,7 +230,7 @@ def main():
     position = rec_utc - m["start_utc_ns"] / 1e9 - m["D_ms"] / 1000
     first = max(m["oldest"], int(position) - 4)
     last = int(position) + total + 4
-    src = fetch_source(url, first, last)
+    src = fetch_source(url, first, last, m["loop_seconds"])
     coarse = (position - first) * RATE
 
     mics = [bm.solo_gap(ch / 32768, src, RATE, count, coarse) for ch in x]

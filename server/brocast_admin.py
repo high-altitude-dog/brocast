@@ -4,7 +4,7 @@
 Each upload is transcoded once, whatever its format or quality, into:
 
     sets/<id>/set.opus     48 kHz stereo Ogg Opus at 160 kbps, as the design specifies, ready for when phones decode it
-    sets/<id>/audio.pcm    raw 48 kHz stereo, which is what today's prototype phones play
+    sets/<id>/audio.pcm    raw 48 kHz stereo, kept on the server only: only set.opus ever leaves it
     sets/<id>/meta.json    title, artist, set, length and the Opus file's hash
 
 The stream server reads this folder and never writes to it. This page has no password, so it must only ever be
@@ -20,6 +20,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import os
 import queue
 import re
@@ -38,6 +39,12 @@ MIN_SECONDS = 1
 ID = re.compile(r"^[0-9a-f]{32}$")
 
 
+OPUS_DELAY_FRAMES = 312
+REEL_TITLE = "Test reel"   # server/make_reel.py: it repeats the other sets, so it stays out of the library
+LIBRARY_D_MS = 60000
+LIBRARY_NOTICE_S = 600     # how far ahead a changed library takes effect
+
+
 class Library:
     def __init__(self, directory: str, reserve_gb: float, max_gb: float):
         self.directory = directory
@@ -54,6 +61,7 @@ class Library:
         for s in self.sets():
             if s["status"] in ("queued", "transcoding"):
                 self.fail(s["id"], "the server restarted during transcoding, so please upload it again")
+        self.publish_library()   # for a library from before this list existed
         threading.Thread(target=self.worker, daemon=True).start()
 
     def free(self) -> int:
@@ -188,6 +196,7 @@ class Library:
                 digest.update(chunk)
         self.update(set_id, status="ready", frames=frames, seconds=frames / 48000,
                     pcm_bytes=os.path.getsize(pcm), opus_bytes=os.path.getsize(opus), sha256=digest.hexdigest())
+        self.publish_library()
 
     def put_on_air(self, set_id: str):
         m = self.meta(set_id)
@@ -210,6 +219,27 @@ class Library:
         if self.meta(set_id)["status"] in ("queued", "transcoding"):
             raise ValueError("this set is still transcoding")
         shutil.rmtree(os.path.join(self.sets_dir, set_id))
+        self.publish_library()
+
+    def publish_library(self):
+        """The list phones loop and keep. A change takes effect at a set time in the future, so phones all switch together."""
+        items = [{"id": m["id"], "title": m["title"], "artist": m["artist"], "bytes": m["opus_bytes"], "sha256": m["sha256"],
+                  # Opus delays the audio by 312 samples: the extra keeps the end of the set, and items are whole seconds.
+                  "seconds": math.ceil((m["frames"] + OPUS_DELAY_FRAMES) / 48000)}
+                 for m in sorted(self.sets(), key=lambda m: m["added"]) if m["status"] == "ready" and m["title"] != REEL_TITLE]
+        path = os.path.join(self.directory, "library.json")
+        with self.lock:
+            try:
+                with open(path) as f:
+                    editions = json.load(f)["editions"]
+            except (OSError, ValueError, KeyError):
+                editions = []
+            if (editions[-1]["items"] if editions else []) == items:
+                return
+            now = time.time_ns() // 1_000_000_000
+            start = now + (LIBRARY_NOTICE_S if editions else 1)
+            editions = editions[-1:] + [{"start_ns": start * 1_000_000_000, "items": items}]
+            self.write_json(path, {"version": 1, "D_ms": LIBRARY_D_MS, "editions": editions})
 
 
 def probe(path: str) -> tuple[dict, float | None]:

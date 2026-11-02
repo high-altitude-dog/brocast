@@ -96,7 +96,10 @@ fun NowPlaying(state: BenchState, actions: BenchActions, openLog: () -> Unit, op
     ) {
         Masthead(s, openBench, openSettings, openSignals, openCalibration)
         BasicText(s?.stream?.manifest?.source?.ifEmpty { null } ?: "Beach Sync Radio", style = Tokens.Text.screenTitle.style().copy(fontSize = 20.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
-        BasicText("Live", style = Tokens.Text.body.style(Ink.textSecondary).copy(fontSize = 13.sp))
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            BasicText(state.library?.status ?: "Live", Modifier.weight(1f), Tokens.Text.body.style(Ink.textSecondary).copy(fontSize = 13.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            KeptBadge()
+        }
         Dial(s, boot, state.localTime)
         SyncBadge(s, boot)
         // There's no Play control in the design yet. This is the test bench's button until there is.
@@ -115,6 +118,17 @@ fun NowPlaying(state: BenchState, actions: BenchActions, openLog: () -> Unit, op
 }
 
 private val IntrinsicTile = 84.dp
+
+/** In the beta everything is kept, so this shows that and can't be turned off. It deliberately has no tap action. */
+@Composable
+private fun KeptBadge() {
+    val shape = RoundedCornerShape(Tokens.Radius.pill.dp)
+    Row(
+        Modifier.height(Tokens.Space.touchTarget.dp).background(Ink.accent.copy(alpha = 0.12f), shape).border(Tokens.Stroke.card.dp, Ink.accent, shape).padding(horizontal = 14.dp)
+            .semantics { contentDescription = "Kept. Every set stays on this phone, and this can't be turned off in the beta." },
+        verticalAlignment = Alignment.CenterVertically,
+    ) { BasicText("■ Kept", style = Tokens.Text.body.style(Ink.accent)) }
+}
 
 /** Holding the station name opens the test bench: the developer way in, with nothing on screen for listeners to trip over. */
 @Composable

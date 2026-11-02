@@ -37,6 +37,7 @@ class MainActivity : ComponentActivity(), BenchActions {
 
     private val runStopped: () -> Unit = { state.session = null }
     private var listenLag: Double? = null
+    private var listenFromLibrary = false
     private var earcupOutput: AudioOutput? = null
 
     private val askForMic = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -61,6 +62,8 @@ class MainActivity : ComponentActivity(), BenchActions {
         volumeControlStream = AudioManager.STREAM_MUSIC
         load()
         state.session = session
+        val testScript = intent?.hasExtra("tickPattern") == true || (intent?.hasExtra("soloSlot") == true && intent?.hasExtra("library") != true)
+        if (!testScript) state.library = LibraryStore.begin(this, state.url.trim())
         state.eventLog = eventLog
         setContent {
             val fromTestScript = intent?.hasExtra("tickPattern") == true || intent?.hasExtra("soloSlot") == true
@@ -107,9 +110,11 @@ class MainActivity : ComponentActivity(), BenchActions {
     }
 
     private fun begin(satellitesOn: Boolean) {
+        val fromLibrary = listenFromLibrary || intent?.getBooleanExtra("library", false) == true
+        listenFromLibrary = false
         val settings = Settings(
             url = state.url.trim(),
-            stream = state.stream,
+            stream = state.stream || fromLibrary,
             policy = state.policy,
             pitchHz = state.pitch.toDoubleOrNull() ?: 2000.0,
             lagMs = listenLag ?: state.lag.toDoubleOrNull() ?: 0.0,
@@ -121,6 +126,7 @@ class MainActivity : ComponentActivity(), BenchActions {
             // The same goes for these, from measure/musictest.py.
             soloSlot = intent?.getIntExtra("soloSlot", 0) ?: 0,
             soloCount = intent?.getIntExtra("soloCount", 0) ?: 0,
+            library = fromLibrary,
         )
         listenLag = null
         SessionService.run(this, satellitesOn)
@@ -168,6 +174,7 @@ class MainActivity : ComponentActivity(), BenchActions {
     }
 
     override fun listen() {
+        listenFromLibrary = true
         val out = output()
         val cal = savedCalibration(out) ?: tableCalibration(out)
         if (cal.source != CalSource.NONE) { listenLag = cal.lagMs; state.lagSource = cal.source.name.lowercase() } else state.lagSource = "not measured"

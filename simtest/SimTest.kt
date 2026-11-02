@@ -1,7 +1,7 @@
 // Desktop tests of the app's pure timing code: NTP parsing, the GPS and NTP fits, and the playout loop.
 // Needs the Kotlin compiler (kotlinc) and the Android SDK's android.jar. From the beachsync-prototype folder:
 //   P=android/app/src/main/java/org/beachsync/proto; J=$ANDROID_HOME/platforms/android-35/android.jar
-//   kotlinc -cp $J -d /tmp/simtest simtest/SimTest.kt $P/Flow.kt $P/Renderer.kt $P/NtpClient.kt $P/CsvLog.kt $P/Events.kt $P/Nudge.kt $P/FetchPlan.kt $P/Calibration.kt $P/OpusBlock.kt
+//   kotlinc -cp $J -d /tmp/simtest simtest/SimTest.kt $P/Flow.kt $P/Renderer.kt $P/NtpClient.kt $P/CsvLog.kt $P/Events.kt $P/Nudge.kt $P/FetchPlan.kt $P/Calibration.kt $P/OpusBlock.kt $P/LibraryPlan.kt
 //   java -cp /tmp/simtest:$J:<kotlinc folder>/lib/kotlin-stdlib.jar SimTestKt
 import org.beachsync.proto.*
 import kotlin.math.abs
@@ -514,6 +514,34 @@ fun testFetchPlan() {
     check(oldSlowShare < 0.05, "where starting from the second being heard played almost nothing")
 }
 
+fun testLibrary() {
+    println("Library")
+    val a = LibraryItem("a", "A", "", 3, 0, ""); val b = LibraryItem("b", "B", "", 2, 0, "")
+    val e = Edition(1000L, listOf(a, b))
+    check(e.at(0)!!.first === a && e.at(0)!!.second == 0L && e.at(2)!!.second == 2L, "segments fall in the first set")
+    check(e.at(3)!!.first === b && e.at(3)!!.second == 0L, "the next set starts straight after")
+    check(e.at(5)!!.first === a && e.at(5)!!.second == 0L && e.at(-1)!!.first === b, "and the library loops")
+    check(e.dueOrder(3).map { it.id } == listOf("b", "a"), "what plays soonest downloads first")
+    val next = Edition(5000L, listOf(b))
+    check(editionAt(listOf(e, next), 4999L) === e && editionAt(listOf(e, next), 5000L) === next, "a new edition takes over exactly on time")
+    check(editionAt(listOf(next), 10L) === next && editionAt(emptyList(), 10L) == null, "before the first edition starts, it's still the one to prepare")
+    check(Edition(0L, emptyList()).at(4) == null, "an empty library has nothing to play")
+    // Ogg pages with a packet running across two of them.
+    fun page(body: ByteArray, lacing: List<Int>) = "OggS".toByteArray() + ByteArray(22) + byteArrayOf(lacing.size.toByte()) + lacing.map { it.toByte() }.toByteArray() + body
+    val tmp = java.io.File.createTempFile("opus", ".ogg")
+    try {
+        val head = "OpusHead".toByteArray() + ByteArray(11)
+        val tags = "OpusTags".toByteArray()
+        val big = ByteArray(300) { 7 }
+        tmp.writeBytes(page(head + tags, listOf(head.size, tags.size)) + page(big.copyOf(255), listOf(255)) + page(big.copyOfRange(255, 300) + byteArrayOf(9), listOf(45, 1)))
+        OpusFile(tmp).use { f ->
+            val spans = OpusBlock.spans(f.block(0))
+            check(spans != null && spans[0].second == 300 && spans[1].second == 1 && spans[2].second == 3, "a packet across two pages joins up, and silence fills the block")
+            check(OpusBlock.spans(f.block(5)) != null, "past the end of the file there's still a whole block")
+        }
+    } finally { tmp.delete() }
+}
+
 fun testOpusBlock() {
     println("Opus blocks")
     val out = java.io.ByteArrayOutputStream()
@@ -525,11 +553,6 @@ fun testOpusBlock() {
     check(OpusBlock.spans(block + byteArrayOf(1, 0, 9)) == null, "a block with too many packets is refused")
     val head = OpusBlock.head()
     check(String(head, 0, 8) == "OpusHead" && head.size == 19 && head[9].toInt() == 2 && head[10].toInt() == 0 && head[11].toInt() == 0, "the decoder's header has stereo and no skipped samples")
-    val rnd = Random(3)
-    val original = ShortArray(96000) { (rnd.nextInt(20000) - 10000).toShort() }
-    val late = ShortArray(96000) { i -> original[Math.floorMod(i / 2 * 2 - 624 + i % 2, 96000)] }
-    val (lag, match) = bestLag(late, original, 2000)
-    check(lag == 312 && match > 0.95, "the check finds audio 312 samples late: $lag, match $match")
 }
 
 fun testEarcupAnalysis() {
@@ -596,6 +619,7 @@ fun testCalibration() {
 }
 
 fun main() {
+    testLibrary()
     testOpusBlock()
     testEarcupAnalysis()
     testCalibration()

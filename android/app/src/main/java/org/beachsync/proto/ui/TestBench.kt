@@ -89,6 +89,7 @@ class BenchState {
     var eventLog by mutableStateOf<EventLog?>(null)
     var earcup by mutableStateOf<org.beachsync.proto.EarcupRun?>(null)
     var lagSource by mutableStateOf("typed")
+    var library by mutableStateOf<org.beachsync.proto.LibraryStore?>(null)
 }
 
 interface BenchActions {

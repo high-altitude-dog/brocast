@@ -9,7 +9,7 @@ counted from the sample number, never re-read from the clock.
     python3 beachsync_server.py --clicks-split           # the same, but 1000 Hz on the left, 2500 Hz on the right
     python3 beachsync_server.py --source mysong.flac     # your own music file (needs ffmpeg), looped
 
-Then phones fetch   http://<this machine>:8080/manifest.json   and   /seg/<n>.pcm
+Then phones fetch   http://<this machine>:8080/manifest.json   and   /seg/<n>.opus
 
 Needs Python 3.8+. ffmpeg only for --source. Keep this machine's clock on NTP (chrony): any
 error in it shifts every phone by the same amount, so it does not affect sync between phones.
@@ -18,9 +18,12 @@ Use music you own or that is licensed for free use.
 from __future__ import annotations
 
 import argparse
+import atexit
 import json
 import math
 import os
+import re
+import shutil
 import struct
 import subprocess
 import sys
@@ -102,6 +105,7 @@ class OpusBlocks:
     A block is each packet in turn as a little-endian 2-byte length and its bytes."""
 
     def __init__(self, path: str):
+        self.path = path
         self.fd = os.open(path, os.O_RDONLY)
         self.first = array("I", [0])    # for each packet, its first piece: a packet can run across Ogg pages
         self.where = array("Q")
@@ -159,20 +163,19 @@ class OpusBlocks:
 
 
 def encode_opus(pcm: bytes):
-    """Blocks for audio held in memory, with the same settings as the upload page. None without ffmpeg: phones then get raw audio."""
-    folder = tempfile.mkdtemp(prefix="beachsync-opus-")
-    path = os.path.join(folder, "set.opus")
-    cmd = ["ffmpeg", "-nostdin", "-v", "error", "-y", "-f", "s16le", "-ar", str(RATE), "-ac", str(CHANNELS), "-i", "-",
-           "-c:a", "libopus", "-b:a", "160k", "-vbr", "on", "-frame_duration", "20", "-page_duration", "1000000", "-f", "ogg", path]
+    """Blocks for audio held in memory, with the same settings as the upload page. None without ffmpeg or a writable temp folder,
+    as in the test container, and phones then can't play this source: they play what's in the library instead."""
     try:
+        folder = tempfile.mkdtemp(prefix="beachsync-opus-")
+        atexit.register(shutil.rmtree, folder, True)
+        path = os.path.join(folder, "set.opus")
+        cmd = ["ffmpeg", "-nostdin", "-v", "error", "-y", "-f", "s16le", "-ar", str(RATE), "-ac", str(CHANNELS), "-i", "-",
+               "-c:a", "libopus", "-b:a", "160k", "-vbr", "on", "-frame_duration", "20", "-page_duration", "1000000", "-f", "ogg", path]
         subprocess.run(cmd, input=pcm, check=True, capture_output=True)
-        blocks = OpusBlocks(path)
+        return OpusBlocks(path)
     except (OSError, subprocess.CalledProcessError, ValueError) as e:
-        print(f"no Opus for this source, so phones get raw audio: {e}", file=sys.stderr)
+        print(f"no Opus for this source, so phones can't play it: {e}", file=sys.stderr)
         return None
-    os.unlink(path)   # the open file stays readable, and goes when the server stops
-    os.rmdir(folder)
-    return blocks
 
 
 class Stream:
@@ -191,24 +194,14 @@ class Stream:
         elapsed = time.time_ns() - self.start_ns
         return elapsed // 1_000_000_000 - 1
 
-    def segment(self, n: int) -> bytes:
-        first = (n * SEG) % self.frames
-        out = bytearray()
-        need = SEG
-        pos = first
-        while need:
-            take = min(need, self.frames - pos)
-            piece = self.audio.read(pos, take) if pos < self.audio.frames else b""
-            out += piece + bytes(take * BYTES_PER_FRAME - len(piece))
-            need -= take
-            pos = 0
-        return bytes(out)
-
     def block(self, n: int) -> bytes | None:
         return self.opus.block(n % (self.frames // SEG)) if self.opus else None
 
+    def opus_path(self) -> str | None:
+        return self.opus.path if self.opus else None
+
     def manifest(self):
-        extra = {"block_format": BLOCK_FORMAT} if self.opus else {}
+        extra = {"block_format": BLOCK_FORMAT, "loop_seconds": self.frames // SEG} if self.opus else {}
         return {**extra, "version": 1, "sample_rate": RATE, "channels": CHANNELS, "format": "s16le",
                 "segment_samples": SEG, "start_utc_ns": self.start_ns, "newest": self.newest(),
                 "oldest": max(0, self.newest() - RETAIN), "D_ms": self.d_ms,
@@ -221,6 +214,7 @@ class LibraryStream:
 
     def __init__(self, directory: str, d_ms: int, fallback: Stream):
         self.directory = directory
+        self.library_dir = directory
         self.d_ms = d_ms
         self.fallback = fallback
         self.current = fallback
@@ -250,7 +244,7 @@ class LibraryStream:
             try:
                 opus = OpusBlocks(os.path.join(folder, "set.opus"))
             except (OSError, ValueError) as e:
-                print(f"no Opus for this set, so phones get raw audio: {e}", file=sys.stderr)
+                print(f"no Opus for this set, so phones can't play it: {e}", file=sys.stderr)
                 opus = None
             return Stream(audio, self.d_ms, air["label"], air["start_ns"], opus)
         except (OSError, ValueError, KeyError) as e:
@@ -260,14 +254,17 @@ class LibraryStream:
     def newest(self):
         return self.stream().newest()
 
-    def segment(self, n: int) -> bytes:
-        return self.stream().segment(n)
-
     def block(self, n: int) -> bytes | None:
         return self.stream().block(n)
 
+    def opus_path(self) -> str | None:
+        return self.stream().opus_path()
+
     def manifest(self):
         return self.stream().manifest()
+
+
+FILE_ID = re.compile(r"^[0-9a-f]{32}$")
 
 
 def make_handler(stream):
@@ -285,15 +282,64 @@ def make_handler(stream):
             self.end_headers()
             self.wfile.write(body)
 
+        def send_file(self, path: str):
+            """A whole compressed file, so a phone only downloads it once. A Range header lets a broken download carry on."""
+            try:
+                f = open(path, "rb")
+            except OSError:
+                self.send(404, b"no such file", "text/plain", "no-store")
+                return
+            with f:
+                size = os.fstat(f.fileno()).st_size
+                m = re.fullmatch(r"bytes=(\d+)-", self.headers.get("Range") or "")
+                start = int(m.group(1)) if m else 0
+                if start >= size and size:
+                    self.send_response(416)
+                    self.send_header("Content-Range", f"bytes */{size}")
+                    self.send_header("Content-Length", "0")
+                    self.end_headers()
+                    return
+                self.send_response(206 if m else 200)
+                self.send_header("Content-Type", "audio/ogg")
+                self.send_header("Content-Length", str(size - start))
+                self.send_header("Accept-Ranges", "bytes")
+                if m:
+                    self.send_header("Content-Range", f"bytes {start}-{size - 1}/{size}")
+                self.end_headers()
+                f.seek(start)
+                while chunk := f.read(1024 * 1024):
+                    self.wfile.write(chunk)
+
         def do_GET(self):
             path = self.path.split("?")[0]
             if path == "/manifest.json":
                 self.send(200, json.dumps(stream.manifest()).encode(), "application/json", "no-store")
                 return
-            if path.startswith("/seg/") and path.endswith((".pcm", ".opus")):
-                opus = path.endswith(".opus")
+            library = getattr(stream, "library_dir", None)
+            if path == "/library.json" and library:
                 try:
-                    n = int(path[5:path.rindex(".")])
+                    with open(os.path.join(library, "library.json"), "rb") as f:
+                        self.send(200, f.read(), "application/json", "no-store")
+                except OSError:
+                    self.send(404, b"no library yet", "text/plain", "no-store")
+                return
+            if path.startswith("/file/") and path.endswith(".opus") and library:
+                set_id = path[6:-5]
+                if FILE_ID.match(set_id):
+                    self.send_file(os.path.join(library, "sets", set_id, "set.opus"))
+                else:
+                    self.send(400, b"bad file id", "text/plain", "no-store")
+                return
+            if path == "/on_air.opus":   # what's playing, whole: the music test decodes it locally to compare against
+                on_air = stream.opus_path()
+                if on_air:
+                    self.send_file(on_air)
+                else:
+                    self.send(404, b"no Opus for this source", "text/plain", "no-store")
+                return
+            if path.startswith("/seg/") and path.endswith(".opus"):
+                try:
+                    n = int(path[5:-5])
                 except ValueError:
                     self.send(400, b"bad segment number", "text/plain", "no-store")
                     return
@@ -301,7 +347,7 @@ def make_handler(stream):
                 if n > newest or n < max(0, newest - RETAIN):
                     self.send(404, b"segment not available", "text/plain", "no-store")
                     return
-                body = stream.block(n) if opus else stream.segment(n)
+                body = stream.block(n)
                 if body is None:
                     self.send(404, b"no Opus for this source", "text/plain", "no-store")
                     return
