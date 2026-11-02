@@ -1,2 +1,6 @@
 comms/
 __pycache__/
+measure/results.csv
+measure/gain.txt
+measure/gain-music.txt
+measure/music-results.csv

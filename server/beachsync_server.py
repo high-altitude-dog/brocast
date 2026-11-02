@@ -6,7 +6,7 @@ segment n holds samples n*48000 .. n*48000+47999 and its stamp is start_utc + n 
 counted from the sample number, never re-read from the clock.
 
     python3 beachsync_server.py --clicks                 # built-in click track (one click per second)
-    python3 beachsync_server.py --clicks-split           # the same, but 1000 Hz on the left, 3000 Hz on the right
+    python3 beachsync_server.py --clicks-split           # the same, but 1000 Hz on the left, 2500 Hz on the right
     python3 beachsync_server.py --source mysong.flac     # your own music file (needs ffmpeg), looped
 
 Then phones fetch   http://<this machine>:8080/manifest.json   and   /seg/<n>.pcm
@@ -213,7 +213,7 @@ def main():
     src = p.add_mutually_exclusive_group(required=True)
     src.add_argument("--clicks", action="store_true", help="built-in click track: one click per second")
     src.add_argument("--clicks-split", action="store_true",
-                     help="click track at 1000 Hz on the left and 3000 Hz on the right (acoustic stream test)")
+                     help="click track at 1000 Hz on the left and 2500 Hz on the right (acoustic stream test)")
     src.add_argument("--source", help="music file to loop (any format ffmpeg reads)")
     p.add_argument("--port", type=int, default=8080)
     p.add_argument("--bind", default="0.0.0.0", help="address to listen on (default all)")
@@ -223,7 +223,7 @@ def main():
     if a.clicks:
         pcm, label = click_track(), "clicks"
     elif a.clicks_split:
-        pcm, label = click_track(freq=1000.0, freq_r=3000.0), "clicks-split"
+        pcm, label = click_track(freq=1000.0, freq_r=2500.0), "clicks-split"
     else:
         pcm, label = decode_file(a.source), a.source
     stream = Stream(MemoryAudio(pcm), a.d_ms, label)
