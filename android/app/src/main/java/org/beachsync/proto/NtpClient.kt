@@ -27,14 +27,21 @@ class NtpClient(private val log: CsvLog) : Thread("ntp") {
 
     override fun run() {
         var i = 0
+        var fails = 0
         while (running) {
+            val sent = SystemClock.elapsedRealtime()
             try {
-                query(HOSTS[i]); lastError = null
+                query(HOSTS[i]); lastError = null; fails = 0
             } catch (e: Exception) {
                 lastError = "${HOSTS[i]}: ${e.message ?: e.javaClass.simpleName}"
                 i = (i + 1) % HOSTS.size
+                fails++
             }
-            try { sleep(16_000) } catch (_: InterruptedException) { }
+            // Until the first answer, try the next server sooner, because nothing can play without a time source:
+            // 4, 8, then 16 s between queries, which stays inside NPL's one-query-per-4-s rule.
+            val gap = if (samples == 0 && fails > 0) minOf(16_000L, 4_000L shl (fails - 1).coerceAtMost(2)) else 16_000L
+            val wait = (gap - (SystemClock.elapsedRealtime() - sent)).coerceAtLeast(1_000L)
+            try { sleep(wait) } catch (_: InterruptedException) { }
         }
     }
 

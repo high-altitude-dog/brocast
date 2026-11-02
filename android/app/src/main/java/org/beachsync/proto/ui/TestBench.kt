@@ -192,7 +192,7 @@ private fun RunningDot() {
 
 @Composable
 private fun ClockCard(state: BenchState) {
-    val boot by rememberTick(CLOCK_MS)
+    val boot = rememberTick(CLOCK_MS).value   // read here, always: read only once a fit exists, this function would never redraw
     val fit = FlowTime.fit()
     val s = state.session
     val utc = if (s != null && fit != null) fit.utcAt(boot) else null
