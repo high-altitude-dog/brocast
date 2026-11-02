@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=390">
+<title>Time signals · Beach Sync</title>
+<!-- Exported from the Beach Sync UI Mock-ups canvas. Static: tokens are in ../tokens.json, behaviour in ../ui-spec.md -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&amp;family=Space+Grotesk:wght@400;500;700&amp;display=swap">
+<style>
+body{margin:0;background:#0A0C0F}
+a{color:#C8FF4D}a:hover{color:#E2FF9E}
+</style>
+</head>
+<body>
+<div style="width: 390px; height: 844px; box-sizing: border-box; background: #0A0C0F; color: #ECEFF2; font-family: 'Space Grotesk', system-ui, sans-serif; padding: 14px 18px 18px; display: flex; flex-direction: column; gap: 11px; overflow: hidden">
+
+  <div style="display: flex; justify-content: space-between; align-items: center">
+    <a href="now-playing.html" style="display: flex; align-items: center; gap: 6px; min-height: 44px; text-decoration: none; color: #ECEFF2; font-size: 18px; font-weight: 700">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg>
+      Time signals
+    </a>
+    <button aria-label="Copy all time signals for support" style="appearance: none; width: 44px; height: 44px; border-radius: 12px; border: 1px solid #222932; background: transparent; color: #ECEFF2; display: flex; align-items: center; justify-content: center; cursor: pointer">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"></rect><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"></path></svg>
+    </button>
+  </div>
+
+  <div style="background: #12161B; border: 1px solid #222932; border-radius: 14px; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px">
+    <div style="display: flex; justify-content: space-between; align-items: baseline">
+      <span style="font-size: 10.5px; letter-spacing: 0.16em; color: #8B95A1">SOURCES</span>
+      <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px; color: #C8FF4D">GPS in charge · ±0.4 ms</span>
+    </div>
+    <svg width="100%" height="160" viewBox="0 0 350 172" role="img" aria-label="Time sources as nodes sized by accuracy: GPS in charge at plus or minus 0.4 milliseconds, holdover clock 0.6, NTP servers 5 to 9 milliseconds">
+      <line x1="80" y1="48" x2="175" y2="86" stroke="#C8FF4D" stroke-width="2"></line>
+      <line x1="80" y1="128" x2="175" y2="86" stroke="#4A5562" stroke-width="1" stroke-dasharray="4 4"></line>
+      <line x1="270" y1="34" x2="175" y2="86" stroke="#4A5562" stroke-width="1" stroke-dasharray="4 4"></line>
+      <line x1="262" y1="86" x2="175" y2="86" stroke="#4A5562" stroke-width="1" stroke-dasharray="4 4"></line>
+      <line x1="270" y1="138" x2="175" y2="86" stroke="#4A5562" stroke-width="1" stroke-dasharray="4 4"></line>
+      <circle cx="175" cy="86" r="30" fill="#0A0C0F" stroke="#C8FF4D" stroke-width="1.5"></circle>
+      <circle cx="175" cy="86" r="36" fill="none" stroke="#C8FF4D" stroke-opacity="0.2" stroke-width="6"></circle>
+      <text x="175" y="83" text-anchor="middle" font-size="10.5" fill="#ECEFF2" font-family="JetBrains Mono, monospace" font-weight="600">FLOW</text>
+      <text x="175" y="96" text-anchor="middle" font-size="10.5" fill="#ECEFF2" font-family="JetBrains Mono, monospace" font-weight="600">TIME</text>
+      <circle cx="80" cy="48" r="22" fill="#C8FF4D" fill-opacity="0.18" stroke="#C8FF4D" stroke-width="2"></circle>
+      <text x="80" y="52" text-anchor="middle" font-size="12" fill="#ECEFF2" font-weight="700">GPS</text>
+      <text x="80" y="88" text-anchor="middle" font-size="11.5" fill="#C8FF4D" font-family="JetBrains Mono, monospace">±0.4 ms</text>
+      <circle cx="80" cy="128" r="17" fill="none" stroke="#8B95A1" stroke-width="1.5"></circle>
+      <text x="80" y="132" text-anchor="middle" font-size="10.5" fill="#C4CBD2">HOLD</text>
+      <text x="80" y="164" text-anchor="middle" font-size="11.5" fill="#8B95A1" font-family="JetBrains Mono, monospace">±0.6 ms</text>
+      <circle cx="270" cy="34" r="9" fill="none" stroke="#8B95A1" stroke-width="1.5"></circle>
+      <text x="284" y="30" font-size="11.5" fill="#C4CBD2">ntp1.npl S1</text>
+      <text x="284" y="44" font-size="11" fill="#8B95A1" font-family="JetBrains Mono, monospace">±5.5 ms</text>
+      <circle cx="262" cy="86" r="8" fill="none" stroke="#8B95A1" stroke-width="1.5"></circle>
+      <text x="274" y="82" font-size="11.5" fill="#C4CBD2">ntp4.npl S1</text>
+      <text x="274" y="96" font-size="11" fill="#8B95A1" font-family="JetBrains Mono, monospace">±7.0 ms</text>
+      <circle cx="270" cy="138" r="7" fill="none" stroke="#8B95A1" stroke-width="1.5"></circle>
+      <text x="284" y="134" font-size="11.5" fill="#C4CBD2">Paris S1</text>
+      <text x="284" y="148" font-size="11" fill="#8B95A1" font-family="JetBrains Mono, monospace">±9.1 ms</text>
+    </svg>
+    <span style="font-size: 11px; color: #8B95A1">Node size = accuracy. Hand-overs animate along the lines.</span>
+  </div>
+
+  <div style="background: #12161B; border: 1px solid #222932; border-radius: 14px; padding: 6px 14px 12px; display: flex; flex-direction: column; gap: 4px">
+  <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px">
+    <div style="display: flex; flex-direction: column; gap: 1px">
+      <span style="font-size: 10.5px; letter-spacing: 0.16em; color: #8B95A1">SKY</span>
+      <span style="font-size: 14px; font-weight: 500">Use satellites</span>
+    </div>
+    <div style="display: flex; align-items: center; gap: 6px">
+      <span style="font-size: 11px; color: #8B95A1; text-align: right">Position stays on this phone<br>Off = Privacy mode</span>
+      <button aria-pressed="true" aria-label="Use satellites, on" style="appearance: none; width: 52px; height: 44px; background: transparent; border: none; padding: 0; display: flex; align-items: center; justify-content: center; cursor: pointer">
+        <span style="width: 46px; height: 26px; border-radius: 13px; background: #C8FF4D; display: flex; align-items: center; justify-content: flex-end; padding: 2px; box-sizing: border-box">
+          <span style="width: 22px; height: 22px; border-radius: 50%; background: #0A0C0F"></span>
+        </span>
+      </button>
+    </div>
+  </div>
+  <div style="display: flex; gap: 14px; align-items: center">
+    <svg width="140" height="140" viewBox="0 0 140 140" role="img" aria-label="Sky plot: 14 satellites used for time out of 16 visible">
+      <circle cx="70" cy="70" r="62" fill="none" stroke="#2A323C"></circle>
+      <circle cx="70" cy="70" r="41" fill="none" stroke="#1F252D"></circle>
+      <circle cx="70" cy="70" r="21" fill="none" stroke="#1F252D"></circle>
+      <line x1="70" y1="8" x2="70" y2="132" stroke="#1F252D"></line>
+      <line x1="8" y1="70" x2="132" y2="70" stroke="#1F252D"></line>
+      <text x="70" y="6" text-anchor="middle" font-size="9" fill="#8B95A1">N</text>
+      <circle cx="81.1" cy="56.8" r="8" fill="#C8FF4D" fill-opacity="0.18"></circle><circle cx="81.1" cy="56.8" r="4" fill="#C8FF4D"></circle>
+      <circle cx="108.8" cy="84.1" r="7" fill="#C8FF4D" fill-opacity="0.14"></circle><circle cx="108.8" cy="84.1" r="4" fill="#C8FF4D"></circle>
+      <circle cx="60.6" cy="95.9" r="8" fill="#C8FF4D" fill-opacity="0.18"></circle><circle cx="60.6" cy="95.9" r="4" fill="#C8FF4D"></circle>
+      <circle cx="24.7" cy="53.5" r="6" fill="#C8FF4D" fill-opacity="0.12"></circle><circle cx="24.7" cy="53.5" r="4" fill="#C8FF4D"></circle>
+      <circle cx="64.8" cy="61.1" r="9" fill="#C8FF4D" fill-opacity="0.22"></circle><circle cx="64.8" cy="61.1" r="4" fill="#C8FF4D"></circle>
+      <circle cx="111.8" cy="45.9" r="6" fill="#C8FF4D" fill-opacity="0.12"></circle><circle cx="111.8" cy="45.9" r="4" fill="#C8FF4D"></circle>
+      <circle cx="88.4" cy="120.5" r="4" fill="none" stroke="#C8FF4D" stroke-width="1.2"></circle>
+      <circle cx="99.1" cy="59.4" r="8" fill="#5CE1FF" fill-opacity="0.18"></circle><circle cx="99.1" cy="59.4" r="4" fill="#5CE1FF"></circle>
+      <circle cx="83.3" cy="85.8" r="9" fill="#5CE1FF" fill-opacity="0.2"></circle><circle cx="83.3" cy="85.8" r="4" fill="#5CE1FF"></circle>
+      <circle cx="34.4" cy="83.0" r="7" fill="#5CE1FF" fill-opacity="0.15"></circle><circle cx="34.4" cy="83.0" r="4" fill="#5CE1FF"></circle>
+      <circle cx="85.3" cy="27.9" r="6" fill="#5CE1FF" fill-opacity="0.12"></circle><circle cx="85.3" cy="27.9" r="4" fill="#5CE1FF"></circle>
+      <circle cx="43.6" cy="47.9" r="7" fill="#5CE1FF" fill-opacity="0.15"></circle><circle cx="43.6" cy="47.9" r="4" fill="#5CE1FF"></circle>
+      <circle cx="70.0" cy="83.8" r="9" fill="#B79CFF" fill-opacity="0.2"></circle><circle cx="70.0" cy="83.8" r="4" fill="#B79CFF"></circle>
+      <circle cx="30.4" cy="103.2" r="6" fill="#B79CFF" fill-opacity="0.12"></circle><circle cx="30.4" cy="103.2" r="4" fill="#B79CFF"></circle>
+      <circle cx="65.8" cy="46.3" r="8" fill="#B79CFF" fill-opacity="0.18"></circle><circle cx="65.8" cy="46.3" r="4" fill="#B79CFF"></circle>
+      <circle cx="124.9" cy="74.8" r="4" fill="none" stroke="#B79CFF" stroke-width="1.2"></circle>
+    </svg>
+    <div style="display: flex; flex-direction: column; gap: 6px; font-size: 12px; min-width: 0">
+      <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 15px; font-weight: 600">14 used / 16 seen</span>
+      <span style="display: flex; align-items: center; gap: 6px"><span style="width: 8px; height: 8px; border-radius: 50%; background: #C8FF4D"></span>GPS 6 of 7</span>
+      <span style="display: flex; align-items: center; gap: 6px"><span style="width: 8px; height: 8px; border-radius: 50%; background: #5CE1FF"></span>Galileo 5 of 5</span>
+      <span style="display: flex; align-items: center; gap: 6px"><span style="width: 8px; height: 8px; border-radius: 50%; background: #B79CFF"></span>BeiDou 3 of 4</span>
+      <span style="color: #8B95A1">Median 38 dB-Hz · Gold</span>
+      <span style="color: #8B95A1">Leap 18 s · full tracking</span>
+    </div>
+  </div>
+  </div>
+
+  <div style="background: #12161B; border: 1px solid #222932; border-radius: 14px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px">
+    <div style="display: flex; justify-content: space-between; align-items: baseline">
+      <span style="font-size: 10.5px; letter-spacing: 0.16em; color: #8B95A1">NTP SERVERS</span>
+      <span style="font-size: 11px; color: #8B95A1">round trip · vs GPS</span>
+    </div>
+    <div style="display: grid; grid-template-columns: minmax(0, 1fr) 48px 64px; gap: 7px 10px; align-items: center; font-size: 12.5px">
+      <span style="display: flex; flex-direction: column"><span style="font-family: 'JetBrains Mono', ui-monospace, monospace">ntp1.npl.co.uk</span><span style="font-size: 11px; color: #8B95A1">S1 · UTC(NPL) · in use</span></span>
+      <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; text-align: right">11 ms</span>
+      <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; text-align: right">+0.9 ms</span>
+      <span style="display: flex; flex-direction: column"><span style="font-family: 'JetBrains Mono', ui-monospace, monospace">ntp4.npl.co.uk</span><span style="font-size: 11px; color: #8B95A1">S1 · UTC(NPL) · in use</span></span>
+      <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; text-align: right">14 ms</span>
+      <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; text-align: right">+1.4 ms</span>
+      <span style="display: flex; flex-direction: column"><span>Paris</span><span style="font-size: 11px; color: #8B95A1">S1 · GPS · in use</span></span>
+      <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; text-align: right">18 ms</span>
+      <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; text-align: right">−0.8 ms</span>
+      <span style="display: flex; flex-direction: column"><span>Amsterdam</span><span style="font-size: 11px; color: #8B95A1">S2 · in use</span></span>
+      <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; text-align: right">16 ms</span>
+      <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; text-align: right">+2.5 ms</span>
+      <span style="display: flex; flex-direction: column"><span style="color: #8B95A1">Madrid</span><span style="font-size: 11px; color: #FFB547">discarded · disagreed</span></span>
+      <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; text-align: right; color: #8B95A1">23 ms</span>
+      <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; text-align: right; color: #FFB547">+41 ms</span>
+    </div>
+  </div>
+
+  <div style="background: #12161B; border: 1px solid #222932; border-radius: 14px; padding: 12px 14px; display: flex; justify-content: space-between; align-items: center; gap: 12px">
+    <div style="display: flex; flex-direction: column; gap: 2px">
+      <span style="font-size: 10.5px; letter-spacing: 0.16em; color: #8B95A1">SAFETY CHECK</span>
+      <span style="font-size: 13px">GPS vs NTP <span style="font-family: 'JetBrains Mono', ui-monospace, monospace">1.1 ms</span> · 2 min ago</span>
+    </div>
+    <span style="font-size: 13px; font-weight: 700; letter-spacing: 0.1em; color: #C8FF4D">PASSED</span>
+  </div>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=390">
+<title>Now playing · Beach Sync</title>
+<!-- Exported from the Beach Sync UI Mock-ups canvas. Static: tokens are in ../tokens.json, behaviour in ../ui-spec.md -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&amp;family=Space+Grotesk:wght@400;500;700&amp;display=swap">
+<style>
+body{margin:0;background:#0A0C0F}
+a{color:#C8FF4D}a:hover{color:#E2FF9E}
+</style>
+</head>
+<body>
+<div style="width: 390px; height: 844px; box-sizing: border-box; background: #0A0C0F; color: #ECEFF2; font-family: 'Space Grotesk', system-ui, sans-serif; padding: 14px 18px 18px; display: flex; flex-direction: column; gap: 9px; overflow: hidden">
+
+  <div style="display: flex; justify-content: space-between; align-items: center">
+    <div style="display: flex; flex-direction: column; gap: 2px">
+      <span style="font-size: 11px; letter-spacing: 0.16em; color: #8B95A1; font-weight: 500">BEACH PARTY</span>
+      <span style="font-size: 14px; font-weight: 500">Live · D 60 s</span>
+    </div>
+    <div style="display: flex; gap: 8px">
+      <a href="time-signals.html" aria-label="Time signals" style="width: 44px; height: 44px; border-radius: 12px; border: 1px solid #222932; display: flex; align-items: center; justify-content: center; color: #ECEFF2">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg>
+      </a>
+      <a href="headphone-lag.html" aria-label="Headphone lag" style="width: 44px; height: 44px; border-radius: 12px; border: 1px solid #222932; display: flex; align-items: center; justify-content: center; color: #ECEFF2">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M4 14v-2a8 8 0 0 1 16 0v2"></path><rect x="3" y="14" width="4" height="6" rx="1.5"></rect><rect x="17" y="14" width="4" height="6" rx="1.5"></rect></svg>
+      </a>
+    </div>
+  </div>
+
+  <div style="position: relative; width: 184px; height: 184px; align-self: center">
+    <svg width="184" height="184" viewBox="0 0 220 220" role="img" aria-label="Brocast clock with second sweep and precision ring" style="position: absolute; left: 0; top: 0">
+      <circle cx="110" cy="110" r="104" fill="none" stroke="#2A323C" stroke-width="6" stroke-dasharray="1.4 9.49"></circle>
+      <circle cx="110" cy="110" r="92" fill="none" stroke="#1A1F26" stroke-width="3"></circle>
+      <circle cx="110" cy="110" r="92" fill="none" stroke="#C8FF4D" stroke-width="3" stroke-linecap="round" stroke-dasharray="137 578" transform="rotate(-90 110 110)"></circle>
+      <circle cx="110" cy="110" r="80" fill="none" stroke="#C8FF4D" stroke-opacity="0.35" stroke-width="1"></circle>
+      <circle cx="110" cy="110" r="80" fill="none" stroke="#C8FF4D" stroke-opacity="0.12" stroke-width="7"></circle>
+    </svg>
+    <div style="position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px">
+      <span style="font-size: 10.5px; letter-spacing: 0.18em; color: #8B95A1">FLOWTIME · GMT</span>
+      <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 32px; font-weight: 600; letter-spacing: -0.02em">22:43:51</span>
+      <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 16px"><span style="color: #ECEFF2">.237 4</span><span style="color: #6B7580">82 913</span></span>
+      <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 11px; color: #C8FF4D; margin-top: 4px">ring ±0.4 ms</span>
+    </div>
+  </div>
+
+  <button aria-label="Sync status: in sync, plus or minus 3.2 milliseconds. Open sync error budget" style="appearance: none; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; min-height: 52px; border-radius: 999px; border: 1.5px solid #C8FF4D; background: rgba(200, 255, 77, 0.07); color: #ECEFF2; font-family: inherit; cursor: pointer">
+    <span style="display: flex; align-items: center; gap: 10px">
+      <span style="width: 10px; height: 10px; border-radius: 50%; background: #C8FF4D; box-shadow: 0 0 12px #C8FF4D"></span>
+      <span style="font-size: 14px; font-weight: 700; letter-spacing: 0.12em">IN SYNC</span>
+    </span>
+    <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 18px; font-weight: 600">±3.2 ms</span>
+    <span style="font-size: 12px; color: #8B95A1">GPS · Gold</span>
+  </button>
+
+  <a href="event-log.html" aria-label="Latest event: 22:43:29, GPS back after 41 seconds. Open the event log" style="text-decoration: none; color: #ECEFF2; min-height: 44px; display: grid; grid-template-columns: 62px 64px minmax(0, 1fr) 16px; gap: 8px; align-items: center; background: #12161B; border: 1px solid #222932; border-radius: 12px; padding: 0 12px; font-size: 12.5px">
+    <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px; color: #8B95A1">22:43:29</span>
+    <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 10px; letter-spacing: 0.1em; color: #C8FF4D">● CLOCK</span>
+    <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis">GPS back after 41 s</span>
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 5l7 7-7 7"></path></svg>
+  </a>
+
+  <div style="background: #12161B; border: 1px solid #222932; border-radius: 14px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px">
+    <div style="display: flex; justify-content: space-between; align-items: baseline">
+      <span style="font-size: 10.5px; letter-spacing: 0.16em; color: #8B95A1">SYNC ERROR BUDGET · 95%</span>
+      <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 13px; color: #C8FF4D">±3.2 ms</span>
+    </div>
+    <div style="display: grid; grid-template-columns: 92px minmax(0, 1fr) 58px; gap: 6px 10px; align-items: center; font-size: 12px">
+      <span style="color: #C4CBD2">Flowtime</span>
+      <div style="height: 8px; border-radius: 4px; background: #1A1F26"><div style="width: 52%; height: 8px; border-radius: 4px; background: #C8FF4D"></div></div>
+      <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; text-align: right">±0.4 ms</span>
+      <span style="color: #C4CBD2">Headphone lag</span>
+      <div style="height: 8px; border-radius: 4px; background: #1A1F26"><div style="width: 69%; height: 8px; border-radius: 4px; background: #FFB547"></div></div>
+      <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; text-align: right">±2.8 ms</span>
+      <span style="color: #ECEFF2; font-weight: 700">Total</span>
+      <div style="height: 8px; border-radius: 4px; background: #1A1F26"><div style="width: 70%; height: 8px; border-radius: 4px; background: #ECEFF2"></div></div>
+      <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; text-align: right; font-weight: 600">±3.2 ms</span>
+      <span style="color: #8B95A1">Screenlag</span>
+      <div style="height: 8px; border-radius: 4px; background: #1A1F26"><div style="width: 61%; height: 8px; border-radius: 4px; background: #4A5562"></div></div>
+      <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; text-align: right; color: #8B95A1">±1.1 ms</span>
+    </div>
+    <div style="display: flex; justify-content: space-between; margin-left: 102px; margin-right: 68px; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 10.5px; color: #8B95A1">
+      <span>1µs</span><span>100µs</span><span>10ms</span>
+    </div>
+  </div>
+
+  <div style="background: #12161B; border: 1px solid #222932; border-radius: 14px; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px">
+    <div style="display: flex; justify-content: space-between; align-items: baseline">
+      <span style="font-size: 10.5px; letter-spacing: 0.16em; color: #8B95A1">STREAM GAP · 60 s</span>
+      <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px; color: #C8FF4D">0.2 ms · closing</span>
+    </div>
+    <svg width="100%" height="46" viewBox="0 0 350 90" preserveAspectRatio="none" role="img" aria-label="Stream gap over the last minute: a step when GPS came back, closing smoothly">
+      <rect x="0" y="29" width="350" height="32" fill="#C8FF4D" fill-opacity="0.08"></rect>
+      <line x1="0" y1="45" x2="350" y2="45" stroke="#2A323C" stroke-dasharray="3 4"></line>
+      <polyline fill="none" stroke="#C8FF4D" stroke-width="1.6" stroke-linejoin="round" points="0.0,46.2 5.8,43.6 11.7,44.9 17.5,46.4 23.3,50.7 29.2,50.8 35.0,44.6 40.8,42.6 46.7,38.0 52.5,37.9 58.3,37.0 64.2,37.4 70.0,46.5 75.8,42.2 81.7,40.2 87.5,38.5 93.3,47.6 99.2,55.6 105.0,58.3 110.8,58.5 116.7,55.0 122.5,53.7 128.3,49.9 134.2,52.3 140.0,49.7 145.8,47.1 151.7,50.0 157.5,41.0 163.3,38.9 169.2,34.1 175.0,38.7 180.8,43.2 186.7,45.1 192.5,45.6 198.3,42.5 204.2,41.7 210.0,44.3 215.8,49.0 221.7,30.9 227.5,27.2 233.3,33.7 239.2,34.2 245.0,33.8 250.8,42.6 256.7,42.8 262.5,36.8 268.3,47.7 274.2,48.9 280.0,48.8 285.8,52.1 291.7,48.7 297.5,48.4 303.3,54.9 309.2,49.5 315.0,45.6 320.8,41.0 326.7,34.7 332.5,34.5 338.3,35.5 344.2,43.1 350.0,40.5"></polyline>
+      <circle cx="221.7" cy="30.9" r="3.5" fill="#FFB547"></circle>
+    </svg>
+    <a href="nudge-control.html" aria-label="Stream gap 0.2 milliseconds, closing on Auto in 1.4 seconds. Open nudge control" style="text-decoration: none; color: #ECEFF2; min-height: 44px; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: center; border-top: 1px solid #1A1F26; font-size: 12.5px">
+      <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.12em; padding: 3px 8px; border-radius: 6px; border: 1px solid #4A5562">AUTO</span>
+      <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis">closes in <span style="font-family: 'JetBrains Mono', ui-monospace, monospace">1.4 s</span> · pitch <span style="font-family: 'JetBrains Mono', ui-monospace, monospace">−0.01%</span></span>
+      <span style="display: flex; align-items: center; gap: 2px; font-size: 12px; color: #8B95A1">Nudge<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 5l7 7-7 7"></path></svg></span>
+    </a>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px">
+    <a href="time-signals.html" style="text-decoration: none; color: #ECEFF2; background: #12161B; border: 1px solid #222932; border-radius: 12px; padding: 8px 10px; display: flex; flex-direction: column; gap: 2px">
+      <span style="font-size: 10px; letter-spacing: 0.14em; color: #8B95A1">SOURCE</span>
+      <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 15px; font-weight: 600">GPS</span>
+      <span style="font-size: 11px; color: #8B95A1">Gold · 14 sats</span>
+    </a>
+    <a href="headphone-lag.html" style="text-decoration: none; color: #ECEFF2; background: #12161B; border: 1px solid #222932; border-radius: 12px; padding: 8px 10px; display: flex; flex-direction: column; gap: 2px">
+      <span style="font-size: 10px; letter-spacing: 0.14em; color: #8B95A1">HEADPHONES</span>
+      <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 15px; font-weight: 600">182 ms</span>
+      <span style="font-size: 11px; color: #8B95A1">measured ±2.8</span>
+    </a>
+    <div style="background: #12161B; border: 1px solid #222932; border-radius: 12px; padding: 8px 10px; display: flex; flex-direction: column; gap: 2px">
+      <span style="font-size: 10px; letter-spacing: 0.14em; color: #8B95A1">BUFFER</span>
+      <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 15px; font-weight: 600">59.6 s</span>
+      <span style="font-size: 11px; color: #8B95A1">of D 60 s</span>
+    </div>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px">
+    <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px; background: #12161B; border: 1px solid #222932; border-radius: 12px; padding: 4px 4px 4px 12px">
+      <div style="display: flex; flex-direction: column; gap: 1px; min-width: 0">
+        <span style="font-size: 13.5px; font-weight: 500">Use satellites</span>
+        <span style="font-size: 10.5px; color: #8B95A1">Stays on phone</span>
+      </div>
+      <button aria-pressed="true" aria-label="Use satellites, on" style="appearance: none; width: 52px; height: 44px; flex: none; background: transparent; border: none; padding: 0; display: flex; align-items: center; justify-content: center; cursor: pointer">
+        <span style="width: 46px; height: 26px; border-radius: 13px; background: #C8FF4D; display: flex; align-items: center; justify-content: flex-end; padding: 2px; box-sizing: border-box">
+          <span style="width: 22px; height: 22px; border-radius: 50%; background: #0A0C0F"></span>
+        </span>
+      </button>
+    </div>
+    <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px; background: #12161B; border: 1px solid #222932; border-radius: 12px; padding: 4px 4px 4px 12px">
+      <div style="display: flex; flex-direction: column; gap: 1px; min-width: 0">
+        <span style="font-size: 13.5px; font-weight: 500">Strict mode</span>
+        <span style="font-size: 10.5px; color: #8B95A1">Silent over 5 ms</span>
+      </div>
+      <button aria-pressed="false" aria-label="Strict mode, off" style="appearance: none; width: 52px; height: 44px; flex: none; background: transparent; border: none; padding: 0; display: flex; align-items: center; justify-content: center; cursor: pointer">
+        <span style="width: 46px; height: 26px; border-radius: 13px; border: 1.5px solid #4A5562; display: flex; align-items: center; padding: 2px; box-sizing: border-box">
+          <span style="width: 18px; height: 18px; border-radius: 50%; background: #8B95A1"></span>
+        </span>
+      </button>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

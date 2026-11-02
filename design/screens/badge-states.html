@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=390">
+<title>Badge states · Beach Sync</title>
+<!-- Exported from the Beach Sync UI Mock-ups canvas. Static: tokens are in ../tokens.json, behaviour in ../ui-spec.md -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&amp;family=Space+Grotesk:wght@400;500;700&amp;display=swap">
+<style>
+body{margin:0;background:#0A0C0F}
+a{color:#C8FF4D}a:hover{color:#E2FF9E}
+</style>
+</head>
+<body>
+<div style="width: 390px; height: 844px; box-sizing: border-box; background: #0A0C0F; color: #ECEFF2; font-family: 'Space Grotesk', system-ui, sans-serif; padding: 16px 18px 18px; display: flex; flex-direction: column; gap: 8px; overflow: hidden">
+
+  <div style="display: flex; flex-direction: column; gap: 2px; margin-bottom: 4px">
+    <span style="font-size: 11px; letter-spacing: 0.16em; color: #8B95A1; font-weight: 500">COMPONENT</span>
+    <span style="font-size: 18px; font-weight: 700">The sync badge, every state</span>
+    <span style="font-size: 11.5px; color: #8B95A1">Always words plus a shape, never colour alone. The ± figure is the sync error estimate.</span>
+  </div>
+
+  <button style="appearance: none; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 0 16px; min-height: 48px; border-radius: 999px; border: 1.5px solid #C8FF4D; background: rgba(200, 255, 77, 0.07); color: #ECEFF2; font-family: inherit">
+    <span style="display: flex; align-items: center; gap: 10px"><span style="width: 10px; height: 10px; border-radius: 50%; background: #C8FF4D; box-shadow: 0 0 12px #C8FF4D"></span><span style="font-size: 13.5px; font-weight: 700; letter-spacing: 0.12em">IN SYNC</span></span>
+    <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 16px; font-weight: 600">±3.2 ms</span>
+    <span style="font-size: 11.5px; color: #8B95A1">GPS · Gold</span>
+  </button>
+  <span style="font-size: 11px; color: #8B95A1; margin: -2px 0 2px 16px">GPS in charge, 5 ms or under</span>
+
+  <button style="appearance: none; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 0 16px; min-height: 48px; border-radius: 999px; border: 1.5px solid #C8FF4D; background: rgba(200, 255, 77, 0.07); color: #ECEFF2; font-family: inherit">
+    <span style="display: flex; align-items: center; gap: 10px"><span style="width: 10px; height: 10px; border-radius: 50%; border: 2px solid #C8FF4D; box-sizing: border-box"></span><span style="font-size: 13.5px; font-weight: 700; letter-spacing: 0.12em">HOLDING</span></span>
+    <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 16px; font-weight: 600">±1.8 ms</span>
+    <span style="font-size: 11.5px; color: #8B95A1">GPS lost 2 min</span>
+  </button>
+  <span style="font-size: 11px; color: #8B95A1; margin: -2px 0 2px 16px">Holdover clock in charge; turns amber by itself above 5 ms</span>
+
+  <button style="appearance: none; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 0 16px; min-height: 48px; border-radius: 999px; border: 1.5px solid #C4CBD2; background: transparent; color: #ECEFF2; font-family: inherit">
+    <span style="display: flex; align-items: center; gap: 9px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ECEFF2" stroke-width="2" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"></rect><path d="M8 11V8a4 4 0 0 1 8 0v3"></path></svg><span style="font-size: 13.5px; font-weight: 700; letter-spacing: 0.12em">PRIVACY MODE</span></span>
+    <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 16px; font-weight: 600">±6.2 ms</span>
+    <span style="font-size: 11.5px; color: #8B95A1">NTP</span>
+  </button>
+  <span style="font-size: 11px; color: #8B95A1; margin: -2px 0 2px 16px">Satellites off by choice: calm at any error, no fault words, no nagging</span>
+
+  <button style="appearance: none; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 0 16px; min-height: 48px; border-radius: 999px; border: 1.5px solid #FFB547; background: rgba(255, 181, 71, 0.07); color: #ECEFF2; font-family: inherit">
+    <span style="display: flex; align-items: center; gap: 10px"><span style="width: 0; height: 0; border-left: 6px solid transparent; border-right: 6px solid transparent; border-bottom: 10px solid #FFB547"></span><span style="font-size: 13.5px; font-weight: 700; letter-spacing: 0.12em">INTERNET TIME</span></span>
+    <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 16px; font-weight: 600">±8.4 ms</span>
+    <span style="font-size: 11.5px; color: #8B95A1">waiting for GPS</span>
+  </button>
+  <span style="font-size: 11px; color: #8B95A1; margin: -2px 0 2px 16px">Satellites on but no GPS time yet. Rejoining uses the same style.</span>
+
+  <div style="display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: 14px; border: 1.5px solid #FFB547; background: rgba(255, 181, 71, 0.07)">
+    <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px">
+      <span style="display: flex; align-items: center; gap: 10px"><span style="width: 0; height: 0; border-left: 6px solid transparent; border-right: 6px solid transparent; border-bottom: 10px solid #FFB547"></span><span style="font-size: 13.5px; font-weight: 700; letter-spacing: 0.12em">SILENT · OVER LIMIT</span></span>
+      <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 16px; font-weight: 600">±7.9 ms</span>
+    </div>
+    <span style="font-size: 11.5px; color: #C4CBD2">This event allows ±5 ms. These could help:</span>
+    <div style="display: flex; gap: 6px">
+      <button style="appearance: none; min-height: 44px; flex: 1; border-radius: 999px; border: none; background: #ECEFF2; color: #0A0C0F; font-family: inherit; font-size: 12.5px; font-weight: 700">Sync from nearby phones</button>
+      <button style="appearance: none; min-height: 44px; padding: 0 14px; border-radius: 999px; border: 1px solid #4A5562; background: transparent; color: #ECEFF2; font-family: inherit; font-size: 12.5px">Use satellites</button>
+    </div>
+  </div>
+
+  <button style="appearance: none; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 0 16px; min-height: 48px; border-radius: 999px; border: 1.5px solid #FF6B6B; background: rgba(255, 107, 107, 0.08); color: #ECEFF2; font-family: inherit">
+    <span style="display: flex; align-items: center; gap: 9px"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 2l8 8M10 2l-8 8" stroke="#FF6B6B" stroke-width="2.4" stroke-linecap="round"></path></svg><span style="font-size: 13.5px; font-weight: 700; letter-spacing: 0.12em">CLOCK CHECK FAILED</span></span>
+    <span style="font-size: 11.5px; color: #C4CBD2">GPS vs NTP 63 ms</span>
+  </button>
+  <span style="font-size: 11px; color: #8B95A1; margin: -2px 0 2px 16px">Also Not in sync: no time source, or no stream</span>
+
+  <div style="display: flex; align-items: center; gap: 10px; padding: 0 12px; min-height: 44px; border-radius: 12px; background: #12161B; border: 1px solid #222932">
+    <span style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.14em; color: #C8FF4D">TIGHTENING</span>
+    <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 13px"><span style="color: #8B95A1">±11.4 ms</span> → <span style="color: #C8FF4D">±0.4 ms</span></span>
+    <span style="font-size: 11px; color: #8B95A1; margin-left: auto">GPS took over</span>
+  </div>
+  <span style="font-size: 11px; color: #8B95A1; margin: -2px 0 0 12px">Shown under the badge only when the estimate improves by 20% or more for 10 s. New satellites without a real gain update quietly.</span>
+
+</div>
+</body>
+</html>

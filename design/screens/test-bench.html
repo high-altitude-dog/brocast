@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=390">
+<title>Test bench (prototype) · Beach Sync</title>
+<!-- Exported from the Beach Sync UI Mock-ups canvas. Static: tokens are in ../tokens.json, behaviour in ../ui-spec.md -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&amp;family=Space+Grotesk:wght@400;500;700&amp;display=swap">
+<style>
+body{margin:0;background:#0A0C0F}
+a{color:#C8FF4D}a:hover{color:#E2FF9E}
+</style>
+</head>
+<body>
+<div style="width: 390px; height: 844px; box-sizing: border-box; background: #0A0C0F; color: #ECEFF2; font-family: 'Space Grotesk', system-ui, sans-serif; padding: 14px 18px 18px; display: flex; flex-direction: column; gap: 8px; overflow: hidden">
+
+  <div style="display: flex; justify-content: space-between; align-items: center; min-height: 44px">
+    <div style="display: flex; flex-direction: column; gap: 2px">
+      <span style="font-size: 11px; letter-spacing: 0.16em; color: #8B95A1; font-weight: 500">PROTOTYPE</span>
+      <span style="font-size: 18px; font-weight: 700">Test bench</span>
+    </div>
+    <span style="display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; border: 1.5px solid #C8FF4D; font-size: 12px; font-weight: 700; letter-spacing: 0.12em">
+      <span style="width: 8px; height: 8px; border-radius: 50%; background: #C8FF4D; box-shadow: 0 0 10px #C8FF4D"></span>RUNNING <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-weight: 400; letter-spacing: 0">12:44</span>
+    </span>
+  </div>
+
+  <div style="background: #12161B; border: 1px solid #222932; border-radius: 14px; padding: 10px 14px; display: flex; justify-content: space-between; align-items: center; gap: 10px">
+    <div style="display: flex; flex-direction: column; gap: 2px">
+      <span style="font-size: 10.5px; letter-spacing: 0.16em; color: #8B95A1">FLOWTIME · GMT</span>
+      <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 24px; font-weight: 600; letter-spacing: -0.02em">22:43:51<span style="color: #ECEFF2">.237</span></span>
+    </div>
+    <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 2px">
+      <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 15px; font-weight: 600; color: #C8FF4D">GPS ±0.4 ms</span>
+      <span style="font-size: 11px; color: #8B95A1">Gold · 14 of 16 sats · switches 1</span>
+    </div>
+  </div>
+
+  <div style="background: #12161B; border: 1px solid #222932; border-radius: 14px; padding: 10px 14px; display: flex; flex-direction: column; gap: 6px">
+    <div style="display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 10px; align-items: center; opacity: 0.55">
+      <span style="font-size: 12.5px; color: #C4CBD2">Mode</span>
+      <div role="group" aria-label="Mode" style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border: 1px solid #2A323C; border-radius: 10px; overflow: hidden">
+        <button disabled aria-pressed="true" style="appearance: none; min-height: 44px; border: none; background: #ECEFF2; color: #0A0C0F; font-family: inherit; font-size: 12.5px; font-weight: 700">Tick</button>
+        <button disabled aria-pressed="false" style="appearance: none; min-height: 44px; border: none; border-left: 1px solid #2A323C; background: transparent; color: #ECEFF2; font-family: inherit; font-size: 12.5px">Stream</button>
+      </div>
+      <span style="font-size: 12.5px; color: #C4CBD2">Time source</span>
+      <div role="group" aria-label="Time source" style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border: 1px solid #2A323C; border-radius: 10px; overflow: hidden">
+        <button disabled aria-pressed="true" style="appearance: none; min-height: 44px; border: none; background: #ECEFF2; color: #0A0C0F; font-family: inherit; font-size: 12.5px; font-weight: 700">Auto</button>
+        <button disabled aria-pressed="false" style="appearance: none; min-height: 44px; border: none; border-left: 1px solid #2A323C; background: transparent; color: #ECEFF2; font-family: inherit; font-size: 12.5px">GPS only</button>
+        <button disabled aria-pressed="false" style="appearance: none; min-height: 44px; border: none; border-left: 1px solid #2A323C; background: transparent; color: #ECEFF2; font-family: inherit; font-size: 12.5px">NTP only</button>
+      </div>
+      <span style="font-size: 12.5px; color: #C4CBD2">Stream channel</span>
+      <div role="group" aria-label="Stream channel" style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border: 1px solid #2A323C; border-radius: 10px; overflow: hidden">
+        <button disabled aria-pressed="true" style="appearance: none; min-height: 44px; border: none; background: #ECEFF2; color: #0A0C0F; font-family: inherit; font-size: 12.5px; font-weight: 700">Both</button>
+        <button disabled aria-pressed="false" style="appearance: none; min-height: 44px; border: none; border-left: 1px solid #2A323C; background: transparent; color: #ECEFF2; font-family: inherit; font-size: 12.5px">Left</button>
+        <button disabled aria-pressed="false" style="appearance: none; min-height: 44px; border: none; border-left: 1px solid #2A323C; background: transparent; color: #ECEFF2; font-family: inherit; font-size: 12.5px">Right</button>
+      </div>
+      <label for="tb-server" style="font-size: 12.5px; color: #C4CBD2">Server</label>
+      <input id="tb-server" disabled value="http://192.168.1.23:8080" style="min-height: 44px; box-sizing: border-box; width: 100%; border-radius: 10px; border: 1px solid #2A323C; background: #0A0C0F; color: #ECEFF2; padding: 0 10px; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px">
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; opacity: 0.55">
+      <div style="display: flex; flex-direction: column; gap: 4px">
+        <label for="tb-pitch" style="font-size: 10px; letter-spacing: 0.14em; color: #8B95A1">TICK PITCH</label>
+        <span style="display: flex; align-items: center; border: 1px solid #2A323C; border-radius: 10px; min-height: 44px; padding: 0 12px; gap: 6px; background: #0A0C0F">
+          <input id="tb-pitch" disabled value="2000" style="width: 100%; min-width: 0; border: none; background: transparent; color: #ECEFF2; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 14px; text-align: right; padding: 0">
+          <span style="font-size: 12px; color: #8B95A1">Hz</span>
+        </span>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 4px">
+        <label for="tb-lag" style="font-size: 10px; letter-spacing: 0.14em; color: #8B95A1">HEADPHONE LAG</label>
+        <span style="display: flex; align-items: center; border: 1px solid #2A323C; border-radius: 10px; min-height: 44px; padding: 0 12px; gap: 6px; background: #0A0C0F">
+          <input id="tb-lag" disabled value="0.0" style="width: 100%; min-width: 0; border: none; background: transparent; color: #ECEFF2; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 14px; text-align: right; padding: 0">
+          <span style="font-size: 12px; color: #8B95A1">ms</span>
+        </span>
+      </div>
+    </div>
+
+    <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; border-top: 1px solid #1A1F26; padding-top: 6px">
+      <div style="display: flex; flex-direction: column; gap: 2px">
+        <span style="font-size: 14px; font-weight: 500">Use satellites</span>
+        <span style="font-size: 11px; color: #8B95A1">Never locked · position stays on phone</span>
+      </div>
+      <button aria-pressed="true" aria-label="Use satellites, on" style="appearance: none; width: 52px; height: 44px; background: transparent; border: none; padding: 0; display: flex; align-items: center; justify-content: center; cursor: pointer">
+        <span style="width: 46px; height: 26px; border-radius: 13px; background: #C8FF4D; display: flex; align-items: center; justify-content: flex-end; padding: 2px; box-sizing: border-box">
+          <span style="width: 22px; height: 22px; border-radius: 50%; background: #0A0C0F"></span>
+        </span>
+      </button>
+    </div>
+  </div>
+
+  <button style="appearance: none; min-height: 52px; border-radius: 999px; border: 1.5px solid #ECEFF2; background: transparent; color: #ECEFF2; font-family: inherit; font-size: 15px; font-weight: 700; letter-spacing: 0.12em; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px">
+    <span style="width: 12px; height: 12px; border-radius: 2px; background: #ECEFF2"></span>STOP RUN
+  </button>
+
+  <a href="event-log.html" style="text-decoration: none; color: #ECEFF2; min-height: 44px; display: grid; grid-template-columns: 62px 58px minmax(0, 1fr) 16px; gap: 8px; align-items: center; background: #12161B; border: 1px solid #222932; border-radius: 12px; padding: 0 12px; font-size: 12.5px">
+    <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px; color: #8B95A1">22:43:29</span>
+    <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 10px; letter-spacing: 0.1em; color: #C8FF4D">● CLOCK</span>
+    <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis">GPS back after 41 s</span>
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 5l7 7-7 7"></path></svg>
+  </a>
+
+  <div style="background: #12161B; border: 1px solid #222932; border-radius: 14px; padding: 9px 14px; display: grid; grid-template-columns: 58px minmax(0, 1fr); gap: 5px 10px; font-size: 11.5px; align-items: baseline">
+    <span style="font-size: 10px; letter-spacing: 0.14em; color: #8B95A1">OUTPUT</span>
+    <span>USB headset · ahead <span style="font-family: 'JetBrains Mono', ui-monospace, monospace">21.4 ms</span> · jitter <span style="font-family: 'JetBrains Mono', ui-monospace, monospace">38 µs</span> · underruns <span style="font-family: 'JetBrains Mono', ui-monospace, monospace">0</span></span>
+    <span style="font-size: 10px; letter-spacing: 0.14em; color: #8B95A1">PLAYOUT</span>
+    <span>position <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; color: #C8FF4D">+3 µs</span> · nudge <span style="font-family: 'JetBrains Mono', ui-monospace, monospace">−12 ppm</span> · jumps <span style="font-family: 'JetBrains Mono', ui-monospace, monospace">0</span> · missing <span style="font-family: 'JetBrains Mono', ui-monospace, monospace">0</span></span>
+    <span style="font-size: 10px; letter-spacing: 0.14em; color: #8B95A1">GAP</span>
+    <span><span style="font-family: 'JetBrains Mono', ui-monospace, monospace">0.2 ms</span> · Auto · closes in <span style="font-family: 'JetBrains Mono', ui-monospace, monospace">1.4 s</span></span>
+    <span style="font-size: 10px; letter-spacing: 0.14em; color: #8B95A1">NTP</span>
+    <span>ntp1.npl S1 · rtt <span style="font-family: 'JetBrains Mono', ui-monospace, monospace">24 ms</span> · NTP−GPS <span style="font-family: 'JetBrains Mono', ui-monospace, monospace">−1.2 ms</span></span>
+    <span style="font-size: 10px; letter-spacing: 0.14em; color: #8B95A1">GPS</span>
+    <span>scatter <span style="font-family: 'JetBrains Mono', ui-monospace, monospace">41 ns</span> · clock <span style="font-family: 'JetBrains Mono', ui-monospace, monospace">+3.21 ppm</span> · delivery <span style="font-family: 'JetBrains Mono', ui-monospace, monospace">212 ms</span></span>
+    <span style="font-size: 10px; letter-spacing: 0.14em; color: #8B95A1">LOG</span>
+    <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 11px; color: #C4CBD2">run-20261101-223107-*.csv</span>
+  </div>
+
+</div>
+</body>
+</html>
