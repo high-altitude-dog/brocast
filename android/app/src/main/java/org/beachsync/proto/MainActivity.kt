@@ -19,6 +19,7 @@ import android.widget.LinearLayout
 import android.widget.RadioButton
 import android.widget.RadioGroup
 import android.widget.ScrollView
+import android.widget.Switch
 import android.widget.TextView
 import java.time.Instant
 import java.time.ZoneId
@@ -32,6 +33,7 @@ class MainActivity : Activity() {
     private lateinit var channel: RadioGroup
     private lateinit var pitch: EditText
     private lateinit var lag: EditText
+    private lateinit var satellites: Switch
     private lateinit var button: Button
     private lateinit var clock: TextView
     private lateinit var status: TextView
@@ -116,16 +118,28 @@ class MainActivity : Activity() {
             running.stop(); session = null; refreshButton(); return
         }
         savePrefs()
-        if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION), 1)
-        } else begin(true)
+        if (satellites.isChecked && !hasLocation()) askLocation(REQUEST_FOR_START) else begin(satellites.isChecked)
+    }
+
+    private fun hasLocation() = checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+
+    private fun askLocation(request: Int) {
+        requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION), request)
+    }
+
+    /** Location is asked for only when the listener wants satellites. Saying no leaves the switch off and the music playing. */
+    private fun onSatellitesChanged(on: Boolean) {
+        prefs.edit().putBoolean("satellites", on).apply()
+        if (on && !hasLocation()) askLocation(REQUEST_FOR_SWITCH) else session?.setSatellites(on)
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
-        begin(grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED)
+        val granted = grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED
+        if (!granted) satellites.isChecked = false
+        if (requestCode == REQUEST_FOR_START) begin(granted) else if (granted) session?.setSatellites(true)
     }
 
-    private fun begin(gpsAllowed: Boolean) {
+    private fun begin(satellitesOn: Boolean) {
         val settings = Settings(
             url = url.text.toString().trim(),
             stream = mode.checkedRadioButtonId == idStream,
@@ -135,7 +149,7 @@ class MainActivity : Activity() {
             channel = when (channel.checkedRadioButtonId) { idLeft -> Renderer.LEFT; idRight -> Renderer.RIGHT; else -> Renderer.BOTH },
         )
         session = try {
-            Session(this, settings, gpsAllowed).also { it.start(); eventLog = it.events }
+            Session(this, settings, satellitesOn).also { it.start(); eventLog = it.events }
         } catch (e: Exception) {
             status.text = "Could not start: $e"; null
         }
@@ -205,6 +219,14 @@ class MainActivity : Activity() {
         row.addView(labelled("Headphone lag, ms", lag), LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
         col.addView(row)
 
+        satellites = Switch(this).apply {
+            text = "Use satellites"
+            isChecked = prefs.getBoolean("satellites", true)
+            setPadding(0, dp(10), 0, dp(10))
+            setOnCheckedChangeListener { _, on -> onSatellitesChanged(on) }
+        }
+        col.addView(satellites)
+
         button = Button(this).apply { setOnClickListener { onButton() } }
         col.addView(button)
 
@@ -265,5 +287,7 @@ class MainActivity : Activity() {
         /** The latest run's events, kept so they can still be read after Stop. */
         var eventLog: EventLog? = null
         private const val SHOWN_EVENTS = 200
+        private const val REQUEST_FOR_START = 1
+        private const val REQUEST_FOR_SWITCH = 2
     }
 }

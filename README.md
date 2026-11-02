@@ -178,6 +178,12 @@ The same works in **stream mode**, which tests the whole stream path (segment fe
 | *(stream)* | Position error, rate nudge, jumps, and frames missing because a segment arrived late |
 | **STREAM** | The server's newest segment, seconds buffered, fetch errors, and the server's clock minus flowtime |
 
+## Use satellites
+
+This switch works at any point, including during a run, and the audio keeps playing. **Off** stops GPS straight away, and the last GPS fit carries on as the holdover clock until NTP's error estimate is smaller. **On** asks for location permission if the app doesn't have it, then starts a fresh GPS fit. If you say no, the switch goes back to off. With the switch off, Start doesn't ask for location at all.
+
+This is also the quick way to run the 10-minute GPS dropout test.
+
 ## The event log
 
 The newest event always shows under the Start button. Tap it, or press **Show event log**, to see the latest 200, newest first. The log stays readable after you press Stop, until the next run starts.

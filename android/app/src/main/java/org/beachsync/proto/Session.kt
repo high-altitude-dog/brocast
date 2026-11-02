@@ -15,7 +15,7 @@ import kotlin.math.roundToLong
 class Settings(val url: String, val stream: Boolean, val policy: Policy, val pitchHz: Double, val lagMs: Double, val channel: Int)
 
 /** One test run: the time sources, the stream, the audio thread, the event log and four CSV logs. */
-class Session(ctx: Context, val s: Settings, gpsAllowed: Boolean) {
+class Session(ctx: Context, val s: Settings, private val satellitesOn: Boolean) {
     private val dir: File = ctx.getExternalFilesDir(null) ?: ctx.filesDir
     val name = "run-" + SimpleDateFormat("yyyyMMdd-HHmmss", Locale.UK).format(Date())
     private val lagNs = (s.lagMs * 1e6).roundToLong()
@@ -24,7 +24,7 @@ class Session(ctx: Context, val s: Settings, gpsAllowed: Boolean) {
         "boot_ns,utc_minus_boot_ns,gold,bias_unc_ns,er_unc_ns,leap_s,leap_from_chip,resid_vs_fit_ns,hw_discontinuities,arrival_minus_stamp_ns")
     private val ntpLog = CsvLog(File(dir, "$name-ntp.csv"),
         "boot_mid_ns,utc_minus_boot_ns,rtt_ns,bound_ns,stratum,ref_id,host,ntp_minus_gps_us")
-    val gps = if (gpsAllowed) GpsTime(ctx, gpsLog) else null
+    val gps = GpsTime(ctx, gpsLog)
     val ntp = NtpClient(ntpLog)
     val stream = if (s.stream) StreamClient(s.url, lagNs) else null
     private val renderer = Renderer(s.pitchHz, stream, s.channel)
@@ -45,8 +45,8 @@ class Session(ctx: Context, val s: Settings, gpsAllowed: Boolean) {
     fun start() {
         FlowTime.reset(s.policy)
         File(dir, "$name-info.txt").writeText(info())
-        note(Lane.CLOCK, "Run started: time source setting ${s.policy}" + if (gps == null) ", GPS off (no location permission)" else "")
-        gps?.start()
+        note(Lane.CLOCK, "Run started: time source setting ${s.policy}, satellites ${if (satellitesOn) "on" else "off"}")
+        if (satellitesOn) gps.start()
         ntp.start()
         stream?.start()
         play.start()
@@ -57,11 +57,18 @@ class Session(ctx: Context, val s: Settings, gpsAllowed: Boolean) {
         play.running = false
         stream?.running = false; stream?.interrupt()
         ntp.running = false; ntp.interrupt()
-        gps?.stop()
+        gps.close()
         play.join(500)
         watching = false; watcher.interrupt(); watcher.join(500)
         note(Lane.CLOCK, "Run stopped")
         statusLog.close(); gpsLog.close(); ntpLog.close(); eventCsv.close()
+    }
+
+    /** "Use satellites" during a run. The audio keeps playing: flowtime carries on from the last fit, then picks the best source. */
+    fun setSatellites(on: Boolean) {
+        if (on == gps.active) return
+        if (on) gps.start() else gps.stop()
+        note(Lane.CLOCK, "Satellites turned ${if (on) "on" else "off"} by you")
     }
 
     private fun note(lane: Lane, text: String) {
@@ -75,7 +82,7 @@ class Session(ctx: Context, val s: Settings, gpsAllowed: Boolean) {
         val fit = FlowTime.fit()
         val found = detector.update(Reading(
             boot, fit?.utcAt(boot), FlowTime.chosen, fit?.errAt(boot) ?: Double.NaN,
-            gps?.lastBoot ?: 0L, play.underruns, renderer.jumps, renderer.missingFrames,
+            if (gps.active) gps.lastBoot else 0L, play.underruns, renderer.jumps, renderer.missingFrames,
             stream?.lastError, stream?.errors ?: 0, ntp.lastError,
             if (play.track != null) routeName(play) else null, play.error,
         ))
@@ -85,7 +92,7 @@ class Session(ctx: Context, val s: Settings, gpsAllowed: Boolean) {
     private fun info() = buildString {
         appendLine("phone: ${Build.MANUFACTURER} ${Build.MODEL} (${Build.DEVICE})")
         appendLine("android: ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT}), build ${Build.FINGERPRINT}")
-        appendLine("gnss chip: ${gps?.chip ?: "not used"}; raw clock reports: ${gps?.reportsRaw ?: "not used"}")
+        appendLine("gnss chip: ${gps.chip}; raw clock reports: ${gps.reportsRaw}; satellites at start: ${if (satellitesOn) "on" else "off"}")
         appendLine("mode: ${if (s.stream) "stream from ${s.url}, ${channelName()} channel" else "tick at ${s.pitchHz} Hz"}")
         appendLine("time source: ${s.policy}; headphone lag: ${s.lagMs} ms")
     }
@@ -100,8 +107,8 @@ class Session(ctx: Context, val s: Settings, gpsAllowed: Boolean) {
         statusLog.row(
             boot, fit?.utcAt(boot), FlowTime.chosen, fit?.errAt(boot),
             FlowTime.gps?.errAt(boot), FlowTime.ntp?.errAt(boot),
-            g?.gold, g?.used, g?.seen, g?.rmsNs, FlowTime.gps?.slope?.times(1e6),
-            if (g != null && g.lastBoot > 0) (boot - g.lastBoot) / 1e6 else null,
+            g.gold, g.used, g.seen, g.rmsNs, FlowTime.gps?.slope?.times(1e6),
+            if (g.lastBoot > 0) (boot - g.lastBoot) / 1e6 else null,
             ntp.minusGpsUs, ntp.rttMs, ntp.boundMs,
             play.state, renderer.posErrUs, (renderer.ratio - 1) * 1e6, renderer.jumps,
             play.underruns, renderer.missingFrames, play.aheadMs, play.stampDevUs,
@@ -113,14 +120,14 @@ class Session(ctx: Context, val s: Settings, gpsAllowed: Boolean) {
     fun describe(boot: Long): String = buildString {
         val fit = FlowTime.fit()
         val src = FlowTime.chosen
-        val holdover = src == Source.GPS && gps != null && boot - gps.lastBoot > 3_000_000_000L
+        val holdover = src == Source.GPS && boot - gps.lastBoot > 3_000_000_000L
         append("SOURCE ")
         append(if (src == null) "none yet" else src.name + if (holdover) " (holdover)" else "")
         if (fit != null) append("   ±").append(fmtNs(fit.errAt(boot)))
         append("   switches ").append(FlowTime.switches).append('\n')
 
         val g = gps
-        if (g == null) append("GPS    off (no location permission)\n") else {
+        if (!g.active) append("GPS    off (Use satellites is off)\n") else {
             append("GPS    ").append(g.status)
             when (g.gold) {
                 true -> append(" · Gold (chip stamps the boot clock)")
@@ -130,7 +137,7 @@ class Session(ctx: Context, val s: Settings, gpsAllowed: Boolean) {
             append('\n')
             append("       satellites ${g.used} used of ${g.seen} · ")
             val gf = FlowTime.gps
-            if (gf != null) {
+            if (gf != null && g.lastBoot > 0) {
                 append("fit ${g.fitN} s, scatter ${fmtNs(g.rmsNs)} · boot clock ${"%+.3f".format(gf.slope * 1e6)} ppm")
                 append(" · last ${"%.1f".format((boot - g.lastBoot) / 1e9)} s ago")
             } else append("no fit yet")

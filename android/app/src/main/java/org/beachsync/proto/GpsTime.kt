@@ -25,7 +25,11 @@ class GpsTime(ctx: Context, private val log: CsvLog) {
     private val thread = HandlerThread("gnss").apply { start() }
     private val handler = Handler(thread.looper)
     private val exec = Executor { handler.post(it) }
-    private val fitter = GpsFitter()
+    private var fitter = GpsFitter()   // used only on the gnss thread
+
+    /** True while the GPS engine is asked to run. "Use satellites" can turn it on and off at any point. */
+    @Volatile var active = false
+        private set
 
     val chip: String = lm.gnssHardwareModelName ?: "unknown"
     val reportsRaw: Boolean = lm.gnssCapabilities.hasMeasurements()
@@ -59,23 +63,42 @@ class GpsTime(ctx: Context, private val log: CsvLog) {
     // The GNSS engine only runs while someone asks for position fixes, so ask for them and ignore them.
     private val fixes = LocationListener { }
 
+    /** The caller must already hold location permission. A restart begins a fresh fit; the last one carries on as holdover. */
     @SuppressLint("MissingPermission")
     fun start() {
+        if (active) return
+        handler.post { fitter = GpsFitter() }
+        lastBoot = 0L
+        active = true
         val req = GnssMeasurementRequest.Builder().setFullTracking(true).build()
         lm.registerGnssMeasurementsCallback(req, exec, measurements)
         lm.registerGnssStatusCallback(exec, satellites)
         lm.requestLocationUpdates(LocationManager.GPS_PROVIDER, 1000L, 0f, fixes, thread.looper)
-        status = if (reportsRaw) "waiting for satellites" else "this phone does not report raw GNSS clocks"
+        status = when {
+            !reportsRaw -> "this phone does not report raw GNSS clocks"
+            !lm.isLocationEnabled -> "Location is off in the phone's settings"
+            else -> "waiting for satellites"
+        }
     }
 
+    /** Stops the GPS engine straight away. FlowTime keeps the last fit, which carries on as the holdover clock. */
     fun stop() {
+        if (!active) return
+        active = false
         lm.unregisterGnssMeasurementsCallback(measurements)
         lm.unregisterGnssStatusCallback(satellites)
         lm.removeUpdates(fixes)
+        used = 0; seen = 0
+        status = "off"
+    }
+
+    fun close() {
+        stop()
         thread.quitSafely()
     }
 
     private fun onClock(c: GnssClock, arrival: Long) {
+        if (!active) return   // a report already queued when the switch went off
         epochs++
         if (!c.hasFullBiasNanos()) { status = "waiting for GPS time"; return }
         val biasUnc = if (c.hasBiasUncertaintyNanos()) c.biasUncertaintyNanos else 0.0
