@@ -12,7 +12,7 @@ Each listener's Android phone plays a time-stamped stream exactly D seconds behi
 
 ### Where each decision stands
 
-As of 1 November 2026. Decided items are settled, Proposed items await agreement, and To test items are the chosen direction but unproven on real phones.
+As of 2 November 2026. Decided items are settled, Proposed items await agreement, and To test items are the chosen direction but unproven on real phones.
 
 | Area | Position | Status |
 | --- | --- | --- |
@@ -21,6 +21,10 @@ As of 1 November 2026. Decided items are settled, Proposed items await agreement
 | Time reference | Teddington NPL time is the master timekeeper | Decided |
 | Scale | Millions of listeners, with no per-listener traffic cost to the host | Decided |
 | Source | Pre-recorded to begin with; live may follow | Decided |
+| Audio format | Opus at 160 kbps, 48 kHz stereo, from the packager to every phone | Decided |
+| Source music | Any format or quality, transcoded once at ingest | Decided |
+| Track files | Each track or set stays one whole file all the way to the phone, played from a signed schedule | Decided |
+| Archive | Listeners can opt in to keep files and replay them after flowtime; the music can be cleared for this | Decided |
 | Buffer and D | 60 seconds | Decided |
 | Use satellites | An On/Off switch available at any point | Decided |
 | No usable GPS | Keep playing and show the larger error; events limit the error rather than require GPS | Decided |
@@ -115,22 +119,52 @@ The diagram above still shows the CDN. Peer delivery replaces it, as Publishing 
 
 ## Publishing and delivery
 
-The packager stamps the audio once into a signed log, and peers and seed servers carry it to every phone. The stamps need not be exactly UTC: an error there shifts every phone by the same amount, so only the phones' agreement matters. Delivery is the chosen direction, but it is unproven on real phones.
+The packager publishes each track or set once as a signed Opus file, with a signed schedule saying when it plays, and peers and seed servers carry both to every phone. The stamps need not be exactly UTC: an error there shifts every phone by the same amount, so only the phones' agreement matters. Delivery is the chosen direction, but it is unproven on real phones.
 
 | Part | Job | Notes |
 | --- | --- | --- |
-| Packager | Builds the schedule from the library, encodes it into 20 ms Opus packets, and groups them into 1 s blocks | Runs ahead of time with no live input, so it can move between batches. Publishing about 24 hours ahead gives blocks time to spread. |
-| Timeline | A fixed start time, set once against NPL time. Block n is heard at start + n seconds + D. | Counted from samples, never re-read from a clock, so moving or restarting a machine can't shift it |
-| Signed log | One Hypercore per stream, where block number n is second n of the timeline | The publisher's Ed25519 key is the stream's identity, and the signed Merkle tree replaces a manifest and separate hashes. One active writer only, because two writers or a stale backup could fork the log. |
+| Packager | Transcodes each track or set once into an Opus file of 20 ms packets, cuts it into 1 s blocks, and builds the schedule (see Library and ingest) | Runs ahead of time with no live input, so it can move between batches. Publishing about 24 hours ahead gives blocks time to spread. |
+| Timeline | A fixed start time, set once against NPL time. Sample k of a scheduled file is heard at start + (the file's start sample + k) / 48 kHz + D. | Counted from samples, never re-read from a clock, so moving or restarting a machine can't shift it |
+| Signed log | One schedule log per stream, listing each file's start sample, and one shared content log holding each file once, as 1 s blocks | The publisher's Ed25519 key is the stream's identity, and the signed Merkle tree replaces a manifest and separate hashes. One active writer only, because two writers or a stale backup could fork the log. |
 | Seed servers | Hold signed blocks and no secret key | Fixed capacity with a hard cap, from any provider. To move one: start the new seed, let it sync and announce, then retire the old one. |
 | Swarm | Peers find each other by topic over HyperDHT and share blocks directly | Seeders are phones on Wi-Fi, charging and not playing. Phones on mobile data download only. Many sub-topics avoid one overloaded DHT topic. |
 | Starter nodes | First contact with the DHT | Saved peers first, then domain names across several domains, then built-in IP addresses |
 | Controller | Holds each event: stream, D, state, stop commands, announcements and an optional maximum sync error | A small signed state. Its polling rate needs setting for millions of phones. |
 | Time servers | NPL for the packager; regional servers that follow NPL time for phones without GPS, chosen from a signed list | Phones can't poll NPL directly at this scale: 62,500 queries a second per million phones at the prototype's 16 s interval |
 | Telemetry (opt-in) | Receives each phone's sync quality, buffer health, errors and measured headset delays | No location is sent, only time quality |
-| Live ingest (later) | Takes a DJ feed over SRT or RTMP, decodes it and locks its rate to 48,000 samples a second | Needed only for live shows. A standby would continue the same numbering, and a planned handover is needed to move it. |
+| Live ingest (later) | Takes a DJ feed over SRT or RTMP, decodes it and locks its rate to 48,000 samples a second | Needed only for live shows. A standby would continue the same numbering, and a planned handover is needed to move it. A live show would be one file that grows as it plays. |
 
-At Opus 96 kbps stereo a phone downloads about 43 MB an hour, so 1 million listeners need 96 Gbps, or 43 TB an hour. The swarm is how that avoids a per-listener cost: capacity grows with listeners, while seed servers stay a fixed cost. As arithmetic, a phone seeding at 1 Mbps for 8 hours supplies about 84 listener-hours. Published offload figures of about 55–78% are vendor claims for large live streams, and the same vendor reports peer connectivity below 30–40% for mobile-heavy audiences, and no data exists yet for this download-ahead design. The host also keeps the NTP server directory and its health probes, the headphone lag table for headsets, the miclag and screenlag tables for phone models, and the device table. D is 60 s, which sets the timeline offset and how long a live show would lag.
+At Opus 160 kbps stereo a phone downloads about 72 MB an hour, so 1 million listeners need 160 Gbps, or 72 TB an hour. The swarm is how that avoids a per-listener cost: capacity grows with listeners, while seed servers stay a fixed cost. As arithmetic, a phone seeding at 1 Mbps for 8 hours supplies about 50 listener-hours. Published offload figures of about 55–78% are vendor claims for large live streams, and the same vendor reports peer connectivity below 30–40% for mobile-heavy audiences, and no data exists yet for this download-ahead design. The host also keeps the NTP server directory and its health probes, the headphone lag table for headsets, the miclag and screenlag tables for phone models, and the device table. D is 60 s, which sets the timeline offset and how long a live show would lag.
+
+### Library and ingest
+
+Every track or set is transcoded once, at the source, into one 48 kHz stereo Ogg Opus file at 160 kbps, whatever format or quality it arrived in. Phones only ever receive these files, so there is one sample rate and one decoder path. Transcoding can't add quality: a poor source stays poor, and a lossy source loses a little more, so lossless masters are preferred where they exist.
+
+| Step | What happens | Why |
+| --- | --- | --- |
+| Keep the master | The host keeps the original file unchanged | Any later re-encode starts from the original, so quality is never lost twice |
+| Check | Records each track's clearance, and flags clipped, silent or very low-bitrate sources for a person to decide | Only cleared tracks are published, because listeners can keep and share them |
+| Convert | Decodes any supported format and resamples to 48 kHz stereo | The timeline counts 48,000 samples a second, and a phone never resamples |
+| Encode | Encodes with libopus to 20 ms packets, at a 160 kbps average | The bitrate can vary, because blocks are counted in packets, not bytes |
+| Tag | Writes the title, artist and set into the file's tags, and into a signed file record with a cue list for sets | The app reads the record. Other players read the tags. Both come from one source. |
+| Cut | One Ogg page per second becomes one 1 s block of 50 packets | Blocks join back into the exact file, checked by its hash. Second b of a file is block b, so joining mid-file needs no index. |
+
+### Schedule and track names
+
+The signed schedule says which file plays when, and the files never change. Each entry gives a file's hash and its start sample on the timeline. Files follow each other to the sample, each with its own decoder state. There are no crossfades between files in the first version: a mix is published as one set file.
+
+- **Track names:** the file record gives the title, artist and set, and a set's cue list stamps each track by sample. A phone switches the name when that sample reaches the ear.
+- **Joining mid-file:** the phone starts decoding slightly before the point due now and discards that audio, so playback begins clean.
+- **Repeats:** a track that plays again uses the same file, so it is stored and seeded once.
+- **Schedule changes:** a later signed entry can replace the plan for time not yet played, without touching any file. The new file must already have reached phones.
+
+### Archive
+
+Listeners can opt in to keep files and replay them after flowtime. A kept file is byte for byte what the packager published, checked by its hash. Replay is ordinary offline playback with no flowtime or sync, so it stays outside the timing path.
+
+- **Storage:** the archive is separate from the fixed seeding allowance, and the listener sets its size. A track takes about 3.6 MB for 3 minutes at 160 kbps.
+- **Tracks joined part-way:** the phone fetches the rest of the file on Wi-Fi.
+- **Other players:** some older players and car stereos can't play Opus. An export to AAC or MP3 can cover them later, outside the swarm.
 
 ## App architecture
 
@@ -142,6 +176,7 @@ One Android app (Kotlin) with its timing-critical audio path in C++. Eleven modu
 | GPS time service | Computes flowtime, the app's best match to UK national time UTC(NPL), from GPS, the holdover clock and NTP. GPS runs only while Use satellites is on. | `GnssMeasurementsEvent`, `GnssClock` |
 | Swarm client | Finds peers, fetches 1 s blocks ahead in bursts, checks the log's signatures and stores them. Seeds only on Wi-Fi, charging and not playing. Runs in a separate Android process at low priority, away from the audio. | Hyperswarm and Hypercore on Bare, through Bare Kit (to test) |
 | Decoder | Keeps blocks stored as Opus and decodes only a few seconds ahead into 48 kHz PCM, with the same bundled decoder on every phone | libopus |
+| Archive | Opt-in: keeps whole files and replays them offline, with no flowtime or sync. Never touches the audio thread of a live session. | libopus; plain file storage |
 | Playout engine | Works out when each output buffer will reach the headphone socket and fills it with the stream samples due at that moment | Oboe over AAudio |
 | Gap control | Decides how a gap closes when flowtime moves: Auto, or Manual with Go. Publishes one immutable state that the audio thread reads. | Plain Kotlin |
 | Output route | Detects wired, USB or Bluetooth output, applies its reported delay, the model default or the microphone calibration, and the person's manual nudge | `AudioDeviceCallback` |
@@ -551,19 +586,19 @@ The app asks for precise location only if the listener turns Use satellites on, 
 - **Privacy:** the app may have to request GPS position updates to keep the chip running; it discards the positions. Swarm peers can see a phone's IP address, which gives a rough location, so the app says so plainly and Privacy mode limits it (see Without satellites). Peers use a new key for each day's swarm, so a stable key can't track a phone. Calibration recordings never leave the phone and are discarded after the measurement. Telemetry is opt-in and carries time quality, buffer health, errors and measured headset delays, nothing else.
 - **Battery:** GPS, data and audio together for hours. Not yet measured; set a target before the field trials. GPS may not need polling continuously, especially for radio listening; this is being kept in view, with drift and re-lock time to measure first. Output chunks of 5 ms mean 200 wake-ups a second, and longer chunks may be possible for radio, if the rig shows the spread stays the same.
 - **CPU:** average load looks low: Opus decode is an estimated 2% of one core or less. Short stalls on the audio thread are the risk. Not yet measured on phones.
-- **Data:** about 43 MB an hour at Opus 96 kbps. A full day is about 1 GB, and a 60 s buffer about 720 KB.
+- **Data:** about 72 MB an hour at Opus 160 kbps. A full day is about 1.7 GB, and a 60 s buffer about 1.2 MB. A phone that still holds a file doesn't fetch it again when it repeats.
 
 ## Test plan and build phases
 
 Prove the GPS clock on real phones first; everything else rests on it. Each phase ends on a measured result.
 
 1. **GPS time probe.** A small app logs each phone's grade and how steady its GPS-to-boot-clock link is. Run it on 10 or more popular Android models, across the target countries. Done when every model has a grade and a measured spread.
-2. **Two-phone bench test.** Play the same stream on two phones and record both wired outputs into one two-channel recorder; measure the gap by cross-correlation. Done when a Gold pair stays within 5 ms for an hour, including a 10-minute GPS dropout, which the Use satellites switch makes one tap. The same rig checks the 3 s tracking period, Manual and Auto gap closing, and the 5 ppm holdover figure against real drift. It also measures each model's screenlag with a light sensor on the screen, or slow-motion video for a first look.
+2. **Two-phone bench test.** Play the same stream on two phones and record both wired outputs into one two-channel recorder; measure the gap by cross-correlation. Run it first with raw audio as the baseline, then with Opus files decoded on the phone, which must not widen the spread. Done when a Gold pair stays within 5 ms for an hour, including a 10-minute GPS dropout, which the Use satellites switch makes one tap. The same rig checks the 3 s tracking period, Manual and Auto gap closing, and the 5 ppm holdover figure against real drift. It also measures each model's screenlag with a light sensor on the screen, or slow-motion video for a first look.
 3. **Without satellites.** Log the app's NTP-versus-GPS gap outdoors on mobile data and Wi-Fi, against nearby servers, including network changes. Run a full session with permission denied and with Location off, with no prompts or GPS banners. Then sync one phone from another with satellites off, and measure the spread.
 4. **Bluetooth test.** Same rig, a microphone on each earcup of several common headsets. Done when the leftover delay per headset is known, the model defaults are set, and both in-app calibrations (the phone's own microphone and a neighbour's phone) agree with the rig to within a few ms.
 5. **Transport test.** Embed Bare, Hypercore and Hyperswarm in a separate process, with no relays. Record APK growth, direct connection rate, time to connect and time per block across home Wi-Fi and mobile data, with Iroh as the comparison. Mobile-to-mobile is the known weak spot. Done when the swarm's connection results decide the transport.
 6. **Load test.** On the Galaxy, as the weaker phone, compare underruns and spread for at least an hour: baseline, swarm running, and background load, with the screen on and off and Compose screens showing. Done when normal use has no underruns and the spread is no wider than baseline.
-7. **Publishing and scale.** Run the packager, signed log, seed servers and NTP directory for 24 hours. Move a seed, lose a seed, move the publisher, and resume from a stale copy to see how a fork is detected. Simulate seed capacity, late joiners, churn and sub-topics at hundreds of thousands of peers, including gossip or block-list traffic. Done when stamps hold to the sample and the swarm covers demand.
+7. **Publishing and scale.** Run the packager, signed logs, seed servers and NTP directory for 24 hours, with sources in several formats and sample rates. Move a seed, lose a seed, move the publisher, and resume from a stale copy to see how a fork is detected. Simulate seed capacity, late joiners, churn and sub-topics at hundreds of thousands of peers, including gossip or block-list traffic. Done when stamps hold to the sample and the swarm covers demand.
 8. **Field trial.** One beach with 10–20 phones, then two beaches far apart. The test team carries a GPS-timed recorder at each beach to measure the phones; it is a test tool, not part of the product.
 9. **Public beta** of the station and a small event, with telemetry on.
 
@@ -573,14 +608,14 @@ Ideas kept for later, not in the first build.
 
 - **Global moments:** a countdown on every brocast clock to a drop that hits every beach at the same instant, with a live count of phones in sync (for example “4,812 phones on 9 beaches in sync”) from opt-in telemetry.
 - **iPhone support:** iPhones are half of UK phones but cannot read GPS time, so they would run flowtime on NTP (about 5–30 ms) with an honest, wider sync error estimate; later perhaps tighter via Wi-Fi Aware from nearby Android phones. Parked for now; the reach cost is the main reason to revisit it.
-- **Bluetooth control mesh:** a local backup for signed stop commands, announcements and schedule changes at events when the mobile network is congested. It suits small messages, not audio: 100 phones relaying 96 kbps would need about 9.6 Mbps of transmissions, against about 1.2 Mbps for a good single link. It must be shown not to disturb Bluetooth headphones first.
+- **Bluetooth control mesh:** a local backup for signed stop commands, announcements and schedule changes at events when the mobile network is congested. It suits small messages, not audio: 100 phones relaying 160 kbps would need about 16 Mbps of transmissions, against about 1.2 Mbps for a good single link. It must be shown not to disturb Bluetooth headphones first.
 - **Nearby handover:** a phone that arrives without the download gets it from a neighbour over Wi-Fi, checked against the signed log.
 
 ## Open questions
 
 - [x] Is the source a live DJ or performer, or a pre-recorded or existing stream? Answered: pre-recorded to begin with. A live DJ later would need a monitor delayed by D.
 - [x] What playout delay D can the field trial support? Answered: D and the buffer are 60 s, with a lower D possible for live shows later.
-- [ ] Do the music licences cover a 24-hour station across countries and many beaches at once, stored copies on phones, and phones redistributing audio?
+- [x] Do the music licences cover a 24-hour station across countries and many beaches at once, stored copies on phones, and phones redistributing audio? Answered: the music can be cleared for this. Ingest records each track's clearance.
 - [ ] How do Bluetooth listeners get looser sync explained: a badge only, or a calibration screen?
 - [ ] How strong is mobile coverage at the target beaches on a busy day?
 - [ ] Google Play distribution or direct download?
@@ -591,14 +626,18 @@ Ideas kept for later, not in the first build.
 
 - [ ] Light track: automatic beat detection, a live lighting operator, or both?
 
-* [ ] Can beach events have their own programme as a separate signed log, or do they play the main station? Recommended: allow both.
+* [ ] Can beach events have their own programme as a separate signed log, or do they play the main station? Recommended: allow both. An event's own schedule log can reuse the same files, so it adds little traffic.
 * [ ] When peers can't supply a block and the seeds are at their cap, should a listener wait, or should paid overflow serve them? Recommended: wait, the only option that keeps host cost fixed.
-* [ ] How late can a schedule change once blocks are published, given that published Hypercore blocks can't be swapped?
+* [ ] How late can a schedule change? Files stay as published and a later signed entry replaces the plan, so the limit is how long a new file takes to reach phones.
 * [ ] Which time servers do phones without GPS use, given that they can't all poll NPL? Recommended: regional servers following NPL time, in a signed list.
 * [ ] Should GPS poll intermittently for radio listening and close to continuously at events?
 * [ ] Do Pears' building blocks hold up on real phones, or does Iroh's connection record beat them? If Iroh wins, its relays are needed for hole punching and raise a cost and a domain name question.
 * [ ] Does each seed need a separate provider, and how much fixed seed capacity is enough?
 * [ ] What does a phone that can't report raw GPS do? Proposed: run the same way as satellites off, rather than being turned away.
+* [ ] Should ingest level loudness across tracks, leaving the levels inside a set alone? Recommended: yes, because mixed sources otherwise jump in volume. The target level is still to choose.
+* [ ] What's the lowest source quality ingest should accept, and who decides on flagged tracks?
+* [ ] Does one shared content log with whole files hold up in the swarm, or do Hyperdrive's blob store or separate logs per file work better? To test in the transport test.
+* [ ] Does 160 kbps cost too much swarm capacity? It's two-thirds more data than the 96 kbps first assumed, and seed capacity is still unmeasured.
 
 ## Sources
 
