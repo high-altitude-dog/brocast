@@ -82,7 +82,8 @@ To keep tokens low:
 | `android/.../Session.kt` | One test run: wiring, the status panel, CSV logs |
 | `android/.../Events.kt` | The plain event log: detects changes in the app's counters on a low-priority thread, never the audio thread. Plain Kotlin, tested in `simtest/`. |
 | `android/.../MainActivity.kt` | The screen |
-| `server/beachsync_server.py` | The stream server (stdlib only). `--clicks` or `--source FILE` (needs ffmpeg). Serves `/manifest.json` and `/seg/<n>.pcm`. |
+| `server/beachsync_server.py` | The stream server (stdlib only). `--clicks` or `--source FILE` (needs ffmpeg). `--library DIR` plays what the upload page has put on air. Serves `/manifest.json` and `/seg/<n>.pcm`. |
+| `server/brocast_admin.py` | The upload page for test sets (stdlib, needs ffmpeg). No password, so only ever behind an SSH tunnel. `server/test_library.py` tests it with the stream server. |
 | `measure/beachsync_measure.py` | Analyses a WAV recording (numpy). Modes: `ticks-stereo`, `ticks-tones`, `music-stereo`. |
 | `simtest/SimTest.kt` | Desktop tests of the pure timing code. The commands are in its header. |
 | `README.md` | The human test guide, from build to results |
@@ -115,7 +116,7 @@ Don't change timing behaviour to make a build pass.
 - `~/Android` and `~/.android` exist, so the SDK is probably at `~/Android/Sdk`. Write `sdk.dir=<path>` into `android/local.properties`.
 - File copying may have dropped the executable bit, so run `chmod +x android/gradlew` first.
 - Build with `cd android && ./gradlew assembleDebug`. The APK lands at `app/build/outputs/apk/debug/app-debug.apk`.
-- The user is setting up a new VM to host the server for tests over mobile data. Until then, both phones can use the same Wi-Fi as this machine.
+- For tests over mobile data, the server runs as the `brocast-test` and `brocast-admin` containers on a test VM (`http://<server-ip>:8765`). That VM also runs other services, so keep the limits in `README.md`, stop `brocast-test` between tests, never publish the upload page's port, and change nothing else there.
 
 ## The test rig
 

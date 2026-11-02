@@ -1,0 +1,10 @@
+# The upload page, in its own container. Only this one can write to the library. Publish its port on the host's
+# 127.0.0.1 only and reach it through an SSH tunnel: it has no password. See README.md.
+FROM python:3.13-alpine
+ENV PYTHONDONTWRITEBYTECODE=1
+RUN apk add --no-cache ffmpeg && mkdir /library && chown 65534:65534 /library
+COPY brocast_admin.py /app/
+RUN chmod 755 /app && chmod 644 /app/brocast_admin.py
+USER 65534:65534
+EXPOSE 8766
+ENTRYPOINT ["python", "-u", "/app/brocast_admin.py", "--library", "/library", "--bind", "0.0.0.0", "--port", "8766"]

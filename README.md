@@ -228,3 +228,38 @@ These tests ran on the app's timing code, outside a phone:
 - **GPS fit:** the data had 3.2 ppm of drift and 30 ns of scatter. The fit measured the drift to within 0.0001 ppm and tracked to within 23 ns. It ignored a one-off 5 ms outlier, and reset once on a real 2 ms step. After 60 s of holdover it was 6 ns out, against a bound of ±300 µs.
 - **Playout loop:** with the audio clock running ±80 ppm off, the heard-time error settled at about 2.5 µs. With ±200 µs of jitter in the output time stamps it was about 7 µs rms.
 - **Server and measure script:** checked against synthetic recordings with known gaps.
+
+## Running the server in containers
+
+For tests over mobile data, the server runs in containers on a shared VM, so it stays apart from everything else there. There are two. Their limits are the point: non-root, a read-only filesystem, no Linux capabilities, and capped CPU and memory.
+
+| Container | Port | Library | Job |
+|---|---|---|---|
+| `brocast-admin` | 8766, on the host's `127.0.0.1` only | read and write | The upload page. It has no password, so reach it only through an SSH tunnel. |
+| `brocast-test` | 8765, public | read only | The stream phones play: what's on air, or the test clicks when nothing is |
+
+```
+cd server
+docker build -t brocast-test .
+docker build -f Dockerfile.admin -t brocast-admin .
+docker volume create brocast-library
+LIMITS="--init --restart no --read-only --cap-drop ALL --security-opt no-new-privileges --pids-limit 64 --log-opt max-size=5m --log-opt max-file=1 --stop-timeout 2"
+docker run -d --name brocast-admin $LIMITS --memory 512m --memory-swap 512m --cpus 1 -v brocast-library:/library -p 127.0.0.1:8766:8766 brocast-admin
+docker run -d --name brocast-test $LIMITS --memory 128m --memory-swap 128m --cpus 0.5 -v brocast-library:/library:ro -p 8765:8765 brocast-test --clicks-split --library /library
+```
+
+Start `brocast-admin` first, the first time, so the new volume takes its ownership. Port 8765 also needs a cloud firewall rule. Set the app's server to `http://<server-ip>:8765`.
+
+### Uploading sets
+
+Open the tunnel, then go to <http://localhost:8766>:
+
+```
+ssh -i ~/.ssh/<key> -N -L 8766:127.0.0.1:8766 <user>@<server-ip>
+```
+
+Each upload, in any audio format, is transcoded once into a 160 kbps Opus file, ready for when phones decode it, and raw 48 kHz audio, which today's phones play. A set uses about 760 MB of disk an hour, and transcoding ran at about 24 times real time on the VM. The upload is then deleted, so keep your own copy. The disk is shared, so the library stops at 8 GB and always leaves 3 GB free.
+
+**Put on air** starts that set from its beginning, on a loop. Phones follow by themselves, after up to a minute of silence.
+
+Stop `brocast-test` between tests, because each phone uses about 690 MB an hour, and the stream has no password. Restarting it starts a new timeline. `python3 server/test_library.py` tests the page and the stream together, and needs ffmpeg.

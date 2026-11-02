@@ -20,6 +20,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import os
 import struct
 import subprocess
 import sys
@@ -66,14 +67,39 @@ def decode_file(path):
     return pcm
 
 
-class Stream:
-    def __init__(self, pcm: bytes, d_ms: int, label: str):
+class MemoryAudio:
+    """Audio held in memory: a click track or a decoded --source file."""
+
+    def __init__(self, pcm: bytes):
         self.pcm = pcm
         self.frames = len(pcm) // BYTES_PER_FRAME
+
+    def read(self, frame: int, count: int) -> bytes:
+        return self.pcm[frame * BYTES_PER_FRAME:(frame + count) * BYTES_PER_FRAME]
+
+
+class FileAudio:
+    """Audio read from disk as needed, so a long set doesn't sit in memory. Closed once nothing is using it."""
+
+    def __init__(self, path: str):
+        self.fd = os.open(path, os.O_RDONLY)
+        self.frames = os.fstat(self.fd).st_size // BYTES_PER_FRAME
+
+    def read(self, frame: int, count: int) -> bytes:
+        return os.pread(self.fd, count * BYTES_PER_FRAME, frame * BYTES_PER_FRAME)
+
+    def __del__(self):
+        os.close(self.fd)
+
+
+class Stream:
+    def __init__(self, audio, d_ms: int, label: str, start_ns: int | None = None):
+        self.audio = audio
+        self.frames = audio.frames
         self.d_ms = d_ms
         self.label = label
         now = time.time_ns()
-        self.start_ns = (now // 1_000_000_000 + 1) * 1_000_000_000  # next whole second
+        self.start_ns = (now // 1_000_000_000 + 1) * 1_000_000_000 if start_ns is None else start_ns  # next whole second
 
     def newest(self):
         """Newest COMPLETE segment: segment n is complete once its last sample has been 'captured'."""
@@ -87,7 +113,7 @@ class Stream:
         pos = first
         while need:
             take = min(need, self.frames - pos)
-            out += self.pcm[pos * BYTES_PER_FRAME:(pos + take) * BYTES_PER_FRAME]
+            out += self.audio.read(pos, take)
             need -= take
             pos = 0
         return bytes(out)
@@ -99,7 +125,53 @@ class Stream:
                 "server_utc_ns": time.time_ns(), "source": self.label}
 
 
-def make_handler(stream: Stream):
+class LibraryStream:
+    """Plays what the upload page (brocast_admin.py) has put on air, or the fallback when nothing is.
+    This side only ever reads the library. Phones notice a new start time and begin the new stream on their own."""
+
+    def __init__(self, directory: str, d_ms: int, fallback: Stream):
+        self.directory = directory
+        self.d_ms = d_ms
+        self.fallback = fallback
+        self.current = fallback
+        self.seen = None
+        self.lock = threading.Lock()
+
+    def stream(self) -> Stream:
+        path = os.path.join(self.directory, "on_air.json")
+        try:
+            stamp = os.stat(path).st_mtime_ns
+        except OSError:
+            stamp = None
+        with self.lock:
+            if stamp != self.seen:
+                self.seen = stamp
+                self.current = self.load(path) if stamp is not None else self.fallback
+            return self.current
+
+    def load(self, path: str) -> Stream:
+        try:
+            with open(path) as f:
+                air = json.load(f)
+            audio = FileAudio(os.path.join(self.directory, "sets", air["id"], "audio.pcm"))
+            if audio.frames < SEG:
+                raise ValueError("too short")
+            return Stream(audio, self.d_ms, air["label"], air["start_ns"])
+        except (OSError, ValueError, KeyError) as e:
+            print(f"couldn't load what's on air, using the fallback: {e}", file=sys.stderr)
+            return self.fallback
+
+    def newest(self):
+        return self.stream().newest()
+
+    def segment(self, n: int) -> bytes:
+        return self.stream().segment(n)
+
+    def manifest(self):
+        return self.stream().manifest()
+
+
+def make_handler(stream):
     class Handler(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
 
@@ -146,6 +218,7 @@ def main():
     p.add_argument("--port", type=int, default=8080)
     p.add_argument("--bind", default="0.0.0.0", help="address to listen on (default all)")
     p.add_argument("--d-ms", type=int, default=60000, help="playout delay D advertised to phones (ms)")
+    p.add_argument("--library", help="folder from the upload page: play what's on air there, or the source above when nothing is")
     a = p.parse_args()
     if a.clicks:
         pcm, label = click_track(), "clicks"
@@ -153,10 +226,11 @@ def main():
         pcm, label = click_track(freq=1000.0, freq_r=3000.0), "clicks-split"
     else:
         pcm, label = decode_file(a.source), a.source
-    stream = Stream(pcm, a.d_ms, label)
-    srv = ThreadingHTTPServer((a.bind, a.port), make_handler(stream))
-    print(f"stream starts at UTC {time.strftime('%H:%M:%S', time.gmtime(stream.start_ns / 1e9))}, "
-          f"D = {a.d_ms} ms, serving on {a.bind}:{a.port}  (Ctrl-C to stop)")
+    stream = Stream(MemoryAudio(pcm), a.d_ms, label)
+    if a.library:
+        stream = LibraryStream(a.library, a.d_ms, stream)
+    srv =ThreadingHTTPServer((a.bind, a.port), make_handler(stream))
+    print(f"D = {a.d_ms} ms, serving on {a.bind}:{a.port}  (Ctrl-C to stop)")
     t = threading.Thread(target=srv.serve_forever, daemon=True)
     t.start()
     try:
