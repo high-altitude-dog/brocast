@@ -1,0 +1,7 @@
+{
+  "name": "brocast-dht",
+  "private": true,
+  "type": "module",
+  "description": "Lets clients reach the Brocast server by its ed25519 public key, wherever the server is.",
+  "dependencies": { "hyperdht": "6.35.0" }
+}

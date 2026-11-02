@@ -1,7 +1,11 @@
 package org.beachsync.proto
 
+import android.Manifest
 import android.annotation.SuppressLint
+import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothManager
 import android.content.Context
+import android.content.pm.PackageManager
 import android.media.AudioAttributes
 import android.media.AudioDeviceInfo
 import android.media.AudioFormat
@@ -33,11 +37,27 @@ fun currentOutput(ctx: Context): AudioOutput {
     )
     for ((type, route) in order) {
         val d = all.firstOrNull { it.type == type } ?: continue
-        val product = d.productName?.toString().orEmpty()
+        val product = bluetoothName(ctx, d) ?: d.productName?.toString().orEmpty()
         val name = if (type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER || product.isBlank() || product == Build.MODEL) route else product
         return AudioOutput(d, name, route)
     }
     return AudioOutput(null, "No output", "None")
+}
+
+/**
+ * What a Bluetooth headset calls itself, which usually includes its model. Android's audio system often doesn't pass this on,
+ * so it comes from Bluetooth instead, and needs the nearby devices permission. Null without it.
+ */
+@SuppressLint("MissingPermission")     // checked here
+private fun bluetoothName(ctx: Context, d: AudioDeviceInfo): String? {
+    if (d.type != AudioDeviceInfo.TYPE_BLUETOOTH_A2DP && d.type != AudioDeviceInfo.TYPE_BLE_HEADSET) return null
+    if (ctx.checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) return null
+    val address = d.address
+    if (!BluetoothAdapter.checkBluetoothAddress(address)) return null
+    return try {
+        val device = ctx.getSystemService(BluetoothManager::class.java).adapter?.getRemoteDevice(address)
+        device?.alias ?: device?.name
+    } catch (_: Exception) { null }
 }
 
 /**

@@ -291,9 +291,10 @@ def make_handler(stream):
                 return
             with f:
                 size = os.fstat(f.fileno()).st_size
-                m = re.fullmatch(r"bytes=(\d+)-", self.headers.get("Range") or "")
+                m = re.fullmatch(r"bytes=(\d+)-(\d*)", self.headers.get("Range") or "")
                 start = int(m.group(1)) if m else 0
-                if start >= size and size:
+                end = min(int(m.group(2)), size - 1) if m and m.group(2) else size - 1
+                if (start >= size and size) or start > end:
                     self.send_response(416)
                     self.send_header("Content-Range", f"bytes */{size}")
                     self.send_header("Content-Length", "0")
@@ -301,14 +302,16 @@ def make_handler(stream):
                     return
                 self.send_response(206 if m else 200)
                 self.send_header("Content-Type", "audio/ogg")
-                self.send_header("Content-Length", str(size - start))
+                self.send_header("Content-Length", str(end + 1 - start))
                 self.send_header("Accept-Ranges", "bytes")
                 if m:
-                    self.send_header("Content-Range", f"bytes {start}-{size - 1}/{size}")
+                    self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
                 self.end_headers()
                 f.seek(start)
-                while chunk := f.read(1024 * 1024):
+                left = end + 1 - start
+                while left > 0 and (chunk := f.read(min(left, 1024 * 1024))):
                     self.wfile.write(chunk)
+                    left -= len(chunk)
 
         def do_GET(self):
             path = self.path.split("?")[0]

@@ -110,7 +110,9 @@ fun NowPlaying(state: BenchState, actions: BenchActions, openLog: () -> Unit, op
         Row(Modifier.fillMaxWidth().height(IntrinsicTile), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             val gold = when (s?.gps?.gold) { true -> "Gold · "; false -> "Silver · "; null -> "" }
             Tile("SOURCE", FlowTime.chosen?.name?.takeIf { s != null } ?: "—", if (s == null) "" else if (s.gps.active) "$gold${s.gps.used} sats" else "Satellites off", Modifier.weight(1f))
-            Tile("HEADPHONES", "${s?.s?.lagMs ?: state.lag} ms", state.lagSource, Modifier.weight(1f))
+            // Named for the output in use: this lag also applies to a phone's own speaker.
+            val out = actions.output()
+            Tile(if (out.external) "HEADPHONES" else "SPEAKER", "${s?.s?.lagMs ?: state.lag} ms", if (out.external) out.name else state.lagSource, Modifier.weight(1f))
             Tile("AHEAD", "—", "downloaded", Modifier.weight(1f))
         }
         Card { SatellitesRow(state.satellites, actions::setSatellites, "Position stays on this phone · off = Privacy mode") }
@@ -292,7 +294,7 @@ private fun Budget(s: Session?, boot: Long) {
             BasicText(if (total.isNaN()) "—" else "±" + fmtDuration(total), style = Tokens.Text.valueSmall.style(Ink.accent))
         }
         BudgetRow("Flowtime", flow, Ink.accent, Ink.text)
-        BudgetRow("Headphone lag", Double.NaN, Ink.warn, Ink.text)
+        BudgetRow("Output lag", Double.NaN, Ink.warn, Ink.text)
         BudgetRow("Total", total, Ink.text, Ink.text)
         BudgetRow("Screenlag", Double.NaN, Ink.muted, Ink.muted)
     }

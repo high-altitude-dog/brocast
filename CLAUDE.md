@@ -1,6 +1,6 @@
 # Beach Sync prototype
 
-Beach Sync is a 24-hour radio station and silent discos on many beaches, on one system. It is no longer simply a streaming app: it plays pre-downloaded sets and tracks in sync with flowtime, with the files meant to reach phones over a geo-local Pears mesh (not built yet; today they come from a server). Every listener hears the same audio at exactly the same instant, on Android phones with no local hardware. Teddington NPL time is the master timekeeper, reached through each phone's GPS, and everything else is non-geographic. The target is millions of listeners with no per-listener traffic cost to the host. This repo is the first prototype: it tests how closely two phones agree. The full design is in `docs/design.md`, a snapshot of the living design doc (<https://claude.ai/artifact/1qiZnSEZMoea8ch2Uhe8MV>). The snapshot has no diagrams.
+Beach Sync is a 24-hour radio station and silent discos on many beaches, on one system. It is no longer simply a streaming app: it plays pre-downloaded sets and tracks in sync with flowtime, with the files meant to reach phones over a Pears mesh of local-network, phone-to-phone and internet peers (not built yet; today they come from a server). Every listener hears the same audio at exactly the same instant, on Android phones with no local hardware. Teddington NPL time is the master timekeeper, reached through each phone's GPS, and everything else is non-geographic. The target is millions of listeners with no per-listener traffic cost to the host. This repo is the first prototype: it tests how closely two phones agree. The full design is in `docs/design.md`, a snapshot of the living design doc (<https://claude.ai/artifact/1qiZnSEZMoea8ch2Uhe8MV>). The snapshot has no diagrams.
 
 ## The one rule
 
@@ -46,6 +46,7 @@ To keep tokens low:
 - **Wait without spending tokens.** Claude Code runs one background wait that exits when `to-code.log` grows, and restarts it after handling a message. No polling from the model.
 - **Claim before starting** shared work, and check the other log first.
 - **The user decides.** Disagreements go to the user in one line; don't debate in the logs.
+- **Share every design decision or change** with the other side as soon as it's made. If two conflict, the most recent wins. Either side can ask for clarity at any time.
 
 ## Terms (use these, as the design doc does)
 
@@ -90,6 +91,7 @@ To keep tokens low:
 | `android/.../MainActivity.kt` | The screen |
 | `server/beachsync_server.py` | The stream server (stdlib only). `--clicks` or `--source FILE` (needs ffmpeg). `--library DIR` plays what the upload page has put on air. Serves `/manifest.json`, `/seg/<n>.opus`, `/library.json`, `/file/<id>.opus` and `/on_air.opus`. Every transfer is compressed: no raw audio ever crosses a network. |
 | `server/brocast_admin.py` | The upload page for test sets (stdlib, needs ffmpeg). No password, so only ever behind an SSH tunnel. `server/test_library.py` tests it with the stream server. |
+| `server/dht/`, `server/Dockerfile.dht` | Reach the server by its ed25519 public key over HyperDHT: `gateway.js` on the server, `connect.js` as a test client. The key locates the server, so it stays out of this repo, like its address. |
 | `measure/beachsync_measure.py` | Analyses a WAV recording (numpy). Modes: `ticks-stereo`, `ticks-tones`, `music-stereo`. |
 | `measure/quicktest.py` | The acoustic two-phone test as one command: use this first. Phones stay silent until the test, then tick for about 10 s at five pitches, giving the gap at each. It logs to `measure/results.csv`, which git ignores. `measure/test_pattern.py` tests its analysis. |
 | `android/.../TickWindowReceiver.kt` | Starts and stops the tick pattern's sound over adb, for `quicktest.py`. Only adb can send it. |

@@ -2,6 +2,18 @@
 
 Claude Desktop: read this before each design round. Newest notes go first.
 
+## 2026-11-02: latest event wraps
+
+The user asked for the latest event row to grow onto more lines rather than overflow, so its text now wraps with no line limit and the row gets taller. Please update the design and spec.
+
+## 2026-11-02: headset name on Now playing
+
+The user wants the connected headset's make and model shown. The HEADPHONES tile's small line now shows the name Bluetooth reports, which needs the nearby devices permission, asked when a headset is first seen. Without it, the line reads `Bluetooth`. Please design that prompt and where the name belongs.
+
+## 2026-11-02: lag labels on the phone's speaker
+
+The user spotted the Galaxy showing `HEADPHONES 20.0 ms` while playing through its speaker. Now playing's tile now reads `SPEAKER` or `HEADPHONES` by the output in use, and the budget row reads `Output lag`. Please match this in the design, and check Calibration's wording for the speaker.
+
 ## 2026-11-02: Time signals, Stream gap and Event log built
 
 These replace the plain screens. All update once a second. Left out because the app has no data for them: the sky plot and constellation list, extra NTP servers, the safety check's age, the event timeline's error trace, tapping and pinching, and the Screen lane. Stream gap says neither "behind" nor "ahead", and adds a `Use recommended` link in Manual. The recommended period is 60 s, so its label reads `rec. 1 min`.

@@ -3,6 +3,7 @@ package org.beachsync.proto
 import android.Manifest
 import android.content.pm.PackageManager
 import android.graphics.Color
+import android.media.AudioDeviceInfo
 import android.media.AudioManager
 import android.os.Build
 import android.os.Bundle
@@ -39,6 +40,20 @@ class MainActivity : ComponentActivity(), BenchActions {
     private var listenLag: Double? = null
     private var listenFromLibrary = false
     private var earcupOutput: AudioOutput? = null
+
+    private val askForHeadsetName = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
+    private var askedForHeadsetName = false
+
+    /** Asked only once a Bluetooth headset is connected, because its name is the only reason the app wants this. */
+    override fun onResume() {
+        super.onResume()
+        val bluetooth = getSystemService(AudioManager::class.java).getDevices(AudioManager.GET_DEVICES_OUTPUTS)
+            .any { it.type == AudioDeviceInfo.TYPE_BLUETOOTH_A2DP || it.type == AudioDeviceInfo.TYPE_BLE_HEADSET }
+        if (bluetooth && !askedForHeadsetName && checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
+            askedForHeadsetName = true
+            askForHeadsetName.launch(Manifest.permission.BLUETOOTH_CONNECT)
+        }
+    }
 
     private val askForMic = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) earcupOutput?.let { beginEarcup(it) }

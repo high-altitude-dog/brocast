@@ -445,7 +445,7 @@ internal fun EventRow(log: EventLog?, tickMs: Long = STATUS_MS, openLog: () -> U
             Spacer(Modifier.width(8.dp))
             BasicText("${last.lane.mark()} ${last.lane.name}", style = Tokens.Text.valueSmall.style(last.lane.color()).copy(fontSize = 10.sp, letterSpacing = 1.sp))
             Spacer(Modifier.width(8.dp))
-            BasicText(last.text, Modifier.weight(1f), Tokens.Text.body.style(), overflow = TextOverflow.Ellipsis, maxLines = 1)
+            BasicText(last.text, Modifier.weight(1f).padding(vertical = 8.dp), Tokens.Text.body.style())
         }
     }
 }
