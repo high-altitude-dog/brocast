@@ -263,3 +263,7 @@ Each upload, in any audio format, is transcoded once into a 160 kbps Opus file, 
 **Put on air** starts that set from its beginning, on a loop. Phones follow by themselves, after up to a minute of silence.
 
 Stop `brocast-test` between tests, because each phone uses about 690 MB an hour, and the stream has no password. Restarting it starts a new timeline. `python3 server/test_library.py` tests the page and the stream together, and needs ffmpeg.
+
+## Licence
+
+MIT: see `LICENSE`. The bundled fonts, JetBrains Mono and Space Grotesk, keep their own SIL Open Font License (`android/app/src/main/assets/licenses/`), and the Gradle wrapper keeps its Apache 2.0 licence.
