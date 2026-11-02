@@ -100,12 +100,12 @@ What's been verified, which happened before this repo reached this machine:
 
 Since then, on this machine, on the `prototype-queue` branch:
 
-- `./gradlew assembleDebug` builds, and `simtest` passes 91 checks. `simtest` needs `Events.kt` and `Nudge.kt` too; screens need Gradle, because of the Compose plugin.
+- `./gradlew assembleDebug` builds, and `simtest` passes 99 checks. `simtest` needs `Events.kt` and `Nudge.kt` too; screens need Gradle, because of the Compose plugin.
 - `simtest` now settles at about 2.5 µs with a 3 s tracking period, and about 7 µs rms with ±200 µs of stamp jitter.
 
 What's never been done:
 
-- **A verified run of the current code on a real phone.** The rate nudge, satellites switch, weighted fit and event log have only run in simulation or compilation.
+- **A two-phone sync measurement on the rig.** The app has run on the Pixel 10 Pro alone (2 Nov 2026, tick mode, speaker, 11 minutes): Gold GPS, no underruns or jumps. The rate nudge has closed one real gap. The satellites switch and Silver link have only run in simulation.
 
 Don't change timing behaviour to make a build pass.
 

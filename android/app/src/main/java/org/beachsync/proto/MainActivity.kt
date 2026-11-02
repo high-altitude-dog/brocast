@@ -2,10 +2,12 @@ package org.beachsync.proto
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.graphics.Color
 import android.media.AudioManager
 import android.os.Bundle
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -39,7 +41,8 @@ class MainActivity : ComponentActivity(), BenchActions {
 
     override fun onCreate(saved: Bundle?) {
         super.onCreate(saved)
-        enableEdgeToEdge()
+        // The app is always dark, so the bars' icons stay light whatever the phone's own theme is.
+        enableEdgeToEdge(SystemBarStyle.dark(Color.TRANSPARENT), SystemBarStyle.dark(Color.TRANSPARENT))
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         volumeControlStream = AudioManager.STREAM_MUSIC
         load()

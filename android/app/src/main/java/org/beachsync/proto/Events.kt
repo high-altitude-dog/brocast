@@ -66,6 +66,8 @@ class EventDetector {
     private var fetchErrorsAtStart = 0
     private var ntpFailing = false
     private var ntpSince = 0L
+    private val fetchTexts = HashSet<String>()
+    private val ntpTexts = HashSet<String>()
     private var route: String? = null
     private var audioError: String? = null
     private var tightRef = Double.NaN
@@ -138,7 +140,10 @@ class EventDetector {
 
         if (r.fetchError != null && !fetchFailing) {
             fetchFailing = true; fetchSince = r.boot; fetchErrorsAtStart = r.fetchErrors - 1
+            fetchTexts.clear(); fetchTexts.add(r.fetchError)
             add(Lane.NET, "Stream fetch failing: ${r.fetchError}")
+        } else if (r.fetchError != null && fetchTexts.size < MAX_FAIL_TEXTS && fetchTexts.add(r.fetchError)) {
+            add(Lane.NET, "Stream fetch still failing: ${r.fetchError}")
         } else if (r.fetchError == null && fetchFailing) {
             fetchFailing = false
             add(Lane.NET, "Stream fetch working again after ${(r.boot - fetchSince) / 1_000_000_000L} s " +
@@ -147,7 +152,11 @@ class EventDetector {
 
         if (r.ntpError != null && !ntpFailing) {
             ntpFailing = true; ntpSince = r.boot
+            ntpTexts.clear(); ntpTexts.add(r.ntpError)
             add(Lane.NET, "NTP failing: ${r.ntpError}")
+        } else if (r.ntpError != null && ntpTexts.size < MAX_FAIL_TEXTS && ntpTexts.add(r.ntpError)) {
+            // Each server's message once: NTP cycles through its servers, which would otherwise add a line every poll.
+            add(Lane.NET, "NTP still failing: ${r.ntpError}")
         } else if (r.ntpError == null && ntpFailing) {
             ntpFailing = false
             add(Lane.NET, "NTP working again after ${(r.boot - ntpSince) / 1_000_000_000L} s")
@@ -167,6 +176,7 @@ class EventDetector {
         const val TIGHT_WORSE = 1.25
         const val TIGHT_HOLD_NS = 10_000_000_000L
         const val TIGHT_SHOW_NS = 10_000_000_000L
+        const val MAX_FAIL_TEXTS = 8              // a message that varies each time can't fill the log
         const val TIGHT_FLOOR_NS = 100_000.0      // below 0.1 ms, changes are routine and not worth an entry
     }
 }

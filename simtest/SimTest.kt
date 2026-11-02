@@ -349,6 +349,21 @@ fun testEvents() {
     val gpsErr = EventDetector().update(Reading(s, null, Source.GPS, 70.0, 0L, 0, 0, 0L, null, 0, null, null, null))
     check(gpsErr.single().text == "Time source: GPS (±70 ns)", "a GPS error no longer reads as ±0.0 ms")
 
+    println("GPS: a report with no real date is refused")
+    check(!gpsDateValid(315_964_002_822_084_299L + 793_181_674_796L), "the Pixel's first report, which reads as 1980, is refused")
+    check(gpsDateValid(1_793_626_846_987_839_256L + 827_012_160_925L), "its first good report is accepted")
+
+    println("Event log: a failure logs each distinct message once")
+    val fd = EventDetector()
+    fun ntpFail(t: Long, error: String?) =
+        fd.update(Reading(t * s, null, null, Double.NaN, 0L, 0, 0, 0L, null, 0, error, null, null)).filter { it.text.startsWith("NTP") }.map { it.text }
+    check(ntpFail(1, "ntp1: timed out") == listOf("NTP failing: ntp1: timed out"), "the first error logs as failing")
+    check(ntpFail(17, "ntp2: timed out") == listOf("NTP still failing: ntp2: timed out"), "a new message logs as still failing")
+    check(ntpFail(33, "ntp1: timed out").isEmpty() && ntpFail(49, "ntp2: timed out").isEmpty(), "cycling back through the servers logs nothing")
+    check((0 until 20).sumOf { ntpFail(65L + it, "varying $it").size } == 6, "messages that vary each time stop at the cap")
+    check(ntpFail(100, null).single().startsWith("NTP working again"), "recovery logs once")
+    check(ntpFail(101, "ntp2: timed out") == listOf("NTP failing: ntp2: timed out"), "a new failure starts afresh")
+
     println("Event log: tightening needs a real, lasting improvement")
     val td = EventDetector()
     fun tight(t: Long, err: Double, sats: Int = 9) =

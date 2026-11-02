@@ -115,6 +115,12 @@ fun fitLine(x: DoubleArray, y: DoubleArray, n: Int, w: DoubleArray? = null): Lin
     return Line(mx, my, b, sxx, sqrt(ss / (n - 2)), n, hi - lo)
 }
 
+/**
+ * A chip that hasn't yet got the GPS week can report a full time that reads as 1980 (seen on the Pixel 10 Pro).
+ * Any time before 2025 is one of these, so it never reaches the fit.
+ */
+fun gpsDateValid(utcNs: Long) = utcNs >= 1_735_689_600_000_000_000L
+
 /** Fit, drop points further from the line than 5 robust sigmas plus [floor], fit again. */
 fun robustFit(x: DoubleArray, y: DoubleArray, n: Int, floor: Double, w: DoubleArray? = null): Line? {
     val first = fitLine(x, y, n, w) ?: return null

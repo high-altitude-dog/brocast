@@ -256,7 +256,15 @@ private fun zoneLine(now: Instant): String {
     val zone = CLOCK_ZONE.format(now)
     val local = ZoneId.systemDefault()
     if (local.rules.getOffset(now) == UK.rules.getOffset(now)) return zone
-    return "$zone · local " + LOCAL_DIGITS.withZone(local).format(now)
+    return "$zone · local " + shortZone(LOCAL_DIGITS.withZone(local).format(now))
+}
+
+/** Zones with no abbreviation read as "GMT-05:00", which squeezes the card, so this makes it "GMT-5". */
+private fun shortZone(line: String): String {
+    val at = line.indexOf("GMT")
+    if (at < 0 || line.length < at + 9) return line
+    val minutes = line.substring(at + 7, at + 9)
+    return line.substring(0, at + 4) + line.substring(at + 4, at + 6).trimStart('0').ifEmpty { "0" } + if (minutes == "00") "" else ":$minutes"
 }
 
 @Composable
@@ -288,6 +296,9 @@ fun Segmented(label: String, options: List<String>, selected: Int, enabled: Bool
                 Box(
                     Modifier.weight(1f).heightIn(min = Tokens.Space.touchTarget.dp)
                         .background(if (on) Ink.text else Color.Transparent, segmentShape(i, options.size))
+                        .drawBehind {
+                            if (i > 0) drawLine(Ink.grid, Offset.Zero, Offset(0f, size.height), Tokens.Stroke.control.dp.toPx())
+                        }
                         .selectable(on, enabled, Role.RadioButton) { onSelect(i) },
                     Alignment.Center,
                 ) {
@@ -384,18 +395,16 @@ private fun RunButton(running: Boolean, onClick: () -> Unit) {
 }
 
 @Composable
-private fun LinkRow(onClick: () -> Unit, chevron: Boolean = true, content: @Composable RowScope.() -> Unit) {
+private fun LinkRow(onClick: () -> Unit, minHeight: Dp = Tokens.Space.touchTarget.dp, chevronTint: Color = Ink.text, chevronSize: Dp = 16.dp, content: @Composable RowScope.() -> Unit) {
     Row(
-        Modifier.fillMaxWidth().heightIn(min = Tokens.Space.touchTarget.dp).background(Ink.surface, RoundedCornerShape(Tokens.Radius.tile.dp))
+        Modifier.fillMaxWidth().heightIn(min = minHeight).background(Ink.surface, RoundedCornerShape(Tokens.Radius.tile.dp))
             .border(Tokens.Stroke.card.dp, Ink.border, RoundedCornerShape(Tokens.Radius.tile.dp))
             .clickable(role = Role.Button, onClick = onClick).padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) { content() }
-        if (chevron) {
-            Spacer(Modifier.width(8.dp))
-            Chevron(Ink.text, 16.dp)
-        }
+        Spacer(Modifier.width(8.dp))
+        Chevron(chevronTint, chevronSize)
     }
 }
 
@@ -437,42 +446,44 @@ private fun partsText(parts: List<StatusPart>) = buildAnnotatedString {
     }
 }
 
-/** "+0.01%": the playback rate change while a gap closes. Very slow closes keep more places, so they don't read as zero. */
+/** "+0.014%": the playback rate change while a gap closes. Very slow closes keep more places, so they don't read as zero. */
 private fun fmtPitch(rate: Double): String {
     val percent = abs(rate) * 100
-    return (if (rate < 0) "−" else "+") + (if (percent >= 0.01) "%.2f%%" else "%.4f%%").format(Locale.ROOT, percent)
-}
-
-/** "gap 0.20 ms · closes in 1.40 s · +0.01%", or "gap 5.00 ms · paused". */
-private fun nudgeParts(s: Session?, boot: Long): List<StatusPart> {
-    val gap = s?.nudge?.gapAt(boot) ?: 0L
-    if (s == null || gap == 0L) return listOf(StatusPart("no gap"))
-    val figure = StatusPart(fmtDuration(gap.toDouble()), mono = true)
-    val closing = s.nudge.state
-    if (!closing.closing) return listOf(StatusPart("gap "), figure, StatusPart(" · paused"))
-    return listOf(
-        StatusPart("gap "), figure, StatusPart(" · closes in "), StatusPart(fmtDuration(s.nudge.secondsLeft(boot) * 1e9), mono = true),
-        StatusPart(" · "), StatusPart(fmtPitch(closing.rate), mono = true),
-    )
+    val format = when { percent >= 0.1 -> "%.2f%%"; percent >= 0.01 -> "%.3f%%"; else -> "%.4f%%" }
+    return (if (rate < 0) "−" else "+") + format.format(Locale.ROOT, percent)
 }
 
 @Composable
 private fun NudgeRow(state: BenchState, openNudge: () -> Unit) {
     val boot by rememberTick(STATUS_MS)
     val manual = state.nudgeMode == NudgeMode.MANUAL
-    LinkRow(openNudge, chevron = false) {
+    val s = state.session
+    val gap = s?.nudge?.gapAt(boot) ?: 0L
+    LinkRow(openNudge, minHeight = 48.dp, chevronTint = Ink.muted, chevronSize = 14.dp) {
         BasicText(
             if (manual) "MANUAL" else "AUTO",
             Modifier.border(Tokens.Stroke.card.dp, if (manual) Ink.accent else Ink.faint, RoundedCornerShape(6.dp)).padding(horizontal = 8.dp, vertical = 3.dp),
             Tokens.Text.badge.style(if (manual) Ink.accent else Ink.text).copy(fontSize = 11.sp),
         )
         Spacer(Modifier.width(10.dp))
-        BasicText(
-            partsText(nudgeParts(state.session, boot)), Modifier.weight(1f), Tokens.Text.body.style().copy(fontSize = 12.5.sp),
-            overflow = TextOverflow.Ellipsis, maxLines = 1,
-        )
-        Spacer(Modifier.width(10.dp))
-        BasicText("Nudge ›", style = Tokens.Text.small.style(Ink.muted).copy(fontSize = 12.sp))
+        if (s == null || gap == 0L) {
+            BasicText(if (s == null) "no run" else "in step", style = Tokens.Text.body.style(Ink.muted).copy(fontSize = 13.sp))
+        } else {
+            BasicText(fmtDuration(gap.toDouble()), style = Tokens.Text.valueSmall.style().copy(fontSize = 14.sp, fontWeight = FontWeight.SemiBold))
+            Spacer(Modifier.width(10.dp))
+            val closing = s.nudge.state
+            val small = Tokens.Text.small.style(Ink.muted).copy(fontSize = 11.sp)
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                BasicText(
+                    if (closing.closing) "gap · closes in " + fmtDuration(s.nudge.secondsLeft(boot) * 1e9) else "gap · paused",
+                    style = small, overflow = TextOverflow.Ellipsis, maxLines = 1,
+                )
+                BasicText(
+                    if (closing.closing) "pitch " + fmtPitch(closing.rate) else "period %.0f s".format(Locale.ROOT, s.nudge.effectivePeriodS(abs(gap))),
+                    style = small, overflow = TextOverflow.Ellipsis, maxLines = 1,
+                )
+            }
+        }
     }
 }
 
@@ -487,17 +498,15 @@ private fun StatusGrid(state: BenchState, openLog: (Lane?) -> Unit) {
         }
         val text = Tokens.Text.body.style().copy(fontSize = 11.5.sp)
         for (row in s.statusRows(boot)) {
-            Row(Modifier.fillMaxWidth()) {
+            val tappable = if (row.error == null) Modifier else
+                Modifier.heightIn(min = Tokens.Space.touchTarget.dp).clickable(role = Role.Button) { openLog(row.errorLane) }
+            Row(Modifier.fillMaxWidth().then(tappable), verticalAlignment = Alignment.CenterVertically) {
                 BasicText(row.label, Modifier.width(58.dp), Tokens.Text.cardLabel.style().copy(fontSize = 10.sp, letterSpacing = 1.4.sp))
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     BasicText(partsText(row.parts), style = text)
                     row.error?.let { error ->
-                        BasicText(
-                            "▲ $error",
-                            Modifier.fillMaxWidth().heightIn(min = 22.dp).clickable(role = Role.Button) { openLog(row.errorLane) },
-                            text.copy(color = Ink.warn), overflow = TextOverflow.Ellipsis, maxLines = 1,
-                        )
+                        BasicText("▲ $error", style = text.copy(color = Ink.warn), overflow = TextOverflow.Ellipsis, maxLines = 1)
                     }
                 }
             }

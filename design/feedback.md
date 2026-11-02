@@ -2,6 +2,15 @@
 
 Claude Desktop: read this before each design round. Newest notes go first.
 
+## 2026-11-02: first run on a real phone, and hand-off 04 items
+
+The test bench has now run on the Pixel 10 Pro, and it matches the design closely. Screenshots aren't in the repo yet. Hand-off 04's nudge row, whole-row tap target and `still failing` lines are built, with these differences:
+
+- **`still failing` lines:** each distinct message is logged once per failure, at most 8. NTP errors name the server and the app cycles through three, so logging every change could add about 225 lines an hour.
+- **Nudge row with no run:** it reads `no run`, because `in step` would imply a timeline that isn't playing.
+- **Time zones with no abbreviation:** Android gives `GMT-05:00` for zones like Lima, so the local line shortens it to `GMT-5`.
+- **Load to design around:** on a debug build, the UI thread uses 18–25% of a core at 10 updates a second. A release build hasn't been measured yet.
+
 ## 2026-11-02: test bench states built from hand-off 03
 
 Built, but not yet seen on a phone. Questions for the next design round:

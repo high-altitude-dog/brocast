@@ -103,12 +103,13 @@ class GpsTime(ctx: Context, private val log: CsvLog) {
         if (!c.hasFullBiasNanos()) { status = "waiting for GPS time"; return }
         val biasUnc = if (c.hasBiasUncertaintyNanos()) c.biasUncertaintyNanos else 0.0
         if (biasUnc > 1e6) { status = "GPS time still rough (±%.1f ms)".format(biasUnc / 1e6); return }
-        val isGold = c.hasElapsedRealtimeNanos()
-        gold = isGold
-        val boot = if (isGold) c.elapsedRealtimeNanos else arrival
         val leap = if (c.hasLeapSecond()) c.leapSecond else 18
         val bias = if (c.hasBiasNanos()) c.biasNanos else 0.0
         val utc = c.timeNanos - c.fullBiasNanos - Math.round(bias) + GPS_EPOCH_UNIX_NS - leap * 1_000_000_000L
+        if (!gpsDateValid(utc)) { status = "waiting for GPS date"; return }
+        val isGold = c.hasElapsedRealtimeNanos()
+        gold = isGold
+        val boot = if (isGold) c.elapsedRealtimeNanos else arrival
         val off = utc - boot
         val erUnc = if (isGold && c.hasElapsedRealtimeUncertaintyNanos()) c.elapsedRealtimeUncertaintyNanos else 0.0
         val before = FlowTime.gps
