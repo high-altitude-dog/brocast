@@ -29,6 +29,7 @@ class MainActivity : Activity() {
     private lateinit var url: EditText
     private lateinit var mode: RadioGroup
     private lateinit var source: RadioGroup
+    private lateinit var channel: RadioGroup
     private lateinit var pitch: EditText
     private lateinit var lag: EditText
     private lateinit var button: Button
@@ -39,6 +40,9 @@ class MainActivity : Activity() {
     private var idAuto = 0
     private var idGps = 0
     private var idNtp = 0
+    private var idBoth = 0
+    private var idLeft = 0
+    private var idRight = 0
     private var ticks = 0
     private val ui = Handler(Looper.getMainLooper())
     private val prefs by lazy { getSharedPreferences("proto", MODE_PRIVATE) }
@@ -94,6 +98,7 @@ class MainActivity : Activity() {
             policy = when (source.checkedRadioButtonId) { idGps -> Policy.GPS_ONLY; idNtp -> Policy.NTP_ONLY; else -> Policy.AUTO },
             pitchHz = pitch.text.toString().toDoubleOrNull() ?: 2000.0,
             lagMs = lag.text.toString().toDoubleOrNull() ?: 0.0,
+            channel = when (channel.checkedRadioButtonId) { idLeft -> Renderer.LEFT; idRight -> Renderer.RIGHT; else -> Renderer.BOTH },
         )
         session = try {
             Session(this, settings, gpsAllowed).also { it.start() }
@@ -107,7 +112,7 @@ class MainActivity : Activity() {
         val on = session != null
         button.text = if (on) "Stop" else "Start"
         for (v in listOf(url, pitch, lag)) v.isEnabled = !on
-        for (g in listOf(mode, source)) for (i in 0 until g.childCount) g.getChildAt(i).isEnabled = !on
+        for (g in listOf(mode, source, channel)) for (i in 0 until g.childCount) g.getChildAt(i).isEnabled = !on
     }
 
     private fun savePrefs() {
@@ -117,6 +122,7 @@ class MainActivity : Activity() {
             .putString("policy", when (source.checkedRadioButtonId) { idGps -> "GPS"; idNtp -> "NTP"; else -> "AUTO" })
             .putString("pitch", pitch.text.toString())
             .putString("lag", lag.text.toString())
+            .putString("channel", when (channel.checkedRadioButtonId) { idLeft -> "LEFT"; idRight -> "RIGHT"; else -> "BOTH" })
             .apply()
     }
 
@@ -149,6 +155,14 @@ class MainActivity : Activity() {
         idNtp = radio(source, "NTP only")
         source.check(when (prefs.getString("policy", "AUTO")) { "GPS" -> idGps; "NTP" -> idNtp; else -> idAuto })
         col.addView(source)
+
+        col.addView(caption("Stream channel"))
+        channel = RadioGroup(this).apply { orientation = RadioGroup.HORIZONTAL }
+        idBoth = radio(channel, "Both")
+        idLeft = radio(channel, "Left only")
+        idRight = radio(channel, "Right only")
+        channel.check(when (prefs.getString("channel", "BOTH")) { "LEFT" -> idLeft; "RIGHT" -> idRight; else -> idBoth })
+        col.addView(channel)
 
         val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         pitch = number(prefs.getString("pitch", "2000") ?: "2000")

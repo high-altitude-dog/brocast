@@ -11,7 +11,7 @@ import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.roundToLong
 
-class Settings(val url: String, val stream: Boolean, val policy: Policy, val pitchHz: Double, val lagMs: Double)
+class Settings(val url: String, val stream: Boolean, val policy: Policy, val pitchHz: Double, val lagMs: Double, val channel: Int)
 
 /** One test run: the time sources, the stream, the audio thread and three CSV logs. */
 class Session(ctx: Context, val s: Settings, gpsAllowed: Boolean) {
@@ -26,7 +26,7 @@ class Session(ctx: Context, val s: Settings, gpsAllowed: Boolean) {
     val gps = if (gpsAllowed) GpsTime(ctx, gpsLog) else null
     val ntp = NtpClient(ntpLog)
     val stream = if (s.stream) StreamClient(s.url, lagNs) else null
-    private val renderer = Renderer(s.pitchHz, stream)
+    private val renderer = Renderer(s.pitchHz, stream, s.channel)
     val play = Playout(renderer, stream, lagNs)
     val folder: String = dir.absolutePath
 
@@ -52,9 +52,11 @@ class Session(ctx: Context, val s: Settings, gpsAllowed: Boolean) {
         appendLine("phone: ${Build.MANUFACTURER} ${Build.MODEL} (${Build.DEVICE})")
         appendLine("android: ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT}), build ${Build.FINGERPRINT}")
         appendLine("gnss chip: ${gps?.chip ?: "not used"}; raw clock reports: ${gps?.reportsRaw ?: "not used"}")
-        appendLine("mode: ${if (s.stream) "stream from ${s.url}" else "tick at ${s.pitchHz} Hz"}")
+        appendLine("mode: ${if (s.stream) "stream from ${s.url}, ${channelName()} channel" else "tick at ${s.pitchHz} Hz"}")
         appendLine("time source: ${s.policy}; headphone lag: ${s.lagMs} ms")
     }
+
+    private fun channelName() = when (s.channel) { Renderer.LEFT -> "left"; Renderer.RIGHT -> "right"; else -> "both" }
 
     /** Called once a second by the screen loop. */
     fun logRow(boot: Long) {
@@ -111,7 +113,7 @@ class Session(ctx: Context, val s: Settings, gpsAllowed: Boolean) {
         append('\n')
 
         append("OUT    ${play.state}")
-        append(if (s.stream) "" else " · ${s.pitchHz.toInt()} Hz")
+        append(if (s.stream) " · ${channelName()} channel" else " · ${s.pitchHz.toInt()} Hz")
         append(" · ${routeName(play)}\n")
         append("       ahead ${"%.1f".format(play.aheadMs)} ms · stamp jitter ${fmtNs(play.stampDevUs * 1e3)} · underruns ${play.underruns}")
         append(" · headphone lag ${s.lagMs} ms\n")

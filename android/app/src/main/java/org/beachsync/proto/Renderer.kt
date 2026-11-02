@@ -17,7 +17,11 @@ fun interface SegmentSource {
  * listener's ear, in flowtime (UTC ns), and this fills the chunk so the right sound is heard at that moment.
  * No Android calls and no allocation: it runs on the audio thread, and it can be tested on a desktop.
  */
-class Renderer(private val clickHz: Double, private val source: SegmentSource?) {
+/**
+ * [channel] picks what stream mode plays: [BOTH] as sent, or only [LEFT] or [RIGHT] on both outputs. The
+ * acoustic test uses one each, so a single microphone can tell two phones apart by the pitch of each channel.
+ */
+class Renderer(private val clickHz: Double, private val source: SegmentSource?, private val channel: Int = BOTH) {
     var pos = Double.NaN          // stream position (in samples) of the next frame to write
         private set
     var ratio = 1.0               // stream samples per output frame: 1 plus or minus the nudge
@@ -72,8 +76,10 @@ class Renderer(private val clickHz: Double, private val source: SegmentSource?) 
             if (l0.isNaN() || l1.isNaN()) {
                 buf[2 * i] = 0f; buf[2 * i + 1] = 0f; missingFrames++
             } else {
-                buf[2 * i] = l0 + (l1 - l0) * f
-                buf[2 * i + 1] = r0 + (r1 - r0) * f
+                val l = l0 + (l1 - l0) * f
+                val r = r0 + (r1 - r0) * f
+                buf[2 * i] = if (channel == RIGHT) r else l
+                buf[2 * i + 1] = if (channel == LEFT) l else r
             }
             p += ratio
         }
@@ -90,6 +96,9 @@ class Renderer(private val clickHz: Double, private val source: SegmentSource?) 
     }
 
     companion object {
+        const val BOTH = 0
+        const val LEFT = 1
+        const val RIGHT = 2
         const val RATE = 48000
         const val RATE_L = 48000L
         const val NS_PER_S = 1_000_000_000L

@@ -167,7 +167,19 @@ fun testTickTiming() {
     check(buf[0] == 0f && buf[2] != 0f && abs(buf[2] - Renderer.click(10_416.67, 2000.0)) < 1e-4, "click starts between frames 0 and 1, at the right phase")
 }
 
+fun testChannel() {
+    println("Stream channel: Left or Right only plays that channel on both outputs")
+    val seg = ShortArray(96000) { if (it % 2 == 0) 8192 else -16384 }   // left 0.25, right -0.5
+    val start = 1_761_955_200_000_000_000L
+    val ear = start + 21_000_000_000L + 2_000_000_000L
+    for ((ch, l, r) in listOf(Triple(Renderer.BOTH, 0.25f, -0.5f), Triple(Renderer.LEFT, 0.25f, 0.25f), Triple(Renderer.RIGHT, -0.5f, -0.5f))) {
+        val buf = FloatArray(480)
+        Renderer(2000.0, SegmentSource { seg }, ch).stream(buf, 240, ear, start, 21_000_000_000L)
+        check((0 until 240).all { buf[2 * it] == l && buf[2 * it + 1] == r }, "channel $ch gives $l, $r")
+    }
+}
+
 fun main() {
-    testNtp(); testGps(); testNtpFit(); testPlayout(); testTickTiming()
+    testNtp(); testGps(); testNtpFit(); testPlayout(); testTickTiming(); testChannel()
     println(if (failures == 0) "ALL PASSED" else "$failures FAILED")
 }

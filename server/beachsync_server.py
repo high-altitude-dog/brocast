@@ -6,6 +6,7 @@ segment n holds samples n*48000 .. n*48000+47999 and its stamp is start_utc + n 
 counted from the sample number, never re-read from the clock.
 
     python3 beachsync_server.py --clicks                 # built-in click track (one click per second)
+    python3 beachsync_server.py --clicks-split           # the same, but 1000 Hz on the left, 3000 Hz on the right
     python3 beachsync_server.py --source mysong.flac     # your own music file (needs ffmpeg), looped
 
 Then phones fetch   http://<this machine>:8080/manifest.json   and   /seg/<n>.pcm
@@ -33,8 +34,10 @@ SEG = RATE  # samples per segment = 1 s
 RETAIN = 120  # segments kept available behind the live edge
 
 
-def click_track(seconds=4, freq=2000.0):
-    """One sharp 5 ms tone burst at the start of every second; the rest silence."""
+def click_track(seconds=4, freq=2000.0, freq_r=None):
+    """One sharp 5 ms tone burst at the start of every second; the rest silence.
+    With freq_r, the right channel's burst is at freq_r instead, for the acoustic stream test."""
+    freq_r = freq if freq_r is None else freq_r
     total = RATE * seconds
     frames = bytearray(total * BYTES_PER_FRAME)
     burst = int(0.005 * RATE)
@@ -44,7 +47,8 @@ def click_track(seconds=4, freq=2000.0):
         for i in range(burst):
             env = min(1.0, (i + 1) / ramp) * (0.5 + 0.5 * math.cos(math.pi * i / burst))
             v = int(0.8 * 32767 * env * math.sin(2 * math.pi * freq * i / RATE))
-            struct.pack_into("<hh", frames, (base + i) * BYTES_PER_FRAME, v, v)
+            w = int(0.8 * 32767 * env * math.sin(2 * math.pi * freq_r * i / RATE))
+            struct.pack_into("<hh", frames, (base + i) * BYTES_PER_FRAME, v, w)
     return bytes(frames)
 
 
@@ -136,13 +140,20 @@ def main():
     p = argparse.ArgumentParser(description="Prototype stream server for the beach sync tests.")
     src = p.add_mutually_exclusive_group(required=True)
     src.add_argument("--clicks", action="store_true", help="built-in click track: one click per second")
+    src.add_argument("--clicks-split", action="store_true",
+                     help="click track at 1000 Hz on the left and 3000 Hz on the right (acoustic stream test)")
     src.add_argument("--source", help="music file to loop (any format ffmpeg reads)")
     p.add_argument("--port", type=int, default=8080)
     p.add_argument("--bind", default="0.0.0.0", help="address to listen on (default all)")
     p.add_argument("--d-ms", type=int, default=21000, help="playout delay D advertised to phones (ms)")
     a = p.parse_args()
-    pcm = click_track() if a.clicks else decode_file(a.source)
-    stream = Stream(pcm, a.d_ms, "clicks" if a.clicks else a.source)
+    if a.clicks:
+        pcm, label = click_track(), "clicks"
+    elif a.clicks_split:
+        pcm, label = click_track(freq=1000.0, freq_r=3000.0), "clicks-split"
+    else:
+        pcm, label = decode_file(a.source), a.source
+    stream = Stream(pcm, a.d_ms, label)
     srv = ThreadingHTTPServer((a.bind, a.port), make_handler(stream))
     print(f"stream starts at UTC {time.strftime('%H:%M:%S', time.gmtime(stream.start_ns / 1e9))}, "
           f"D = {a.d_ms} ms, serving on {a.bind}:{a.port}  (Ctrl-C to stop)")

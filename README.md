@@ -164,6 +164,8 @@ python3 measure/beachsync_measure.py ticks-tones tones.wav --fa 1000 --fb 3000
 
 Sound takes 29 µs to travel each centimetre, so precision depends on the distances being equal. If phone B is further from the microphone, pass the extra distance with `--extra-b-cm`.
 
+The same works in **stream mode**, which tests the whole stream path (segment fetch, ring, position and rate nudge). Start the server with `--clicks-split`, which sends a 1000 Hz click on the left channel and a 3000 Hz click on the right. Set both phones to **Stream**, phone A's **Stream channel** to **Left only** and phone B's to **Right only**, then record and analyse exactly as above. Music (tests 4 and 5) still needs the interface.
+
 ## What the status panel shows
 
 | Line | Meaning |
