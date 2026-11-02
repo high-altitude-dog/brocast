@@ -1,4 +1,4 @@
-# UI spec (hand-off 08)
+# UI spec (hand-off 10)
 
 Field names come from Claude Code's "Fields that exist today" table in `feedback.md`, as of 1 Nov 2026. If one has been renamed since, use the new name.
 
@@ -27,7 +27,7 @@ Field names come from Claude Code's "Fields that exist today" table in `feedback
 
 | Element | Shows | Source | States and taps | Status |
 |---|---|---|---|---|
-| Header | Station or event name (eyebrow), `Live · D 60 s` | `StreamClient.manifest.dMs`; the name is **later** | Icon buttons (44 × 44) for Time signals, Headphone lag, Archive and Settings | now |
+| Header | Station or event name (eyebrow), `Live · D 60 s` | `StreamClient.manifest.dMs`; the name is **later** | Icon buttons (44 × 44) for Time signals, Calibration, Archive and Settings | now |
 | Now playing | Track title (20 px, bold, one line), `artist · set` (13 px, `textSecondary`), a **Keep** button, and a thin progress line with elapsed and remaining time | The signed file record and cue list (**later**; the prototype can show the manifest `source`) | Follows the Track names rule; long names end with an ellipsis. Keep pins the file being heard: `Keep` for a single track, `Keep set` inside a set, `Kept` (filled accent mark) once pinned. Hidden while the archive is Off. | later |
 | Brocast clock | A dial. Along the top of the bezel, curved: `TEDDINGTON · GREENWICH`, with an accent meridian tick at 12 o'clock between the two names. Inside: the zone (GMT or BST), HH:MM:SS large, a **sub-second dial** (40 px: 10 tenth ticks with the 0 tick in accent, a faint accent arc and an accent hand), then local time beneath (`23:43:51 CET · local`). Along the bottom of the bezel, curved: `FLOWTIME ±error` in accent. Tapping the dial swaps the sub-dial for the digits to the ns (finer than the error in `faded`), for side-by-side photos; tapping again swaps back. | `FlowTime.fit().utcAt(boot)` at the frame's presentation time; `ZoneId.of("Europe/London")`; `ZoneId.systemDefault()` for the local line | Local line hidden when its offset equals UK time's. Screenlag correction is **later**. Draw the curved text with `drawTextOnPath`, or the Compose equivalent. | now |
 | Seconds sweep | The outer accent arc fills once per flowtime **minute**, like a second hand | Seconds of the current minute | Steps once a second at Reduced level | now |
@@ -37,7 +37,7 @@ Field names come from Claude Code's "Fields that exist today" table in `feedback
 | Latest event | Time, lane mark and name, and one line of text, **directly under the badge** | `EventLog.latest()` | Tapping opens the Event log. A banner elsewhere links to its own event. | now |
 | Sync error budget | Bars on a log scale from 1 µs to 10 ms: flowtime, headphone lag, total, screenlag | `errAt` now; headphone-lag uncertainty and screenlag **later** | | partly |
 | Gap row | The rate nudge row: mode chip, the gap value, then two small lines (`gap · closes in 1.40 s` and `pitch +0.014%`) | `NudgeControl.gapAt`, `mode`, `secondsLeft`, `state.rate` | Opens Nudge control. The 60 s gap trace has left this screen to make room for the track; history belongs on Nudge control, **later**. | now |
-| Tiles | SOURCE, HEADPHONES, AHEAD (how much is downloaded ahead, in hours and minutes) | `FlowTime.chosen`, `GpsTime`, `Settings.lagMs`, download state (**later**) | SOURCE opens Time signals; HEADPHONES opens Headphone lag; AHEAD opens Buffer | partly |
+| Tiles | SOURCE, HEADPHONES, AHEAD (how much is downloaded ahead, in hours and minutes) | `FlowTime.chosen`, `GpsTime`, `Settings.lagMs`, download state (**later**) | SOURCE opens Time signals; HEADPHONES opens Calibration; AHEAD opens Buffer | partly |
 | Use satellites | A full-width row with a switch, never locked, one tap from the main screen. Shows `Position stays on this phone · off = Privacy mode`. | `GpsTime.active` | Off: the badge becomes Privacy mode. On: asks for location permission if needed; if refused, it returns to off. | now |
 
 ## Settings
@@ -47,7 +47,7 @@ Field names come from Claude Code's "Fields that exist today" table in `feedback
 | Element | Shows | Source | States and taps | Status |
 |---|---|---|---|---|
 | LISTENING · Use satellites | The same switch as Now playing | `GpsTime.active` | Never locked | now |
-| LISTENING · Headphones | Route and lag, as a link | `Playout.track.routedDevice`, `Settings.lagMs` | Opens Headphone lag | now |
+| LISTENING · Calibration | `Calibration`, then route · lag ± · source (`Bluetooth · 182 ms ±2.8 · Earcup`), as a link | `Playout.track.routedDevice`, `Settings.lagMs`; ± and source **later** | Opens Calibration | partly |
 | LISTENING · Local time under the clock | A switch, on by default | A new setting | Off hides the local line on every clock | now |
 | SCREEN · No flashing | A switch, off by default | Not built (light show) | Always respected; screen levels never override it | later |
 | SCREEN · Screen level | The current automatic level | Not built | Read-only | later |
@@ -151,7 +151,7 @@ Whenever the frontier is more than 12 s ahead it sits at x 330, so arriving bloc
 | Not yet | A dashed rail out to +24 h | Schedule | later |
 | Blocks in flight | Tiles flying in from the right edge and shrinking onto the frontier, each with a fading trail. Solid: from the station (seed servers). Outline: from listeners. | Block arrivals, with source | later |
 | Legend | played, downloaded, not yet, from the station, from listeners | | |
-| Tiles | AHEAD (time to the frontier, then `no gaps` or `N gaps`), FILLING (arrival rate as a multiple of real time; `—` when steady), FROM STATION (share of this session's blocks, the rest from listeners) | Download state | later |
+| Tiles | AHEAD (time to the frontier, then `no gaps` or `N gaps`), FILLING (arrival rate as a multiple of real time; `—` when steady), FROM STATION (share of this session's blocks, the rest from listeners; opens Swarm) | Download state | later |
 | Up next | The next track in this set, then each scheduled file: countdown (`in m:ss` or `in h:mm:ss`), title, artist · kind · BPM, and `✓ ready` or `◐` with the percent downloaded. A short tick marks a track inside the current set; a filled square marks a new file. | Schedule, cue lists, block store | later |
 
 **Motion:**
@@ -181,6 +181,39 @@ Whenever the frontier is more than 12 s ahead it sits at x 330, so arriving bloc
 | Offline | ○ `textSecondary`, `Offline · plays for 6 h 12 m` | No station or listeners reachable | Nothing in flight; the downloaded music plays on in sync |
 
 When several apply, show the most urgent: Thin, then Missing block, then Offline, then Filling, then Full. The 10 s threshold is a starting value for the tests.
+
+## Swarm
+
+![](screens/swarm.png)
+
+The user wants this to be a showcase for peer delivery (2 Nov), so the swarm gets its own screen. No Pears name or logo until the user confirms. Opens from the FROM STATION tile on Buffer.
+
+| Element | Shows | Source | Status |
+|---|---|---|---|
+| Status chip | The same state as the sharing row in Settings › Delivery (see Swarm states) | Sharing state | later |
+| Network | You at the centre (accent phone with a soft halo, `YOU`). Station seed servers as squares on top (`STATION`). Connected listeners on an ellipse, each labelled with the first 4 hex digits of its public key. Each listener link is two parallel lanes, each a single-headed arrow pointing the opposite way: the inner lane (to you) ends in a head at your phone, the outer lane (from you) ends in a head at the listener. A lane is accent while blocks move on it, grey when idle. Station links have only the to-you lane, because phones never upload to the station. Solid lanes: direct. Dashed: relayed. Grey dots on an outer ring: found but not connected. Never placed by location. | Swarm connections, peer keys, connection type | later |
+| Blocks moving | Tiles ride their lane in the direction of the arrow, fading in at the start and out at the head, with a short trail behind. Solid: to you. Outline: from you. About 1.8 s per trip. The board animates this with SVG animation (no script). | Block transfers by peer | later |
+| Tiles | CONNECTED (count, then how many relayed), TO YOU (rate, share from listeners), FROM YOU (rate, how many listeners) | Swarm stats | later |
+| Passed on today | Bytes sent today, as listening time for others (at 72 MB an hour), and the held-to-share amount against the sharing allowance | Swarm stats, allowance setting | later |
+| Listener list | The busiest few peers: key (8 hex digits), direct or relayed, rate to you, rate from you | Swarm connections | later |
+| Footnote | Listeners are found by key, from anywhere, never by location, and can see your network address | | |
+
+**Motion:** the same rules as Buffer. Full level: tiles move every frame, one tile per batch, at most about ten on screen. Reduced or reduced motion: 4 Hz steps, tiles fade instead of moving. Minimal: text only (chip, tiles, Passed on today). Nodes never move, so the picture is calm.
+
+**Needs from code:** per-peer connection (key, direct or relayed, bytes each way), the station seed connections, a count of found-but-not-connected peers, and bytes sent today.
+
+## Swarm states
+
+![](screens/swarm-states.png)
+
+| State | Chip | When |
+|---|---|---|
+| Sharing | ● accent, `Sharing · 3 listeners` | Every sharing condition holds and someone is receiving |
+| Receiving only | ○ `Paused · ` plus the first unmet condition | Sharing is on but paused (Sharing states); listeners still send to you |
+| Sharing off | ○ `Not sharing` | The listener switched it off. Links to Settings › Delivery; no prompts. |
+| Station only | ○ `No listeners found yet` | No peers connected |
+| All relayed | ▲ amber, `All connections relayed` | Every peer connection goes through a relay: it works but fills more slowly |
+| Offline | ○ `Offline · plays for 6 h 12 m` | Nothing connected; the phone dims to grey |
 
 ## Badge states
 
@@ -237,11 +270,63 @@ Lane marks: clock ● accent, audio ■ #FFB547, net ▲ #5CE1FF, output ○ #B7
 | NTP servers | Host, stratum, reference, round trip, offset from GPS | `NtpClient` (one server) | partly |
 | Safety check | GPS vs NTP, and its age; PASSED or FAILED | `NtpClient.minusGpsUs` | now |
 
-## Headphone lag
+## Calibration
 
 ![](screens/headphone-lag.png)
 
-Unchanged. Everything except the typed value (`Settings.lagMs`) is **later**.
+The user asked for calibration in Settings (2 Nov). It replaces the Headphone lag screen and keeps its file name (`headphone-lag`), so there is one home: the HEADPHONES tile, Settings › Listening › Calibration and the new-headphones prompt all open it. Accuracy figures on every Calibration screen are examples; nothing has been measured on phones yet, so the copy never promises a figure.
+
+| Element | Shows | Source | Status |
+|---|---|---|---|
+| Route card | Output name and route (`Bluetooth · connected 26 min`), lag large (mono), ±, a source chip (`TABLE`, `EARCUP`, `HANDSHAKE` or `TYPED`) and when it was measured; for a handshake, the other phone's model | `Playout.track.routedDevice`, `Settings.lagMs`; the rest **later** | partly |
+| Bluetooth note | Shown only on Bluetooth: its delay can change each time it connects, so a saved value may not hold | Route | now |
+| Sources | One row each: Shared table, Earcup test, Two-phone test, Typed. Value, ±, and `IN USE` on the one in use; `not yet` where empty. | **later** | later |
+| Which one is used | Typed, if set, overrides everything. Otherwise the most recent test (earcup or two-phone). Otherwise the table. Otherwise 0 ms ±40 (Not measured). | | later |
+| Actions | `Earcup test · about 10 s` (primary), `Two-phone test`, and a `Type a value` link | | later |
+| Mic note | The mic is on only during a test, and no audio leaves the phone | | |
+
+**Applying a value:** a saved value takes effect when playback next starts, because lag is fixed for a run today. When a value is saved during playback, show `Saved: 182 ms ±2.8 · Playing with 175 ms until playback next starts` with `Apply now` and `Later`. Apply now restarts playback, which rejoins in sync with a short fade. That makes a change during playback a deliberate restart, not a live timing change, so nothing new needs agreeing.
+
+**Sync error budget:** the Headphone lag bar uses the ± of the value in use (Typed counts as ±20 ms, Not measured as ±40 ms).
+
+## Earcup test
+
+![](screens/earcup-test.png)
+
+The board shows the steps of one flow stacked; on the phone each is one screen.
+
+| Step | Shows | Taps |
+|---|---|---|
+| 1 · Place the cup | A drawing of a cup held over the phone's mic; instructions; `Needs the mic for about 10 s. Nothing is recorded or sent.` | Start. The system mic permission appears the first time. |
+| 2 · Listening | Two stages, `Speaker clicks` then `Headphone clicks` (✓ done, ● now), a progress bar, clicks heard (`14 of 20`) and time left | Cancel |
+| 3 · Result | Lag and ± large, the old value for comparison (`was 175 ±20, table`), and the match strength by delay with its single peak (kept from the old Headphone lag scope) | Save, Apply now, Try again |
+| Failures | ▲ `Too quiet`, ▲ `Too noisy`, ▲ `Readings disagree` (with the spread, `150–230 ms`), each with the fix in one line | Try again, Cancel. Nothing is saved. |
+
+## Two-phone test
+
+![](screens/handshake-test.png)
+
+| Step | Shows | Taps |
+|---|---|---|
+| 1 · Choose roles | `Measure this phone` (gets the result) or `Help another` (shows a code); place the phones side by side; both need GPS or internet time good enough | Start |
+| 2 · Taking turns | A row of click dots (solid: this phone, outline: the other) filling in, and time left | Cancel |
+| 3 · Swap the code | The helper shows a 6-digit code (`472 916`) and a QR code of it; the measuring phone has six boxes | Type the code or `Scan instead` |
+| 4 · Result | Lag and ±, `HANDSHAKE` chip, the route, the other phone's model, and when it applies | Save, Try again |
+| Failures | ✕ `Time not good enough` (with this phone's figure, and turn satellites on or wait), ▲ `Clicks not heard`, ▲ `Code doesn't match` | Try again |
+
+The ±1 ms time threshold in the copy is a placeholder until the code side sets it. Whether Privacy mode allows this test is parked with the rest of Privacy mode.
+
+## Calibration prompts
+
+![](screens/calibration-prompts.png)
+
+| Item | Shows | Taps |
+|---|---|---|
+| New headphones | A bottom sheet when an output with no saved value starts playing: name, that it may sound up to ±40 ms off, and the 10 s fix. Once per output. | Test now, Not now |
+| Not in the shared table | `0 ms ±40 ms`, ▲ amber `NOT MEASURED`, and a line asking for a test | |
+| Saved during playback | See Applying a value above | Apply now, Later |
+| Typed (advanced) | A number field in ms, `± unknown`, and that it overrides every measured value until cleared | |
+| Settings row | See Settings › LISTENING · Calibration | Opens Calibration |
 
 ## Test bench (prototype)
 
