@@ -17,10 +17,16 @@ class Settings(
     val nudgeMode: NudgeMode, val nudgePeriodS: Double?,
 )
 
+/** A run of text in the status grid. Live numbers are [mono], so their digits don't jitter as they update. */
+class StatusPart(val text: String, val mono: Boolean = false, val good: Boolean = false)
+
+class StatusRow(val label: String, val parts: List<StatusPart>)
+
 /** One test run: the time sources, the stream, the audio thread, the event log and four CSV logs. */
 class Session(ctx: Context, val s: Settings, private val satellitesOn: Boolean) {
     private val dir: File = ctx.getExternalFilesDir(null) ?: ctx.filesDir
     val name = "run-" + SimpleDateFormat("yyyyMMdd-HHmmss", Locale.UK).format(Date())
+    val startBoot = nowBoot()
     private val lagNs = (s.lagMs * 1e6).roundToLong()
     private val statusLog = CsvLog(File(dir, "$name-status.csv"), STATUS_HEADER)
     private val gpsLog = CsvLog(File(dir, "$name-gps.csv"),
@@ -30,7 +36,7 @@ class Session(ctx: Context, val s: Settings, private val satellitesOn: Boolean) 
     val gps = GpsTime(ctx, gpsLog)
     val ntp = NtpClient(ntpLog)
     val stream = if (s.stream) StreamClient(s.url, lagNs) else null
-    private val renderer = Renderer(s.pitchHz, stream, s.channel)
+    val renderer = Renderer(s.pitchHz, stream, s.channel)
     val nudge = NudgeControl(s.nudgeMode, s.nudgePeriodS) { note(Lane.AUDIO, it) }
     val play = Playout(renderer, stream, lagNs, nudge)
     val folder: String = dir.absolutePath
@@ -38,10 +44,13 @@ class Session(ctx: Context, val s: Settings, private val satellitesOn: Boolean) 
     val events = EventLog { e -> eventCsv.row(e.boot, e.utc, e.lane, "\"" + e.text.replace("\"", "\"\"") + "\"") }
     private val detector = EventDetector()
     @Volatile private var watching = true
+
+    /** Once a second, whether or not the screen is on: the event log and status.csv. */
     private val watcher = Thread({
         Process.setThreadPriority(Process.THREAD_PRIORITY_BACKGROUND)
         while (watching) {
             checkEvents()
+            logRow(nowBoot())
             try { Thread.sleep(1000) } catch (_: InterruptedException) { }
         }
     }, "events")
@@ -93,7 +102,7 @@ class Session(ctx: Context, val s: Settings, private val satellitesOn: Boolean) 
         events.add(Event(boot, FlowTime.fit()?.utcAt(boot), lane, text))
     }
 
-    /** Runs on the watcher thread only. It reads the counters the status panel already shows. */
+    /** Runs on the watcher thread only. It reads the counters the status grid already shows. */
     private fun checkEvents() {
         val boot = nowBoot()
         val fit = FlowTime.fit()
@@ -116,8 +125,7 @@ class Session(ctx: Context, val s: Settings, private val satellitesOn: Boolean) 
 
     private fun channelName() = when (s.channel) { Renderer.LEFT -> "left"; Renderer.RIGHT -> "right"; else -> "both" }
 
-    /** Called once a second by the screen loop. */
-    fun logRow(boot: Long) {
+    private fun logRow(boot: Long) {
         val fit = FlowTime.fit()
         val g = gps
         val st = stream
@@ -133,68 +141,86 @@ class Session(ctx: Context, val s: Settings, private val satellitesOn: Boolean) 
         )
     }
 
-    /** The status panel. */
-    fun describe(boot: Long): String = buildString {
-        val fit = FlowTime.fit()
-        val src = FlowTime.chosen
-        val holdover = src == Source.GPS && boot - gps.lastBoot > 3_000_000_000L
-        append("SOURCE ")
-        append(if (src == null) "none yet" else src.name + if (holdover) " (holdover)" else "")
+    /** The source line above the status grid, such as "GPS (holdover)". */
+    fun sourceName(boot: Long): String {
+        val src = FlowTime.chosen ?: return "No source"
+        return if (src == Source.GPS && boot - gps.lastBoot > 3_000_000_000L) "GPS (holdover)" else src.name
+    }
+
+    /** The sync error shown to the listener: flowtime's error plus any gap being held, which is real sync error. */
+    fun syncErrorNs(boot: Long): Double {
+        val fit = FlowTime.fit() ?: return Double.NaN
+        return fit.errAt(boot) + abs(nudge.gapAt(boot)).toDouble()
+    }
+
+    /** The line beside the clock, such as "Gold · 14 of 16 sats · switches 1". */
+    fun sourceDetail(): String {
+        val switches = "switches ${FlowTime.switches}"
+        if (!gps.active) return "Satellites off · $switches"
+        val grade = when (gps.gold) { true -> "Gold · "; false -> "Silver · "; null -> "" }
+        return "$grade${gps.used} of ${gps.seen} sats · $switches"
+    }
+
+    /** True while a better error estimate is being confirmed, with the figure it improves on. */
+    fun tighteningFromNs() = detector.tighteningFromNs
+
+    /** The test bench's status grid, from the fields design/ui-spec.md names. */
+    fun statusRows(boot: Long): List<StatusRow> {
+        fun t(text: String) = StatusPart(text)
+        fun n(text: String, good: Boolean = false) = StatusPart(text, mono = true, good = good)
+        val rows = ArrayList<StatusRow>()
+
+        val output = mutableListOf(
+            t("${routeName(play)} · ahead "), n(fmtMs(play.aheadMs)), t(" · jitter "), n(fmtDuration(play.stampDevUs * 1e3)),
+            t(" · underruns "), n(play.underruns.toString()),
+        )
+        if (play.state != "streaming" && play.state != "ticking") output.add(t(" · ${play.state}"))
+        play.error?.let { output.add(t(" · error: $it")) }
+        rows.add(StatusRow("OUTPUT", output))
+
+        val posNs = renderer.posErrUs * 1e3
+        rows.add(StatusRow("PLAYOUT", listOf(
+            t("position "), n(fmtSigned(posNs), good = abs(posNs) < 5e6), t(" · nudge "), n("%+.0f ppm".format(Locale.ROOT, (renderer.ratio - 1) * 1e6)),
+            t(" · jumps "), n(renderer.jumps.toString()), t(" · missing "), n(renderer.missingFrames.toString()),
+        )))
+
         val gap = nudge.gapAt(boot)
-        if (fit != null) append("   ±").append(fmtNs(fit.errAt(boot) + abs(gap).toDouble()))   // a held gap is real sync error
-        append("   switches ").append(FlowTime.switches)
-        val from = detector.tighteningFromNs
-        if (!from.isNaN()) append("   TIGHTENING from ±").append(fmtNs(from))
-        append('\n')
+        val mode = if (nudge.mode == NudgeMode.AUTO) "Auto" else "Manual"
+        rows.add(StatusRow("GAP", when {
+            gap == 0L -> listOf(n("0"), t(" · $mode"))
+            nudge.state.closing -> listOf(n(fmtDuration(gap.toDouble())), t(" · $mode · closes in "), n(fmtDuration(nudge.secondsLeft(boot) * 1e9)))
+            else -> listOf(n(fmtDuration(gap.toDouble())), t(" · $mode · held"))
+        }))
 
-        val g = gps
-        if (!g.active) append("GPS    off (Use satellites is off)\n") else {
-            append("GPS    ").append(g.status)
-            when (g.gold) {
-                true -> append(" · Gold (chip stamps the boot clock)")
-                false -> append(" · Silver (stamped on arrival)")
-                null -> {}
-            }
-            append('\n')
-            append("       satellites ${g.used} used of ${g.seen} · ")
-            val gf = FlowTime.gps
-            if (gf != null && g.lastBoot > 0) {
-                append("fit ${g.fitN} s, scatter ${fmtNs(g.rmsNs)} · boot clock ${"%+.3f".format(gf.slope * 1e6)} ppm")
-                append(" · last ${"%.1f".format((boot - g.lastBoot) / 1e9)} s ago")
-            } else append("no fit yet")
-            append('\n')
-            append("       chip ${g.chip} · delivery ${"%.0f".format(g.deliveryMs)} ms · rejected ${g.rejected} · resets ${g.resets}\n")
-        }
+        val ntpParts = if (ntp.samples == 0) mutableListOf(t(ntp.lastError ?: "asking ${ntp.host}")) else mutableListOf(
+            t("${ntp.host} S${ntp.stratum} · rtt "), n(fmtMs(ntp.rttMs)), t(" · NTP−GPS "), n(fmtSigned(ntp.minusGpsUs * 1e3)),
+        )
+        if (ntp.samples > 0) ntp.lastError?.let { ntpParts.add(t(" · last error: $it")) }
+        rows.add(StatusRow("NTP", ntpParts))
 
-        append("NTP    ${ntp.host} · ")
-        if (ntp.samples == 0) append(ntp.lastError ?: "asking") else {
-            append("stratum ${ntp.stratum} (${ntp.refId}) · round trip ${"%.1f".format(ntp.rttMs)} ms · ±${"%.1f".format(ntp.boundMs)} ms")
-            if (!ntp.minusGpsUs.isNaN()) append(" · NTP−GPS ${fmtNs(ntp.minusGpsUs * 1e3)}")
-            ntp.lastError?.let { append(" · last error: $it") }
-        }
-        append('\n')
-
-        append("OUT    ${play.state}")
-        append(if (s.stream) " · ${channelName()} channel" else " · ${s.pitchHz.toInt()} Hz")
-        append(" · ${routeName(play)}\n")
-        append("       ahead ${"%.1f".format(play.aheadMs)} ms · stamp jitter ${fmtNs(play.stampDevUs * 1e3)} · underruns ${play.underruns}")
-        append(" · headphone lag ${s.lagMs} ms\n")
-        play.error?.let { append("       error: $it\n") }
+        val fitted = FlowTime.gps
+        rows.add(StatusRow("GPS", when {
+            !gps.active -> listOf(t("off · position stays on phone"))
+            fitted == null || gps.lastBoot == 0L -> listOf(t(gps.status))
+            else -> listOf(
+                t("scatter "), n(fmtDuration(gps.rmsNs)), t(" · clock "), n("%+.2f ppm".format(Locale.ROOT, fitted.slope * 1e6)),
+                t(" · delivery "), n(fmtMs(gps.deliveryMs)),
+            )
+        }))
 
         val st = stream
         if (st != null) {
-            append("       position ${fmtNs(renderer.posErrUs * 1e3)} · nudge ${"%+.0f".format((renderer.ratio - 1) * 1e6)} ppm")
-            append(" · jumps ${renderer.jumps} · missing ${renderer.missingFrames} frames\n")
             val m = st.manifest
-            append("STREAM ")
-            if (m == null) append(st.lastError ?: "connecting to ${s.url}") else {
-                append("newest #${m.newest} · buffered ${st.buffered} s · fetched ${st.fetched} · errors ${st.errors}")
-                append(" · server−flowtime ${"%.1f".format(st.serverMinusFlowMs)} ms")
-                st.lastError?.let { append(" · last error: $it") }
-            }
-            append('\n')
+            val parts = if (m == null) mutableListOf(t(st.lastError ?: "connecting to ${s.url}")) else mutableListOf(
+                t("${channelName()} · newest "), n("#${m.newest}"), t(" · buffered "), n("${st.buffered} s"),
+                t(" · errors "), n(st.errors.toString()), t(" · server−flow "), n(fmtMs(st.serverMinusFlowMs)),
+            )
+            if (m != null) st.lastError?.let { parts.add(t(" · last error: $it")) }
+            rows.add(StatusRow("STREAM", parts))
         }
-        append("LOG    $name-*.csv\n       in $folder")
+
+        rows.add(StatusRow("LOG", listOf(n("$name-*.csv"))))
+        return rows
     }
 
     private fun routeName(p: Playout): String {
@@ -218,13 +244,7 @@ class Session(ctx: Context, val s: Settings, private val satellitesOn: Boolean) 
             "state,pos_err_us,nudge_ppm,jumps,underruns,missing_frames,ahead_ms,stamp_jitter_us,server_minus_flow_ms," +
             "held_gap_ns,gap_rate_ppm"
 
-        fun fmtNs(ns: Double): String = when {
-            ns.isNaN() || ns.isInfinite() -> "—"
-            abs(ns) < 1e3 -> "%.0f ns".format(ns)
-            abs(ns) < 1e6 -> "%.2f µs".format(ns / 1e3)
-            abs(ns) < 1e9 -> "%.2f ms".format(ns / 1e6)
-            else -> "%.2f s".format(ns / 1e9)
-        }
+        private fun fmtMs(ms: Double) = fmtDuration(ms * 1e6)
 
         fun nowBoot() = SystemClock.elapsedRealtimeNanos()
     }

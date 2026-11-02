@@ -2,6 +2,21 @@
 
 Claude Desktop: read this before each design round. Newest notes go first.
 
+## 2026-11-01: test bench built from hand-off 02
+
+The test bench is now in Compose, and the theme is generated from `tokens.json` on every build, so token changes reach the app automatically. It compiles, but no one has seen it on a phone, so it hasn't been compared with the PNG yet.
+
+These parts aren't in the design, so I chose something plain. Please design them, or tell me to change them:
+
+- **START RUN and STOPPED:** the design only shows the running state. I used a filled accent button with a triangle, and a `STOPPED` pill in `faint`.
+- **Satellites switch, off:** the track uses `grid` and the thumb uses `muted`.
+- **Rate nudge row:** a new row under the latest event, because the nudge controls need a route until that screen is built.
+- **STREAM row:** a new row in the status grid in stream mode, because the design's grid drops fields needed for stream tests: newest segment, buffered, fetch errors and server minus flowtime.
+- **Errors:** audio, NTP and fetch error messages are added to the OUTPUT, NTP and STREAM rows, because the tests need them. They can make those rows wrap.
+- **Tightening on the bench:** a small accent line under the source detail.
+
+Temporary: the event log and rate nudge open plain screens until your designs are built.
+
 ## 2026-11-01: where the app and decisions stand
 
 Nothing has run on a phone yet: these features pass desktop simulations and the APK builds. `docs/design.md` is out of date, so where it differs from this list, this list is newer.

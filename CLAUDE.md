@@ -70,7 +70,8 @@ To keep tokens low:
 
 | Path | What it is |
 |---|---|
-| `android/` | The app: Kotlin, package `org.beachsync.proto`. AGP 8.7.3, Kotlin 2.0.21, Gradle 8.11.1, compileSdk/targetSdk 35, minSdk 31. Jetpack Compose (and the AndroidX it needs) is allowed for screens only; the rest stays free of AndroidX. Today's screen is still programmatic test controls. |
+| `android/` | The app: Kotlin, package `org.beachsync.proto`. AGP 8.7.3, Kotlin 2.0.21, Gradle 8.11.1, compileSdk/targetSdk 35, minSdk 31. Jetpack Compose (and the AndroidX it needs) is allowed for screens only; the rest stays free of AndroidX. |
+| `android/.../ui/` | Compose screens. `Theme.kt` uses `Tokens`, generated from `design/tokens.json` by the `generateTokens` Gradle task on every build; never copy token values by hand. `TestBench.kt` is built from the design. `PlainScreens.kt` holds temporary event log and rate nudge screens until those designs are built. |
 | `android/.../Flow.kt` | `ClockFit`, `FlowTime` (source choice, with 20%-better-for-10-s hysteresis), line fits, `GpsFitter`, `NtpFitter` |
 | `android/.../Renderer.kt` | Tick and stream rendering, and the PI rate nudge that tracks the audio clock (±0.1% at most, jump if more than 20 ms out) |
 | `android/.../Nudge.kt` | How a gap closes when flowtime moves: Auto, Manual, Go and the period. The audio thread only reads one immutable `NudgeState`. Plain Kotlin, tested in `simtest/`. |
@@ -99,7 +100,7 @@ What's been verified, which happened before this repo reached this machine:
 
 Since then, on this machine, on the `prototype-queue` branch:
 
-- `./gradlew assembleDebug` builds, and `simtest` passes 80 checks.
+- `./gradlew assembleDebug` builds, and `simtest` passes 90 checks. `simtest` needs `Events.kt` and `Nudge.kt` too; screens need Gradle, because of the Compose plugin.
 - `simtest` now settles at about 2.5 µs with a 3 s tracking period, and about 7 µs rms with ±200 µs of stamp jitter.
 
 What's never been done:

@@ -108,7 +108,7 @@ On **both** phones, open **Beach Sync proto** and set:
 - **Tick pitch:** 2000 Hz
 - **Headphone lag:** 0
 
-Press **Start**. The phones need to see the sky, so a windowsill works. Wait until the panel shows **SOURCE GPS** and **GPS tracking · Gold** (or Silver), and the big clock is running. That takes about a minute, or longer for the first fix of the day.
+Press **Start**. The phones need to see the sky, so a windowsill works. Wait until the top card shows **GPS ±** in green and **Gold** (or Silver), and its clock is running. That takes about a minute, or longer for the first fix of the day.
 
 Record each test for 5 minutes, then analyse it:
 
@@ -165,18 +165,23 @@ python3 measure/beachsync_measure.py ticks-tones tones.wav --fa 1000 --fb 3000
 
 Sound takes 29 µs to travel each centimetre, so precision depends on the distances being equal. If phone B is further from the microphone, pass the extra distance with `--extra-b-cm`.
 
-The same works in **stream mode**, which tests the whole stream path (segment fetch, ring, position and rate nudge). Start the server with `--clicks-split`, which sends a 1000 Hz click on the left channel and a 3000 Hz click on the right. Set both phones to **Stream**, phone A's **Stream channel** to **Left only** and phone B's to **Right only**, then record and analyse exactly as above. Music (tests 4 and 5) still needs the interface.
+The same works in **stream mode**, which tests the whole stream path (segment fetch, ring, position and rate nudge). Start the server with `--clicks-split`, which sends a 1000 Hz click on the left channel and a 3000 Hz click on the right. Set both phones to **Stream**, phone A's **Stream channel** to **Left** and phone B's to **Right**, then record and analyse exactly as above. Music (tests 4 and 5) still needs the interface.
 
-## What the status panel shows
+## What the test bench shows
 
-| Line | Meaning |
+The top card shows flowtime in UK time, with local time beneath when it differs, and the source in use with its 95% error estimate plus any held gap. The source switches only when the other is 20% better for 10 s.
+
+| Row | Meaning |
 |---|---|
-| **SOURCE** | Which source flowtime is using, with its 95% error estimate. The source switches only when the other is 20% better for 10 s. |
-| **GPS** | Gold (the chip stamps the boot clock) or Silver (the report is stamped on arrival). Also shows satellites used, the scatter of the fit, and how fast the phone's boot clock runs in ppm. **Delivery** is how late GPS reports reach the app; it matters for Silver phones. |
-| **NTP** | Server, stratum, round trip and error bound. **NTP−GPS** shows how far NTP's answer is from GPS, which tells you how good NTP alone would be. |
-| **OUT** | The audio route, which should say *USB headset* or *USB audio* with the adapter in. Also: how far ahead the app writes, how much the output time stamps jitter, and underruns. |
-| *(stream)* | Position error, rate nudge, jumps, and frames missing because a segment arrived late |
-| **STREAM** | The server's newest segment, seconds buffered, fetch errors, and the server's clock minus flowtime |
+| **OUTPUT** | The audio route, which should say *USB headset* or *USB audio* with the adapter in. Also: how far ahead the app writes, how much the output time stamps jitter, and underruns. |
+| **PLAYOUT** | Position error, rate nudge, jumps, and frames missing because a segment arrived late |
+| **GAP** | Any gap between the stream and flowtime, its nudge mode, and when it closes |
+| **NTP** | Server, stratum and round trip. **NTP−GPS** shows how far NTP's answer is from GPS, which tells you how good NTP alone would be. |
+| **GPS** | The scatter of the fit, how fast the phone's boot clock runs in ppm, and **delivery**, how late GPS reports reach the app, which matters for Silver phones |
+| **STREAM** | In stream mode: the channel, the server's newest segment, seconds buffered, fetch errors, and the server's clock minus flowtime |
+| **LOG** | The name of this run's log files |
+
+Gold means the chip stamps the boot clock, and Silver means each report is stamped on arrival. They show in the top card with the satellite count.
 
 ## Use satellites
 
@@ -186,12 +191,12 @@ This is also the quick way to run the 10-minute GPS dropout test.
 
 ## Rate nudge
 
-The audio clock is always tracked, with a fixed period of 3 s, because it can't wait. These controls decide how a gap closes when flowtime itself moves by more than 0.1 ms. Smaller corrections are absorbed quietly.
+The audio clock is always tracked, with a fixed period of 3 s, because it can't wait. These controls decide how a gap closes when flowtime itself moves by more than 0.1 ms. Smaller corrections are absorbed quietly. To reach them, tap the **Rate nudge** row on the test bench.
 
 | Control | What it does |
 |---|---|
 | **Auto** | The default. A gap starts closing straight away at the chosen or recommended period. Above 20 ms it jumps instead. |
-| **Manual** | A gap is held and shown. **Go** starts closing it, **Pause** stops, and **Jump** moves straight there. A held gap doesn't grow by itself, and it counts in the error shown on the SOURCE line. |
+| **Manual** | A gap is held and shown. **Go** starts closing it, **Pause** stops, and **Jump** moves straight there. A held gap doesn't grow by itself, and it counts in the error shown in the top card. |
 | **Period** | A log slider from 1 s to 5 min. It can't go faster than the 0.09% rate limit, so a 5 ms gap takes at least 5.6 s. The readout shows the real time and pitch change. |
 | **Recommended** | Returns to the recommended period: 60 s, or longer if the gap needs it. |
 
@@ -199,7 +204,7 @@ The audio clock is always tracked, with a fixed period of 3 s, because it can't 
 
 ## The event log
 
-The newest event always shows under the Start button. Tap it, or press **Show event log**, to see the latest 200, newest first. The log stays readable after you press Stop, until the next run starts.
+The newest event always shows under the Start button. Tap it to see the latest 200, newest first. The log stays readable after you press Stop, until the next run starts.
 
 It checks once a second and records each change once: time source changes, GPS first report, loss and return, underruns, jumps, missing audio, stream and NTP failures and recoveries, audio output changes and audio errors. Times are flowtime in UK time, or `--:--:--` before there is a time source.
 
