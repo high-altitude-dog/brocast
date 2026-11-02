@@ -127,7 +127,7 @@ The packager publishes each track or set once as a signed Opus file, with a sign
 | Timeline | A fixed start time, set once against NPL time. Sample k of a scheduled file is heard at start + (the file's start sample + k) / 48 kHz + D. | Counted from samples, never re-read from a clock, so moving or restarting a machine can't shift it |
 | Signed log | One schedule log per stream, listing each file's start sample, and one shared content log holding each file once, as 1 s blocks | The publisher's Ed25519 key is the stream's identity, and the signed Merkle tree replaces a manifest and separate hashes. One active writer only, because two writers or a stale backup could fork the log. |
 | Seed servers | Hold signed blocks and no secret key | Fixed capacity with a hard cap, from any provider. To move one: start the new seed, let it sync and announce, then retire the old one. |
-| Swarm | Peers find each other by topic over HyperDHT and share blocks directly | Seeders are phones on Wi-Fi, charging and not playing. Sharing is on by default, and a listener can turn it off. It stays off by default in Privacy mode. Phones on mobile data download only. Many sub-topics avoid one overloaded DHT topic. |
+| Swarm | Peers find each other by topic over HyperDHT and share blocks directly | Seeders are phones on Wi-Fi, charging and not playing. Sharing is on by default. A listener can turn it off, or limit it to scheduled Brocast global parties. It stays off by default in Privacy mode. Phones on mobile data download only. Many sub-topics avoid one overloaded DHT topic. |
 | Starter nodes | First contact with the DHT | Saved peers first, then domain names across several domains, then built-in IP addresses |
 | Controller | Holds each event: stream, D, state, stop commands, announcements and an optional maximum sync error | A small signed state. Its polling rate needs setting for millions of phones. |
 | Time servers | NPL for the packager; regional servers that follow NPL time for phones without GPS, chosen from a signed list | Phones can't poll NPL directly at this scale: 62,500 queries a second per million phones at the prototype's 16 s interval |
@@ -264,7 +264,7 @@ These ways of improving on that are all proposed, and the nearby-phone method is
 - **Network correction table:** GPS phones report the NTP-versus-GPS gap by network, as opt-in telemetry. Other phones download the whole table and pick locally, so nothing is revealed.
 - **Longer averaging:** reduces noise for radio listening, but not bias.
 
-Turning GPS off doesn't hide a rough location if swarm peers can see the phone's IP address. So this mode defaults to no seeding or announcing and a new key each session, offers download from seed servers only (subject to the capacity cap), and states plainly what peers and servers can see. Social features, once built, are also off in this mode.
+Turning GPS off doesn't hide a rough location if swarm peers can see the phone's IP address. So this mode defaults to no seeding or announcing and a new key each session, offers download from seed servers only (subject to the capacity cap), and states plainly what peers and servers can see. Social features, once built, are also off in this mode. These sharing rules are parked until the Pears proof of concept is validated.
 
 ### Choosing NTP servers
 
