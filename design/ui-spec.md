@@ -1,4 +1,4 @@
-# UI spec (hand-off 04)
+# UI spec (hand-off 05)
 
 Field names come from Claude Code's "Fields that exist today" table in `feedback.md`, as of 1 Nov 2026. If one has been renamed since, use the new name.
 
@@ -26,16 +26,17 @@ Field names come from Claude Code's "Fields that exist today" table in `feedback
 
 | Element | Shows | Source | States and taps | Status |
 |---|---|---|---|---|
-| Header | Station or event name (eyebrow), `Live · D 60 s` | `StreamClient.manifest.dMs`; the name is **later** | Icon buttons (44 × 44) for Time signals, Headphone lag and Settings | now |
-| Now playing | Track title (20 px, bold, one line), `artist · set` (13 px, `textSecondary`), and a thin progress line with elapsed and remaining time | Stream track metadata (**later**; the prototype can show the manifest `source`) | Follows the Track names rule. Long names end with an ellipsis. | later |
-| Brocast clock | A dial. Along the top of the bezel, curved: `TEDDINGTON · GREENWICH`, with an accent meridian tick at 12 o'clock between the two names. Inside: the zone (GMT or BST), HH:MM:SS large, the fraction to the ns (digits finer than the error in `faded`), then local time beneath (`23:43:51 CET · local`). Along the bottom of the bezel, curved: `FLOWTIME ±error` in accent. | `FlowTime.fit().utcAt(boot)` at the frame's presentation time; `ZoneId.of("Europe/London")`; `ZoneId.systemDefault()` for the local line | Local line hidden when its offset equals UK time's. Screenlag correction is **later**. Draw the curved text with `drawTextOnPath`, or the Compose equivalent. | now |
-| Second sweep | An arc that fills once per flowtime second | The fraction of the current second | Off at Reduced level and with reduced motion | now |
+| Header | Station or event name (eyebrow), `Live · D 60 s` | `StreamClient.manifest.dMs`; the name is **later** | Icon buttons (44 × 44) for Time signals, Headphone lag, Archive and Settings | now |
+| Now playing | Track title (20 px, bold, one line), `artist · set` (13 px, `textSecondary`), a **Keep** button, and a thin progress line with elapsed and remaining time | The signed file record and cue list (**later**; the prototype can show the manifest `source`) | Follows the Track names rule; long names end with an ellipsis. Keep pins the file being heard: `Keep` for a single track, `Keep set` inside a set, `Kept` (filled accent mark) once pinned. Hidden while the archive is Off. | later |
+| Brocast clock | A dial. Along the top of the bezel, curved: `TEDDINGTON · GREENWICH`, with an accent meridian tick at 12 o'clock between the two names. Inside: the zone (GMT or BST), HH:MM:SS large, a **sub-second dial** (40 px: 10 tenth ticks with the 0 tick in accent, a faint accent arc and an accent hand), then local time beneath (`23:43:51 CET · local`). Along the bottom of the bezel, curved: `FLOWTIME ±error` in accent. Tapping the dial swaps the sub-dial for the digits to the ns (finer than the error in `faded`), for side-by-side photos; tapping again swaps back. | `FlowTime.fit().utcAt(boot)` at the frame's presentation time; `ZoneId.of("Europe/London")`; `ZoneId.systemDefault()` for the local line | Local line hidden when its offset equals UK time's. Screenlag correction is **later**. Draw the curved text with `drawTextOnPath`, or the Compose equivalent. | now |
+| Seconds sweep | The outer accent arc fills once per flowtime **minute**, like a second hand | Seconds of the current minute | Steps once a second at Reduced level | now |
+| Sub-second dial | The hand **steps in tenths** at 10 Hz, landing on the ticks, and the arc fills by tenths. A smooth sweep at frame rate comes only if a release build shows the UI thread can afford it (Claude Code, 2 Nov: 18–25% of a core at 10 Hz in a debug build). | The fraction of the current second | Hidden at Reduced and Minimal levels and with reduced motion | now |
 | Precision ring | A glow whose width shows the sync error on the budget's log scale; its figure is on the bottom bezel | Sync error | | now |
 | Sync badge | Words, the ± figure and the source | See Badge states | Tapping opens the error budget detail | now |
 | Latest event | Time, lane mark and name, and one line of text, **directly under the badge** | `EventLog.latest()` | Tapping opens the Event log. A banner elsewhere links to its own event. | now |
 | Sync error budget | Bars on a log scale from 1 µs to 10 ms: flowtime, headphone lag, total, screenlag | `errAt` now; headphone-lag uncertainty and screenlag **later** | | partly |
 | Gap row | The rate nudge row: mode chip, the gap value, then two small lines (`gap · closes in 1.40 s` and `pitch +0.014%`) | `NudgeControl.gapAt`, `mode`, `secondsLeft`, `state.rate` | Opens Nudge control. The 60 s gap trace has left this screen to make room for the track; history belongs on Nudge control, **later**. | now |
-| Tiles | SOURCE, HEADPHONES, BUFFER (seconds in hand out of D) | `FlowTime.chosen`, `GpsTime`, `Settings.lagMs`, `StreamClient.buffered` | SOURCE opens Time signals; HEADPHONES opens Headphone lag | now |
+| Tiles | SOURCE, HEADPHONES, AHEAD (how much is downloaded ahead, in hours and minutes) | `FlowTime.chosen`, `GpsTime`, `Settings.lagMs`, download state (**later**) | SOURCE opens Time signals; HEADPHONES opens Headphone lag | partly |
 | Use satellites | A full-width row with a switch, never locked, one tap from the main screen. Shows `Position stays on this phone · off = Privacy mode`. | `GpsTime.active` | Off: the badge becomes Privacy mode. On: asks for location permission if needed; if refused, it returns to off. | now |
 
 ## Settings
@@ -49,7 +50,37 @@ Field names come from Claude Code's "Fields that exist today" table in `feedback
 | LISTENING · Local time under the clock | A switch, on by default | A new setting | Off hides the local line on every clock | now |
 | SCREEN · No flashing | A switch, off by default | Not built (light show) | Always respected; screen levels never override it | later |
 | SCREEN · Screen level | The current automatic level | Not built | Read-only | later |
+| ARCHIVE · Keep | Segmented: Off, Kept only, Everything. Off by default (opt-in). | A new setting | See Archive rules | later |
+| ARCHIVE · Size limit | Stepped slider: 1, 2, 5, 10, 20, 50 GB; 5 GB by default | A new setting | Disabled in Kept only and Off | later |
+| ARCHIVE · Storage bar | Rolling (accent) out of the limit, then Kept (`text`) as extra | Archive store | | later |
+| ARCHIVE · Open archive | A link | | Opens Archive | later |
+| DELIVERY · Download ahead on mobile data | A switch, on by default, with `About 72 MB an hour of listening` | A new setting | Off: downloads only on Wi-Fi | later |
+| DELIVERY · Share with nearby phones | A switch, with `Only on Wi-Fi, while charging and not playing` | A new setting | Default is a product decision (see the hand-off) | later |
+| DELIVERY · Sharing allowance | A storage figure, separate from the archive | A new setting | | later |
 | ADVANCED · Strict mode | A switch tagged `EVENTS ONLY`, off by default, plus a `My limit` slider (1–50 ms, default 5), dimmed while off | Not built (needs events) | Applies only inside an event, and can only tighten the event's own limit. On the radio it does nothing, and the caption says so. | later |
+
+## Archive
+
+![](screens/archive.png)
+
+**Archive rules (the user's decision, 2 Nov):**
+
+- **Keep modes:** Off (the default), Kept only, or Everything.
+  - **Everything:** every file heard goes into a rolling archive capped by the size limit. When it's full, the oldest file that isn't kept is removed first (FIFO).
+  - **Keep overrides the limit:** a kept file is never removed and doesn't count toward the limit. It's shown as `extra`.
+  - **Kept only:** only files the listener keeps are stored, and the limit is disabled.
+- **Files, not cues:** what's kept is the published file, a single track or a whole set. Inside a set, Keep keeps the set.
+- **Joined part-way:** the rest of the file downloads on Wi-Fi, shown as `Finishing on Wi-Fi · n%`.
+- **Low phone storage:** when the phone's free space runs low, the rolling archive stops adding files and says so. Kept files are never touched.
+
+| Element | Shows | Source | States and taps | Status |
+|---|---|---|---|---|
+| Header link | The current mode, for example `Keeping everything ›` | Archive setting | Opens Settings › Archive | later |
+| Storage card | The two-part bar; phone free space | Archive store | | later |
+| Filter | All, Kept, Finishing | | One at a time | later |
+| Day groups | TODAY, then dates | File play times | Newest first | later |
+| Rows | Replay button, title, `artist · single`, `set, n tracks` or `show`, then `length · size · time heard` in mono; the keep mark on the right | Signed file record | Status line: `Playing now · track 9 of 14` (accent), `Finishing on Wi-Fi · 62%` (#5CE1FF), or `Oldest unkept · goes next` (muted) | later |
+| Replay bar | `REPLAY · NOT SYNCED` chip, title, play and pause, a scrubber with elapsed and remaining time | Offline playback | Replay can pause and seek, because it's off the timeline. Starting a replay stops live playback, and a later `Back to live` rejoins at the live point. Replay never touches flowtime. | later |
 
 ## Badge states
 
