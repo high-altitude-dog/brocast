@@ -1,4 +1,4 @@
-# UI spec (hand-off 02)
+# UI spec (hand-off 03)
 
 Field names come from Claude Code's "Fields that exist today" table in `feedback.md`, as of 1 Nov 2026. If one has been renamed since, use the new name.
 
@@ -127,6 +127,43 @@ This screen restyles today's test controls with the same data.
   - GPS: `GpsTime`, `FlowTime.gps.slope`
   - LOG: `Session.name`
 
+## Notification, lock screen and quick settings
+
+![](screens/notification-shade.png) ![](screens/lock-screen.png)
+
+Android draws all three from one `MediaSession` and its media notification. The app supplies only the content below. Use Android's media style and don't design a custom notification layout. (The foreground service that keeps playback alive with the screen off is code; see `feedback.md`.)
+
+| Slot | Content | Source | Updates |
+|---|---|---|---|
+| Title (`METADATA_KEY_TITLE`) | The station or event name, for example `Beach Sync Radio` | Event or station; **later** | On change |
+| Subtitle (`METADATA_KEY_ARTIST`) | Badge words, the ± figure and the source, for example `In sync ±3.2 ms · GPS` or `Privacy mode ±6.2 ms · NTP` | The badge state and sync error | Only under the redraw rule below |
+| Artwork (`METADATA_KEY_ART`) | A 512 × 512 state tile, rendered by the app (`screens/notification-art.png`) | Badge state, ± figure | Only under the redraw rule |
+| Playback state | `STATE_PLAYING` or `STATE_STOPPED`; no duration, so no seek bar | `Playout.state` | On change |
+| Main button | Stop or Play. Play rejoins the live point at D; there's no pause. | | |
+| Custom action 1 | **Use satellites:** icon on (Material Symbols `satellite_alt`) or off (the same icon crossed through). Label `Satellites on` or `Satellites off (Privacy mode)`. | `GpsTime.active` | On change |
+| Content intent | Opens Now playing | | |
+
+**Redraw rule:** update the subtitle and artwork only when the badge state changes, or when the ± figure moves a step (1, 2, 5, 10, 20 ms) and holds it for 10 s. Never update every second.
+
+**Artwork tile:** a dark ground (`bg`), the tick ring, the meridian tick and the `TEDDINGTON · GREENWICH` bezel, a static arc, the state mark, the state word, and the ± figure. Use the state's colour from `tokens.color.status`. Keep everything that matters in the middle 60%, because Android crops it and lays a scrim over it. Privacy mode is neutral at any error. Not in sync has no arc.
+
+**Lock screen:** no nudges to turn location on. If location isn't allowed yet, the satellites button opens the app after unlock to ask, and stays off until then.
+
+## Test bench states
+
+![](screens/test-bench-states.png)
+
+| Part | Design |
+|---|---|
+| Run chip | STOPPED: an outline in `faint`, text in `textSecondary`, a square mark. RUNNING: an accent outline, a glowing dot, and elapsed `mm:ss`. |
+| Start / Stop | START RUN: filled accent with dark text and a ▶. STOP RUN: a `text` outline with a ■. Both 52 high and full width. |
+| Settings | 100% opacity and editable while stopped; 55% and locked while running. Use satellites is never locked. |
+| Satellites switch, off | Track: a 1.5 px outline in `faint`; thumb: 18 px in `muted`, on the left. On: an accent track with a 22 px thumb in `bg`, on the right. The same on every screen. |
+| Rate nudge row | A 44 px row under the latest event: a mode chip (AUTO outlined in `faint`; MANUAL outlined and lettered in accent), then `gap · closes in · pitch`, or `gap · paused`, then `Nudge ›`. Opens Nudge control. |
+| STREAM row | Stream mode only, after PLAYOUT: newest segment, seconds buffered, fetch errors, server−flowtime |
+| Error lines | One extra line under the row, in `warn` with ▲, cut to one line. Tapping it opens the event log for that lane. Applies to OUTPUT, NTP and STREAM. |
+| Tightening | One line under the source detail in the flowtime card: `TIGHTENING` in accent, then `±from → ±to` in `muted` mono. Only under the tightening rule. |
+
 ---
 
 ## Screen levels
@@ -138,6 +175,6 @@ Each phone moves between levels automatically, based on heat, missed frames, und
 | Full | As drawn |
 | Reduced | No glows, no sweep, and no animated hand-overs. Clocks update to 0.1 s at 4 Hz, traces at 1 Hz. |
 | Minimal | Pure black, text only, one update a second, no animation. The clock shows whole seconds, the badge is words, the event log is plain text, and the satellites switch stays. See `screens/now-playing-minimal.png`. |
-| Off | Screen off (the notification design is **later**) |
+| Off | Screen off. The notification and lock-screen player carry the state (see Notification, lock screen and quick settings). |
 
 The light show follows its own rules. A screen level can reduce flashes but can never start the show without the listener's opt-in. The three-flashes limit and the "no flashing" setting always apply.

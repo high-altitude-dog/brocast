@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=390">
+<title>Lock screen · Beach Sync</title>
+<!-- Exported from the Beach Sync UI Mock-ups canvas. Static: tokens are in ../tokens.json, behaviour in ../ui-spec.md -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&amp;family=Space+Grotesk:wght@400;500;700&amp;display=swap">
+<style>
+body{margin:0;background:#1B1F24}
+</style>
+</head>
+<body>
+<div style="width: 390px; height: 844px; box-sizing: border-box; background: #0D0F12; color: #ECEFF2; font-family: 'Space Grotesk', system-ui, sans-serif; padding: 16px 14px 18px; display: flex; flex-direction: column; gap: 12px; overflow: hidden">
+
+  <span style="font-size: 11px; letter-spacing: 0.16em; color: #8B95A1; font-weight: 500; padding: 0 4px">LOCK SCREEN · SATELLITES OFF</span>
+
+  <div style="height: 150px; border-radius: 18px; border: 1.5px dashed #3A424C; display: flex; align-items: center; justify-content: center; margin-top: 40px">
+    <span style="font-size: 12px; color: #8B95A1">Android's own clock and date</span>
+  </div>
+
+  <div style="flex: 1"></div>
+
+  <div style="position: relative; overflow: hidden; border-radius: 26px; background: #101317; border: 1px solid #262B32; padding: 14px 16px; height: 196px; box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-between">
+      <svg width="210" height="210" viewBox="0 0 512 512" aria-hidden="true" style="position: absolute; right: -36px; top: -14px; opacity: 0.9">
+        <defs><path id="pprivacy" d="M 46 256 A 210 210 0 0 1 466 256"></path></defs>
+        <circle cx="256" cy="256" r="186" fill="none" stroke="#2A323C" stroke-width="12" stroke-dasharray="2.6 16.87"></circle>
+        <line x1="256" y1="58" x2="256" y2="84" stroke="#C4CBD2" stroke-width="5"></line>
+        <circle cx="256" cy="256" r="160" fill="none" stroke="#C4CBD2" stroke-opacity="0.8" stroke-width="7" stroke-dasharray="760 1005" transform="rotate(-90 256 256)" stroke-linecap="round"></circle>
+        <text font-family="Space Grotesk, sans-serif" font-size="24" font-weight="500" letter-spacing="6" fill="#C4CBD2"><textPath href="#pprivacy" startOffset="50%" text-anchor="middle">TEDDINGTON · GREENWICH</textPath></text>
+        <g transform="translate(238 186)" fill="none" stroke="#ECEFF2" stroke-width="5"><rect x="0" y="16" width="36" height="26" rx="4"></rect><path d="M7 16V9a11 11 0 0 1 22 0v7"></path></g>
+        <text x="256" y="278" text-anchor="middle" font-family="Space Grotesk, sans-serif" font-size="44" font-weight="700" letter-spacing="4" fill="#ECEFF2">PRIVACY</text>
+        <text x="256" y="334" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="44" font-weight="600" fill="#C4CBD2">±6.2 ms</text>
+      </svg>
+      <div style="position: absolute; inset: 0; background: linear-gradient(90deg, #101317 0%, #101317 48%, rgba(16, 19, 23, 0.55) 100%)"></div>
+      <div style="position: relative; display: flex; justify-content: space-between; align-items: center">
+        <span style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: #C4CBD2"><span style="width: 22px; height: 22px; border-radius: 50%; background: #0A0C0F; border: 1.5px solid #C8FF4D; display: flex; align-items: center; justify-content: center"><span style="width: 6px; height: 6px; border-radius: 50%; background: #C8FF4D"></span></span>Beach Sync</span>
+        <span style="font-size: 11.5px; color: #ECEFF2; background: rgba(255, 255, 255, 0.1); border-radius: 999px; padding: 6px 10px">Earbuds</span>
+      </div>
+      <div style="position: relative; display: flex; flex-direction: column; gap: 3px; max-width: 220px">
+        <span style="font-size: 17px; font-weight: 700">Beach Sync Radio</span>
+        <span style="font-size: 13px; color: #C4CBD2">Privacy mode ±6.2 ms · NTP</span>
+      </div>
+      <div style="position: relative; display: flex; justify-content: space-between; align-items: center">
+        <button aria-pressed="false" aria-label="Use satellites, off" style="appearance: none; width: 44px; height: 44px; border-radius: 50%; border: none; background: transparent; color: #ECEFF2; display: flex; align-items: center; justify-content: center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><rect x="9" y="9" width="6" height="6" rx="1" transform="rotate(45 12 12)"></rect><path d="M4 4l4 4M16 16l4 4M3 9l3-3M15 21l3-3"></path><path d="M3 21L21 3"></path></svg></button>
+        <button aria-label="Stop" style="appearance: none; width: 52px; height: 52px; border-radius: 18px; border: none; background: #C8FF4D; color: #0A0C0F; display: flex; align-items: center; justify-content: center"><span style="width: 14px; height: 14px; border-radius: 2px; background: #0A0C0F"></span></button>
+      </div>
+    </div>
+
+  <div style="display: flex; flex-direction: column; gap: 8px; padding: 4px 6px 30px; font-size: 12px; color: #C4CBD2">
+    <span><span style="color: #ECEFF2; font-weight: 700">Privacy mode stays calm here too:</span> neutral artwork, plain words, and no "turn on location" nudges on the lock screen.</span>
+    <span><span style="color: #ECEFF2; font-weight: 700">Turning satellites on from the lock screen</span> works at once if location is already allowed. If not, it opens the app after unlock to ask, and stays off until then.</span>
+  </div>
+
+</div>
+</body>
+</html>

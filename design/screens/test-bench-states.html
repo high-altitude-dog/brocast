@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=390">
+<title>Test bench states · Beach Sync</title>
+<!-- Exported from the Beach Sync UI Mock-ups canvas. Static: tokens are in ../tokens.json, behaviour in ../ui-spec.md -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&amp;family=Space+Grotesk:wght@400;500;700&amp;display=swap">
+<style>
+body{margin:0;background:#0A0C0F}
+</style>
+</head>
+<body>
+<div style="width: 390px; height: 844px; box-sizing: border-box; background: #0A0C0F; color: #ECEFF2; font-family: 'Space Grotesk', system-ui, sans-serif; padding: 14px 18px 18px; display: flex; flex-direction: column; gap: 8px; overflow: hidden">
+
+  <div style="display: flex; flex-direction: column; gap: 2px">
+    <span style="font-size: 11px; letter-spacing: 0.16em; color: #8B95A1; font-weight: 500">PROTOTYPE · STATES</span>
+    <span style="font-size: 18px; font-weight: 700">Test bench parts</span>
+  </div>
+
+  <span style="font-size: 10.5px; letter-spacing: 0.16em; color: #8B95A1; margin-top: 4px">RUN CHIP · STOPPED AND RUNNING</span>
+  <div style="display: flex; gap: 8px; align-items: center">
+    <span style="display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; border: 1.5px solid #4A5562; font-size: 12px; font-weight: 700; letter-spacing: 0.12em; color: #C4CBD2"><span style="width: 8px; height: 8px; border-radius: 2px; background: #8B95A1"></span>STOPPED</span>
+    <span style="display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; border: 1.5px solid #C8FF4D; font-size: 12px; font-weight: 700; letter-spacing: 0.12em"><span style="width: 8px; height: 8px; border-radius: 50%; background: #C8FF4D; box-shadow: 0 0 10px #C8FF4D"></span>RUNNING <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-weight: 400; letter-spacing: 0">12:44</span></span>
+  </div>
+
+  <span style="font-size: 10.5px; letter-spacing: 0.16em; color: #8B95A1; margin-top: 4px">START AND STOP</span>
+  <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px">
+    <button style="appearance: none; min-height: 52px; border-radius: 999px; border: none; background: #C8FF4D; color: #0A0C0F; font-family: inherit; font-size: 14px; font-weight: 700; letter-spacing: 0.12em; display: flex; align-items: center; justify-content: center; gap: 8px"><svg width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3l15 9-15 9z" fill="#0A0C0F"></path></svg>START RUN</button>
+    <button style="appearance: none; min-height: 52px; border-radius: 999px; border: 1.5px solid #ECEFF2; background: transparent; color: #ECEFF2; font-family: inherit; font-size: 14px; font-weight: 700; letter-spacing: 0.12em; display: flex; align-items: center; justify-content: center; gap: 8px"><span style="width: 11px; height: 11px; border-radius: 2px; background: #ECEFF2"></span>STOP RUN</button>
+  </div>
+  <span style="font-size: 11px; color: #8B95A1">Stopped: settings at full strength and editable. Running: settings at 55%, except Use satellites.</span>
+
+  <span style="font-size: 10.5px; letter-spacing: 0.16em; color: #8B95A1; margin-top: 4px">USE SATELLITES · ON AND OFF</span>
+  <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px">
+    <div style="background: #12161B; border: 1px solid #222932; border-radius: 12px; display: flex; align-items: center; justify-content: space-between; padding: 4px 4px 4px 12px"><span style="font-size: 13px">On</span><span style="width: 52px; height: 44px; display: flex; align-items: center; justify-content: center"><span style="width: 46px; height: 26px; border-radius: 13px; background: #C8FF4D; display: flex; align-items: center; justify-content: flex-end; padding: 2px; box-sizing: border-box"><span style="width: 22px; height: 22px; border-radius: 50%; background: #0A0C0F"></span></span></span></div>
+    <div style="background: #12161B; border: 1px solid #222932; border-radius: 12px; display: flex; align-items: center; justify-content: space-between; padding: 4px 4px 4px 12px"><span style="font-size: 13px; color: #C4CBD2">Off · Privacy mode</span><span style="width: 52px; height: 44px; display: flex; align-items: center; justify-content: center"><span style="width: 46px; height: 26px; border-radius: 13px; border: 1.5px solid #4A5562; display: flex; align-items: center; padding: 2px; box-sizing: border-box"><span style="width: 18px; height: 18px; border-radius: 50%; background: #8B95A1"></span></span></span></div>
+  </div>
+
+  <span style="font-size: 10.5px; letter-spacing: 0.16em; color: #8B95A1; margin-top: 4px">RATE NUDGE ROW · UNDER THE LATEST EVENT</span>
+  <a href="nudge-control.html" style="text-decoration: none; color: #ECEFF2; min-height: 44px; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: center; background: #12161B; border: 1px solid #222932; border-radius: 12px; padding: 0 12px; font-size: 12.5px">
+    <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.12em; padding: 3px 8px; border-radius: 6px; border: 1px solid #4A5562">AUTO</span>
+    <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis">gap <span style="font-family: 'JetBrains Mono', ui-monospace, monospace">0.2 ms</span> · closes in <span style="font-family: 'JetBrains Mono', ui-monospace, monospace">1.4 s</span> · <span style="font-family: 'JetBrains Mono', ui-monospace, monospace">+0.01%</span></span>
+    <span style="font-size: 12px; color: #8B95A1">Nudge ›</span>
+  </a>
+  <a href="nudge-control.html" style="text-decoration: none; color: #ECEFF2; min-height: 44px; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: center; background: #12161B; border: 1px solid #222932; border-radius: 12px; padding: 0 12px; font-size: 12.5px">
+    <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.12em; padding: 3px 8px; border-radius: 6px; border: 1px solid #C8FF4D; color: #C8FF4D">MANUAL</span>
+    <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis">gap <span style="font-family: 'JetBrains Mono', ui-monospace, monospace">5.0 ms</span> · paused</span>
+    <span style="font-size: 12px; color: #8B95A1">Nudge ›</span>
+  </a>
+
+  <span style="font-size: 10.5px; letter-spacing: 0.16em; color: #8B95A1; margin-top: 4px">STATUS GRID · STREAM ROW AND ERROR LINES</span>
+  <div style="background: #12161B; border: 1px solid #222932; border-radius: 12px; border-radius: 14px; padding: 9px 14px; display: grid; grid-template-columns: 58px minmax(0, 1fr); gap: 5px 10px; font-size: 11.5px; align-items: baseline">
+    <span style="font-size: 10px; letter-spacing: 0.14em; color: #8B95A1">STREAM</span>
+    <span>#<span style="font-family: 'JetBrains Mono', ui-monospace, monospace">2911</span> · <span style="font-family: 'JetBrains Mono', ui-monospace, monospace">60 s</span> buffered · <span style="font-family: 'JetBrains Mono', ui-monospace, monospace">0</span> errors · server−flow <span style="font-family: 'JetBrains Mono', ui-monospace, monospace">+3.1 ms</span></span>
+    <span style="font-size: 10px; letter-spacing: 0.14em; color: #8B95A1">NTP</span>
+    <span style="display: flex; flex-direction: column; gap: 2px"><span>ntp1.npl S1 · rtt <span style="font-family: 'JetBrains Mono', ui-monospace, monospace">24 ms</span> · NTP−GPS <span style="font-family: 'JetBrains Mono', ui-monospace, monospace">−1.2 ms</span></span><a href="event-log.html" style="color: #FFB547; text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-height: 22px; display: block">▲ ntp2.npl.co.uk: timed out after 2 s, retrying ntp3…</a></span>
+  </div>
+  <span style="font-size: 11px; color: #8B95A1">Stream mode adds the STREAM row after PLAYOUT. An error takes one extra line in amber with ▲, cut to one line; tap it for the full text in the event log.</span>
+
+  <span style="font-size: 10.5px; letter-spacing: 0.16em; color: #8B95A1; margin-top: 4px">TIGHTENING · IN THE FLOWTIME CARD</span>
+  <div style="background: #12161B; border: 1px solid #222932; border-radius: 12px; border-radius: 14px; padding: 10px 14px; display: flex; flex-direction: column; gap: 2px; align-items: flex-end">
+    <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 15px; font-weight: 600; color: #C8FF4D">GPS ±0.4 ms</span>
+    <span style="font-size: 11px; color: #8B95A1">Gold · 14 of 16 sats · switches 1</span>
+    <span style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.12em; color: #C8FF4D">TIGHTENING <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-weight: 400; letter-spacing: 0; color: #8B95A1">±11.4 → ±0.4 ms</span></span>
+  </div>
+
+</div>
+</body>
+</html>
