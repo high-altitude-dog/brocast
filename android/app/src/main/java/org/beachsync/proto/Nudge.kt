@@ -1,0 +1,160 @@
+package org.beachsync.proto
+
+import kotlin.math.abs
+import kotlin.math.max
+
+/*
+ * Closing gaps. The Renderer always tracks the audio clock, which can't wait. This decides how a gap closes when
+ * flowtime itself moves: straight away in Auto, or when the listener presses Go in Manual. Plain Kotlin, so simtest
+ * can run it. The control thread builds each NudgeState; the audio thread only reads the current one.
+ */
+
+enum class NudgeMode { AUTO, MANUAL }
+
+/**
+ * What the audio thread reads: the fit to use, and how far the stream is held behind it. The gap falls at [rate]
+ * (same sign as [held0]) from [boot0] until it reaches zero. Immutable, and its methods don't allocate.
+ */
+class NudgeState(val fit: ClockFit?, val held0: Long, val boot0: Long, val rate: Double) {
+    private val end = if (rate == 0.0) Long.MAX_VALUE else boot0 + (held0 / rate).toLong()
+    val closing get() = rate != 0.0
+
+    fun heldAt(boot: Long): Long = when {
+        rate == 0.0 -> held0
+        boot >= end -> 0L
+        else -> held0 - ((boot - boot0) * rate).toLong()
+    }
+
+    fun rateAt(boot: Long): Double = if (boot < end) rate else 0.0
+
+    fun done(boot: Long) = rate != 0.0 && boot >= end
+}
+
+class NudgeControl(mode: NudgeMode, periodS: Double?, private val note: (String) -> Unit = {}) {
+    @Volatile var state = NudgeState(null, 0L, 0L, 0.0)
+        private set
+    @Volatile var mode = mode
+        private set
+    /** The listener's chosen period, or null for the recommended one. */
+    @Volatile var periodS = periodS
+        private set
+    private var closeStart = 0L
+
+    fun gapAt(boot: Long) = state.heldAt(boot)
+
+    /** The period a gap of this size would really take: the chosen or recommended one, but never above the rate limit. */
+    fun effectivePeriodS(gapNs: Long): Double = max(periodS ?: recommendedS(gapNs), fastestS(gapNs))
+
+    fun secondsLeft(boot: Long): Double {
+        val s = state
+        return if (s.closing && !s.done(boot)) abs(s.heldAt(boot) / s.rate) / 1e9 else 0.0
+    }
+
+    /** Called about ten times a second with flowtime's current fit. */
+    @Synchronized
+    fun tick(boot: Long, fit: ClockFit?) {
+        val cur = state
+        if (fit == null) return
+        val curFit = cur.fit
+        if (curFit == null) { state = NudgeState(fit, 0L, boot, 0.0); return }
+        val finished = cur.done(boot)
+        if (finished) closed(boot)
+        if (fit === curFit) {
+            if (finished) state = NudgeState(fit, 0L, boot, 0.0)
+            return
+        }
+        // Keep the stream exactly where it is: the new fit plus a held gap gives the same position as the old fit did.
+        val delta = fit.utcAt(boot) - curFit.utcAt(boot)
+        val held = cur.heldAt(boot) + delta
+        val wasClosing = cur.closing && !finished
+        when {
+            abs(held) <= ABSORB_NS -> {
+                if (wasClosing) closed(boot)
+                state = NudgeState(fit, 0L, boot, 0.0)   // routine: the Renderer takes a step this small in its stride
+            }
+            mode == NudgeMode.AUTO && abs(held) > JUMP_NS -> {
+                note("Gap of ${fmt(held)}: too large to nudge, jumping")
+                state = NudgeState(fit, 0L, boot, 0.0)   // the Renderer jumps when it sees the difference
+            }
+            wasClosing -> {
+                val keep = abs(delta) <= ABSORB_NS && (held > 0) == (cur.rate > 0)
+                state = NudgeState(fit, held, boot, if (keep) cur.rate else rateFor(held))
+            }
+            mode == NudgeMode.AUTO -> begin(fit, held, boot)
+            else -> {
+                if (cur.held0 == 0L || finished) note("Gap of ${fmt(held)} held: press Go to close it")
+                state = NudgeState(fit, held, boot, 0.0)
+            }
+        }
+    }
+
+    @Synchronized
+    fun setMode(m: NudgeMode, boot: Long) {
+        if (m == mode) return
+        mode = m
+        note("Nudge mode: $m")
+        val s = state
+        val h = s.heldAt(boot)
+        if (m == NudgeMode.AUTO && h != 0L && !s.closing) s.fit?.let { begin(it, h, boot) }
+    }
+
+    /** A new period also applies to a gap already closing. */
+    @Synchronized
+    fun setPeriod(p: Double?, boot: Long) {
+        periodS = p
+        val s = state
+        val h = s.heldAt(boot)
+        if (s.closing && h != 0L) state = NudgeState(s.fit, h, boot, rateFor(h))
+    }
+
+    @Synchronized
+    fun go(boot: Long) {
+        val s = state
+        val h = s.heldAt(boot)
+        if (h != 0L && !s.closing) s.fit?.let { begin(it, h, boot) }
+    }
+
+    @Synchronized
+    fun pause(boot: Long) {
+        val s = state
+        if (!s.closing || s.done(boot)) return
+        val h = s.heldAt(boot)
+        state = NudgeState(s.fit, h, boot, 0.0)
+        note("Paused with ${fmt(h)} of the gap left")
+    }
+
+    @Synchronized
+    fun jump(boot: Long) {
+        val s = state
+        val h = s.heldAt(boot)
+        if (h == 0L) return
+        state = NudgeState(s.fit, 0L, boot, 0.0)
+        note("Jumped across a gap of ${fmt(h)}")
+    }
+
+    private fun begin(fit: ClockFit, held: Long, boot: Long) {
+        closeStart = boot
+        state = NudgeState(fit, held, boot, rateFor(held))
+        note("Gap of ${fmt(held)}: closing over %.0f s".format(effectivePeriodS(abs(held))))
+    }
+
+    private fun closed(boot: Long) = note("Gap closed in %.0f s".format((boot - closeStart) / 1e9))
+
+    private fun rateFor(held: Long): Double {
+        val r = abs(held) / (effectivePeriodS(abs(held)) * 1e9)
+        return if (held > 0) r else -r
+    }
+
+    companion object {
+        const val ABSORB_NS = 100_000L            // 0.1 ms: routine corrections never need Go
+        const val JUMP_NS = 20_000_000L           // above 20 ms, Auto jumps; Manual lets the listener choose
+        const val MAX_RATE = 0.0009               // inside the Renderer's 0.1% limit, leaving room to track the audio clock
+        const val MIN_PERIOD_S = 1.0
+        const val MAX_PERIOD_S = 300.0
+        const val RECOMMENDED_S = 60.0            // a starting value for listening alone; events would use the fastest
+
+        fun fastestS(gapNs: Long) = abs(gapNs) / MAX_RATE / 1e9
+        fun recommendedS(gapNs: Long) = max(RECOMMENDED_S, fastestS(gapNs))
+        fun fmt(ns: Long) = if (abs(ns) < 1_000_000L) "%.0f µs".format(abs(ns) / 1e3) else "%.2f ms".format(abs(ns) / 1e6)
+    }
+}

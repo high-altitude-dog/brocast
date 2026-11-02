@@ -12,7 +12,10 @@ import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.roundToLong
 
-class Settings(val url: String, val stream: Boolean, val policy: Policy, val pitchHz: Double, val lagMs: Double, val channel: Int)
+class Settings(
+    val url: String, val stream: Boolean, val policy: Policy, val pitchHz: Double, val lagMs: Double, val channel: Int,
+    val nudgeMode: NudgeMode, val nudgePeriodS: Double?,
+)
 
 /** One test run: the time sources, the stream, the audio thread, the event log and four CSV logs. */
 class Session(ctx: Context, val s: Settings, private val satellitesOn: Boolean) {
@@ -28,7 +31,8 @@ class Session(ctx: Context, val s: Settings, private val satellitesOn: Boolean) 
     val ntp = NtpClient(ntpLog)
     val stream = if (s.stream) StreamClient(s.url, lagNs) else null
     private val renderer = Renderer(s.pitchHz, stream, s.channel)
-    val play = Playout(renderer, stream, lagNs)
+    val nudge = NudgeControl(s.nudgeMode, s.nudgePeriodS) { note(Lane.AUDIO, it) }
+    val play = Playout(renderer, stream, lagNs, nudge)
     val folder: String = dir.absolutePath
     private val eventCsv = CsvLog(File(dir, "$name-events.csv"), "boot_ns,flow_utc_ns,lane,text")
     val events = EventLog { e -> eventCsv.row(e.boot, e.utc, e.lane, "\"" + e.text.replace("\"", "\"\"") + "\"") }
@@ -42,6 +46,16 @@ class Session(ctx: Context, val s: Settings, private val satellitesOn: Boolean) 
         }
     }, "events")
 
+    /** Picks the time source and hands flowtime to the audio thread, whether or not the screen is on. */
+    private val control = Thread({
+        while (watching) {
+            val boot = nowBoot()
+            FlowTime.reselect(boot)
+            nudge.tick(boot, FlowTime.fit())
+            try { Thread.sleep(100) } catch (_: InterruptedException) { }
+        }
+    }, "nudge")
+
     fun start() {
         FlowTime.reset(s.policy)
         File(dir, "$name-info.txt").writeText(info())
@@ -49,6 +63,7 @@ class Session(ctx: Context, val s: Settings, private val satellitesOn: Boolean) 
         if (satellitesOn) gps.start()
         ntp.start()
         stream?.start()
+        control.start()
         play.start()
         watcher.start()
     }
@@ -59,7 +74,9 @@ class Session(ctx: Context, val s: Settings, private val satellitesOn: Boolean) 
         ntp.running = false; ntp.interrupt()
         gps.close()
         play.join(500)
-        watching = false; watcher.interrupt(); watcher.join(500)
+        watching = false
+        control.interrupt(); control.join(500)
+        watcher.interrupt(); watcher.join(500)
         note(Lane.CLOCK, "Run stopped")
         statusLog.close(); gpsLog.close(); ntpLog.close(); eventCsv.close()
     }
@@ -112,7 +129,7 @@ class Session(ctx: Context, val s: Settings, private val satellitesOn: Boolean) 
             ntp.minusGpsUs, ntp.rttMs, ntp.boundMs,
             play.state, renderer.posErrUs, (renderer.ratio - 1) * 1e6, renderer.jumps,
             play.underruns, renderer.missingFrames, play.aheadMs, play.stampDevUs,
-            st?.serverMinusFlowMs,
+            st?.serverMinusFlowMs, nudge.gapAt(boot), nudge.state.rateAt(boot) * 1e6,
         )
     }
 
@@ -123,7 +140,8 @@ class Session(ctx: Context, val s: Settings, private val satellitesOn: Boolean) 
         val holdover = src == Source.GPS && boot - gps.lastBoot > 3_000_000_000L
         append("SOURCE ")
         append(if (src == null) "none yet" else src.name + if (holdover) " (holdover)" else "")
-        if (fit != null) append("   ±").append(fmtNs(fit.errAt(boot)))
+        val gap = nudge.gapAt(boot)
+        if (fit != null) append("   ±").append(fmtNs(fit.errAt(boot) + abs(gap).toDouble()))   // a held gap is real sync error
         append("   switches ").append(FlowTime.switches)
         val from = detector.tighteningFromNs
         if (!from.isNaN()) append("   TIGHTENING from ±").append(fmtNs(from))
@@ -197,7 +215,8 @@ class Session(ctx: Context, val s: Settings, private val satellitesOn: Boolean) 
     companion object {
         const val STATUS_HEADER = "boot_ns,flow_utc_ns,source,err_ns,gps_err_ns,ntp_err_ns,gold,sats_used,sats_seen," +
             "gps_scatter_ns,boot_clock_ppm,gps_age_ms,ntp_minus_gps_us,ntp_rtt_ms,ntp_bound_ms," +
-            "state,pos_err_us,nudge_ppm,jumps,underruns,missing_frames,ahead_ms,stamp_jitter_us,server_minus_flow_ms"
+            "state,pos_err_us,nudge_ppm,jumps,underruns,missing_frames,ahead_ms,stamp_jitter_us,server_minus_flow_ms," +
+            "held_gap_ns,gap_rate_ppm"
 
         fun fmtNs(ns: Double): String = when {
             ns.isNaN() || ns.isInfinite() -> "—"

@@ -19,11 +19,16 @@ import android.widget.LinearLayout
 import android.widget.RadioButton
 import android.widget.RadioGroup
 import android.widget.ScrollView
+import android.widget.SeekBar
 import android.widget.Switch
 import android.widget.TextView
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import kotlin.math.abs
+import kotlin.math.ln
+import kotlin.math.log2
+import kotlin.math.pow
 
 /** One screen: settings, Start/Stop, flowtime as UK time, and the live status panel. */
 class MainActivity : Activity() {
@@ -34,6 +39,13 @@ class MainActivity : Activity() {
     private lateinit var pitch: EditText
     private lateinit var lag: EditText
     private lateinit var satellites: Switch
+    private lateinit var nudgeMode: RadioGroup
+    private lateinit var nudgeSlider: SeekBar
+    private lateinit var nudgeInfo: TextView
+    private lateinit var goButton: Button
+    private lateinit var jumpButton: Button
+    private var idNudgeAuto = 0
+    private var idManual = 0
     private lateinit var button: Button
     private lateinit var clock: TextView
     private lateinit var status: TextView
@@ -78,12 +90,46 @@ class MainActivity : Activity() {
     private fun refresh() {
         val boot = Session.nowBoot()
         val s = session
-        if (s != null) FlowTime.reselect(boot)
         val fit = FlowTime.fit()
         clock.text = if (s == null || fit == null) "--:--:--.---" else uk.format(Instant.ofEpochSecond(0, fit.utcAt(boot)))
         status.text = s?.describe(boot) ?: "Stopped. Set up both phones the same way, then press Start on each."
         if (s != null && ++ticks % 4 == 0) s.logRow(boot)
         refreshEvents()
+        refreshNudge(boot)
+    }
+
+    private fun chosenPeriod(): Double? = prefs.getFloat("nudgePeriod", -1f).let { if (it > 0f) it.toDouble() else null }
+
+    private fun chosenMode() = if (nudgeMode.checkedRadioButtonId == idManual) NudgeMode.MANUAL else NudgeMode.AUTO
+
+    private fun refreshNudge(boot: Long) {
+        val n = session?.nudge
+        val period = chosenPeriod()
+        val label = if (period == null) "recommended" else "%.0f s".format(period)
+        val gap = n?.gapAt(boot) ?: 0L
+        val closing = n != null && n.state.closing && gap != 0L
+        nudgeInfo.text = buildString {
+            if (gap == 0L) append("No gap · period: $label") else {
+                val secs = if (closing) n!!.secondsLeft(boot) else n!!.effectivePeriodS(gap)
+                val rate = if (closing) abs(n.state.rate) else abs(gap) / (secs * 1e9)
+                append("Gap ${NudgeControl.fmt(gap)} · ")
+                append(if (closing) "closing, %.0f s left".format(secs) else "held, would take %.0f s".format(secs))
+                append(" · up to %.2f cents".format(1200 * log2(1 + rate)))
+            }
+        }
+        val manual = chosenMode() == NudgeMode.MANUAL
+        goButton.text = if (closing) "Pause" else "Go"
+        goButton.isEnabled = manual && gap != 0L
+        jumpButton.isEnabled = manual && gap != 0L
+    }
+
+    private fun periodToProgress(s: Double) = (1000 * ln(s / NudgeControl.MIN_PERIOD_S) / ln(NudgeControl.MAX_PERIOD_S / NudgeControl.MIN_PERIOD_S)).toInt()
+
+    private fun progressToPeriod(p: Int) = NudgeControl.MIN_PERIOD_S * (NudgeControl.MAX_PERIOD_S / NudgeControl.MIN_PERIOD_S).pow(p / 1000.0)
+
+    private fun setPeriod(p: Double?) {
+        prefs.edit().putFloat("nudgePeriod", p?.toFloat() ?: -1f).apply()
+        session?.nudge?.setPeriod(p, Session.nowBoot())
     }
 
     /** Redraws only when there is something new, and builds the full list only while it is open. */
@@ -147,6 +193,8 @@ class MainActivity : Activity() {
             pitchHz = pitch.text.toString().toDoubleOrNull() ?: 2000.0,
             lagMs = lag.text.toString().toDoubleOrNull() ?: 0.0,
             channel = when (channel.checkedRadioButtonId) { idLeft -> Renderer.LEFT; idRight -> Renderer.RIGHT; else -> Renderer.BOTH },
+            nudgeMode = chosenMode(),
+            nudgePeriodS = chosenPeriod(),
         )
         session = try {
             Session(this, settings, satellitesOn).also { it.start(); eventLog = it.events }
@@ -242,6 +290,54 @@ class MainActivity : Activity() {
             typeface = Typeface.MONOSPACE; textSize = 12f; setTextIsSelectable(true); visibility = View.GONE
         }
         col.addView(eventList)
+
+        col.addView(caption("Rate nudge: how a gap closes when flowtime moves"))
+        nudgeMode = RadioGroup(this).apply { orientation = RadioGroup.HORIZONTAL }
+        idNudgeAuto = radio(nudgeMode, "Auto")
+        idManual = radio(nudgeMode, "Manual")
+        nudgeMode.check(if (prefs.getBoolean("nudgeManual", false)) idManual else idNudgeAuto)
+        nudgeMode.setOnCheckedChangeListener { _, _ ->
+            prefs.edit().putBoolean("nudgeManual", chosenMode() == NudgeMode.MANUAL).apply()
+            session?.nudge?.setMode(chosenMode(), Session.nowBoot())
+        }
+        col.addView(nudgeMode)
+        col.addView(caption("Period, 1 s to 5 min"))
+        nudgeSlider = SeekBar(this).apply {
+            max = 1000
+            progress = periodToProgress(chosenPeriod() ?: NudgeControl.RECOMMENDED_S)
+            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(bar: SeekBar, value: Int, fromUser: Boolean) {
+                    if (fromUser) setPeriod(progressToPeriod(value))
+                }
+                override fun onStartTrackingTouch(bar: SeekBar) {}
+                override fun onStopTrackingTouch(bar: SeekBar) {}
+            })
+        }
+        col.addView(nudgeSlider)
+        nudgeInfo = TextView(this).apply { typeface = Typeface.MONOSPACE; textSize = 12f }
+        col.addView(nudgeInfo)
+        val nudgeRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        val recommended = Button(this).apply {
+            text = "Recommended"
+            setOnClickListener {
+                setPeriod(null)
+                nudgeSlider.progress = periodToProgress(NudgeControl.RECOMMENDED_S)
+            }
+        }
+        goButton = Button(this).apply {
+            text = "Go"
+            setOnClickListener {
+                val n = session?.nudge ?: return@setOnClickListener
+                val now = Session.nowBoot()
+                if (n.state.closing) n.pause(now) else n.go(now)
+            }
+        }
+        jumpButton = Button(this).apply {
+            text = "Jump"
+            setOnClickListener { session?.nudge?.jump(Session.nowBoot()) }
+        }
+        for (b in listOf(recommended, goButton, jumpButton)) nudgeRow.addView(b, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+        col.addView(nudgeRow)
 
         status = TextView(this).apply {
             typeface = Typeface.MONOSPACE; textSize = 12f; setTextIsSelectable(true)

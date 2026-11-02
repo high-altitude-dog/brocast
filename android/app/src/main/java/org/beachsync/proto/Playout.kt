@@ -13,7 +13,12 @@ import kotlin.math.abs
  * output time stamp), convert that to flowtime, add the headphone lag, and let the Renderer fill it.
  * Lean on purpose: no allocation, no locks, no logging in the loop.
  */
-class Playout(private val renderer: Renderer, private val stream: StreamClient?, private val lagNs: Long) : Thread("playout") {
+class Playout(
+    private val renderer: Renderer,
+    private val stream: StreamClient?,
+    private val lagNs: Long,
+    private val nudge: NudgeControl,
+) : Thread("playout") {
     @Volatile var running = true
     @Volatile var state = "starting"
     @Volatile var aheadMs = Double.NaN      // how far ahead of the output the next frame is written
@@ -54,7 +59,8 @@ class Playout(private val renderer: Renderer, private val stream: StreamClient?,
                         tsFrame = ts.framePosition; tsBoot = boot; haveTs = true
                     }
                 }
-                val fit = FlowTime.fit()
+                val hold = nudge.state   // one read: the fit and its held gap always belong together
+                val fit = hold.fit
                 val m = stream?.manifest
                 if (fit == null) {
                     renderer.silence(buf, CHUNK); renderer.reset(); state = "waiting for flowtime"
@@ -67,10 +73,11 @@ class Playout(private val renderer: Renderer, private val stream: StreamClient?,
                     val bootOut = tsBoot + (written - tsFrame) * 1_000_000_000L / Renderer.RATE
                     aheadMs = (bootOut - now) / 1e6
                     val ear = fit.utcAt(bootOut) + lagNs
+                    val held = hold.heldAt(bootOut)
                     if (m == null) {
-                        renderer.ticks(buf, CHUNK, ear); state = "ticking"
+                        renderer.ticks(buf, CHUNK, ear - held); state = "ticking"
                     } else {
-                        renderer.stream(buf, CHUNK, ear, m.startNs, m.dMs * 1_000_000L); state = "streaming"
+                        renderer.stream(buf, CHUNK, ear, m.startNs, m.dMs * 1_000_000L, held, hold.rateAt(bootOut)); state = "streaming"
                     }
                 }
                 t.write(buf, 0, buf.size, AudioTrack.WRITE_BLOCKING)

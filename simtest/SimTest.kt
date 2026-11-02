@@ -1,7 +1,7 @@
 // Desktop tests of the app's pure timing code: NTP parsing, the GPS and NTP fits, and the playout loop.
 // Needs the Kotlin compiler (kotlinc) and the Android SDK's android.jar. From the beachsync-prototype folder:
 //   P=android/app/src/main/java/org/beachsync/proto; J=$ANDROID_HOME/platforms/android-35/android.jar
-//   kotlinc -cp $J -d /tmp/simtest simtest/SimTest.kt $P/Flow.kt $P/Renderer.kt $P/NtpClient.kt $P/CsvLog.kt $P/Events.kt
+//   kotlinc -cp $J -d /tmp/simtest simtest/SimTest.kt $P/Flow.kt $P/Renderer.kt $P/NtpClient.kt $P/CsvLog.kt $P/Events.kt $P/Nudge.kt
 //   java -cp /tmp/simtest:$J:<kotlinc folder>/lib/kotlin-stdlib.jar SimTestKt
 import org.beachsync.proto.*
 import kotlin.math.abs
@@ -157,12 +157,19 @@ fun testNtpFit() {
     check(inside.toDouble() / total > 0.95, "true error inside the bound ${inside} of ${total} seconds")
 }
 
-/** A simulated phone: the DAC runs [ppm] fast or slow, time stamps have [jitterUs] of noise. */
-fun simPlayout(ppm: Double, jitterUs: Double, seconds: Int, seed: Int): Pair<Double, Double> {
+var lastSimJumps = 0
+
+/**
+ * A simulated phone: the DAC runs [ppm] fast or slow, time stamps have [jitterUs] of noise. If [gapAtS] is set, flowtime
+ * moves by [gapNs] at that moment and the gap closes over [periodS]; the error is measured against that closing target.
+ */
+fun simPlayout(ppm: Double, jitterUs: Double, seconds: Int, seed: Int, gapAtS: Int = -1, gapNs: Long = 0L, periodS: Double = 0.0): Pair<Double, Double> {
     val rnd = Random(seed)
     val rate = 48000.0 * (1 + ppm * 1e-6)                  // true frames per second
     val utc0 = 1_761_955_200_000_000_000L                   // boot clock = true time here; flowtime is exact
-    val fit = ClockFit(0, utc0, 0.0, 100.0, 0.0)
+    val fit0 = ClockFit(0, utc0, 0.0, 100.0, 0.0)
+    var hold = NudgeState(fit0, 0L, 0L, 0.0)
+    var shift = 0L
     val start = utc0 + 5_000_000_000L - 1_000_000_000L * 3  // stream start, whole second
     val d = 21_000_000_000L
     val lag = 0L
@@ -187,29 +194,93 @@ fun simPlayout(ppm: Double, jitterUs: Double, seconds: Int, seed: Int): Pair<Dou
                 haveTs = true
             }
         }
+        if (gapAtS >= 0 && shift == 0L && written >= gapAtS * 48000L) {
+            shift = gapNs
+            hold = NudgeState(ClockFit(0, utc0 + gapNs, 0.0, 100.0, 0.0), gapNs, now, gapNs / (periodS * 1e9))
+        }
         if (haveTs) {
             val bootOut = tsBoot + (written - tsFrame) * 1_000_000_000L / 48000
-            r.stream(buf, chunk, fit.utcAt(bootOut) + lag, start, d)
+            r.stream(buf, chunk, hold.fit!!.utcAt(bootOut) + lag, start, d, hold.heldAt(bootOut), hold.rateAt(bootOut))
             // the truth: when does each of these frames really play, and which stream sample should that be?
             val p0 = r.pos - chunk * r.ratio
             for (i in 0 until chunk step 60) {
                 val tTrue = playStart + ((written + i) / rate * 1e9)
-                val want = (tTrue - (start - utc0 + d)) * 48000 / 1e9
+                val want = (tTrue + shift - hold.heldAt(tTrue.toLong()) - (start - utc0 + d)) * 48000 / 1e9
                 val errUs = (p0 + i * r.ratio - want) / 48000 * 1e6
-                if (written > 15 * 48000) { sum2 += errUs * errUs; n++; worst = maxOf(worst, abs(errUs)) }
+                if (written > 45 * 48000) { sum2 += errUs * errUs; n++; worst = maxOf(worst, abs(errUs)) }
             }
         }
         written += chunk
     }
+    lastSimJumps = r.jumps
     return Pair(sqrt(sum2 / n), worst)
 }
 
 fun testPlayout() {
-    println("Playout loop: true heard-time error after the first 15 s (DAC rate off, noisy time stamps)")
+    println("Playout loop: true heard-time error after the first 45 s (DAC rate off, noisy time stamps)")
     for ((ppm, jit) in listOf(80.0 to 0.0, -80.0 to 0.0, 30.0 to 50.0, -30.0 to 200.0)) {
         val (rms, worst) = simPlayout(ppm, jit, 120, 3)
         check(worst < 10 + 0.5 * jit, "DAC ${"%+.0f".format(ppm)} ppm, stamp jitter ±${jit.toInt()} µs: rms ${"%.1f".format(rms)} µs, worst ${"%.1f".format(worst)} µs")
     }
+    println("Closing a gap: the stream follows the closing target, with no jump and no overshoot")
+    for ((gap, period) in listOf(5_000_000L to 30.0, -5_000_000L to 30.0, 5_000_000L to 5.6, 15_000_000L to 300.0)) {
+        val (rms, worst) = simPlayout(80.0, 0.0, 480, 3, gapAtS = 60, gapNs = gap, periodS = period)
+        check(worst < 20 && lastSimJumps == 0, "${gap / 1_000_000} ms over ${period} s: rms ${"%.1f".format(rms)} µs, worst ${"%.1f".format(worst)} µs, ${lastSimJumps} jumps")
+    }
+}
+
+fun testNudge() {
+    println("Nudge control: Auto closes gaps, Manual holds them until Go")
+    val s = 1_000_000_000L
+    val x0 = 1_761_955_200_000_000_000L
+    fun fit(off: Long) = ClockFit(0, x0 + off, 0.0, 100.0, 0.0)
+    val notes = ArrayList<String>()
+    val t0 = 1000 * s
+
+    val a = NudgeControl(NudgeMode.AUTO, null) { notes.add(it) }
+    a.tick(t0, fit(0))
+    check(a.gapAt(t0) == 0L, "the first fit is no gap")
+    a.tick(t0 + s, fit(50_000))
+    check(a.gapAt(t0 + s) == 0L && !a.state.closing, "a 0.05 ms routine correction is absorbed")
+    val f5 = fit(5_050_000)
+    a.tick(t0 + 2 * s, f5)
+    check(a.state.closing && abs(a.state.heldAt(t0 + 2 * s) - 5_000_000) < 100, "Auto starts closing a 5 ms gap straight away")
+    check(abs(a.state.heldAt(t0 + 32 * s) - 2_500_000) < 1000, "over the recommended 60 s: half gone after 30 s")
+    a.tick(t0 + 63 * s, f5)
+    check(a.gapAt(t0 + 63 * s) == 0L && !a.state.closing && notes.last().startsWith("Gap closed"), "it closes and says so")
+    a.tick(t0 + 64 * s, fit(35_050_000))
+    check(a.gapAt(t0 + 64 * s) == 0L && notes.last().contains("jumping"), "Auto jumps across a 30 ms gap")
+
+    val fast = NudgeControl(NudgeMode.AUTO, 1.0)
+    fast.tick(t0, fit(0)); fast.tick(t0 + s, fit(5_000_000))
+    check(abs(fast.state.rate - NudgeControl.MAX_RATE) < 1e-9, "a 1 s period on 5 ms is held to the rate limit")
+    check(abs(fast.secondsLeft(t0 + s) - 5.0 / 0.9) < 0.01, "so it really takes 5.6 s, and says so")
+
+    notes.clear()
+    val m = NudgeControl(NudgeMode.MANUAL, 10.0) { notes.add(it) }
+    m.tick(t0, fit(0))
+    val g = fit(5_000_000)
+    m.tick(t0 + s, g)
+    check(!m.state.closing && m.gapAt(t0 + 100 * s) == 5_000_000L && notes.last().contains("press Go"), "Manual holds the gap and doesn't let it grow")
+    m.tick(t0 + 101 * s, fit(5_010_000))
+    check(m.gapAt(t0 + 101 * s) == 5_010_000L && notes.size == 1, "routine corrections add up quietly while a gap is held")
+    m.go(t0 + 102 * s)
+    check(m.state.closing && abs(m.state.rate - 5.01e-4) < 1e-9, "Go closes it over the chosen 10 s")
+    m.pause(t0 + 107 * s)
+    check(!m.state.closing && abs(m.gapAt(t0 + 200 * s) - 2_505_000) < 1000, "Pause holds what's left")
+    m.setMode(NudgeMode.AUTO, t0 + 201 * s)
+    check(m.state.closing, "switching to Auto finishes the job")
+    m.setMode(NudgeMode.MANUAL, t0 + 202 * s)
+    m.jump(t0 + 202 * s)
+    check(m.gapAt(t0 + 203 * s) == 0L, "Jump clears the gap")
+    val big = fit(35_000_000)
+    m.tick(t0 + 204 * s, big)
+    check(!m.state.closing && m.gapAt(t0 + 204 * s) != 0L, "Manual holds even a large gap for the listener to choose")
+
+    val before = NudgeState(fit(0), 2_000_000L, t0, 1e-3)
+    check(before.heldAt(t0 + 3 * s) == 0L && before.rateAt(t0 + 3 * s) == 0.0, "a finished gap holds nothing and adds no rate")
+    val neg = NudgeState(fit(0), -2_000_000L, t0, -1e-3)
+    check(neg.heldAt(t0 + s) == -1_000_000L && neg.heldAt(t0 + 3 * s) == 0L, "negative gaps close the same way")
 }
 
 fun testTickTiming() {
@@ -296,6 +367,6 @@ fun testEvents() {
 }
 
 fun main() {
-    testNtp(); testGps(); testGpsWeighting(); testGpsEstimate(); testNtpFit(); testPlayout(); testTickTiming(); testChannel(); testEvents()
+    testNtp(); testGps(); testGpsWeighting(); testGpsEstimate(); testNtpFit(); testPlayout(); testTickTiming(); testChannel(); testEvents(); testNudge()
     println(if (failures == 0) "ALL PASSED" else "$failures FAILED")
 }

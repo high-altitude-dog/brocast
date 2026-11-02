@@ -184,6 +184,19 @@ This switch works at any point, including during a run, and the audio keeps play
 
 This is also the quick way to run the 10-minute GPS dropout test.
 
+## Rate nudge
+
+The audio clock is always tracked, with a fixed period of 3 s, because it can't wait. These controls decide how a gap closes when flowtime itself moves by more than 0.1 ms. Smaller corrections are absorbed quietly.
+
+| Control | What it does |
+|---|---|
+| **Auto** | The default. A gap starts closing straight away at the chosen or recommended period. Above 20 ms it jumps instead. |
+| **Manual** | A gap is held and shown. **Go** starts closing it, **Pause** stops, and **Jump** moves straight there. A held gap doesn't grow by itself, and it counts in the error shown on the SOURCE line. |
+| **Period** | A log slider from 1 s to 5 min. It can't go faster than the 0.09% rate limit, so a 5 ms gap takes at least 5.6 s. The readout shows the real time and pitch change. |
+| **Recommended** | Returns to the recommended period: 60 s, or longer if the gap needs it. |
+
+`status.csv` records the held gap and its closing rate.
+
 ## The event log
 
 The newest event always shows under the Start button. Tap it, or press **Show event log**, to see the latest 200, newest first. The log stays readable after you press Stop, until the next run starts.
@@ -206,5 +219,5 @@ These tests ran on the app's timing code, outside a phone:
 
 - **NTP parsing:** recovered a known offset to 1 ns, and refused replies with the wrong nonce and kiss-o'-death replies.
 - **GPS fit:** the data had 3.2 ppm of drift and 30 ns of scatter. The fit measured the drift to within 0.0001 ppm and tracked to within 23 ns. It ignored a one-off 5 ms outlier, and reset once on a real 2 ms step. After 60 s of holdover it was 6 ns out, against a bound of ±300 µs.
-- **Playout loop:** with the audio clock running ±80 ppm off, the heard-time error settled at 2–3 µs. With ±200 µs of jitter in the output time stamps it was 13 µs rms.
+- **Playout loop:** with the audio clock running ±80 ppm off, the heard-time error settled at about 2.5 µs. With ±200 µs of jitter in the output time stamps it was about 7 µs rms.
 - **Server and measure script:** checked against synthetic recordings with known gaps.

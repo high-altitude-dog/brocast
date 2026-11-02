@@ -50,10 +50,14 @@ class Renderer(private val clickHz: Double, private val source: SegmentSource?, 
         }
     }
 
-    /** Stream mode: stream sample n is heard when flowtime at the ear is start + n / 48 kHz + D. */
-    fun stream(buf: FloatArray, frames: Int, earUtc0: Long, startNs: Long, dNs: Long) {
+    /**
+     * Stream mode: stream sample n is heard when flowtime at the ear, less any gap being held ([heldNs]), is
+     * start + n / 48 kHz + D. [gapRate] is how fast that gap is closing; it goes straight into the playback rate,
+     * so the control loop below only has to track the audio clock and doesn't overshoot when a gap finishes closing.
+     */
+    fun stream(buf: FloatArray, frames: Int, earUtc0: Long, startNs: Long, dNs: Long, heldNs: Long = 0L, gapRate: Double = 0.0) {
         val src = source ?: return silence(buf, frames)
-        val want = (earUtc0 - startNs - dNs).toDouble() * RATE / 1e9
+        val want = (earUtc0 - startNs - dNs - heldNs).toDouble() * RATE / 1e9
         if (pos.isNaN() || abs(pos - want) > JUMP) {
             if (!pos.isNaN()) jumps++ else integral = 0.0
             pos = want
@@ -62,7 +66,7 @@ class Renderer(private val clickHz: Double, private val source: SegmentSource?, 
         // runs against flowtime, so the error settles at zero rather than parking at an offset.
         val e = pos - want
         integral = (integral + KI * e).coerceIn(-MAX_NUDGE, MAX_NUDGE)
-        ratio = 1.0 - (KP * e + integral).coerceIn(-MAX_NUDGE, MAX_NUDGE)
+        ratio = (1.0 - (KP * e + integral).coerceIn(-MAX_NUDGE, MAX_NUDGE) + gapRate).coerceIn(1.0 - MAX_NUDGE, 1.0 + MAX_NUDGE)
         posErrUs = e * 1e6 / RATE
         segN = Long.MIN_VALUE   // look segments up afresh each chunk: one may have just arrived
         var p = pos
@@ -105,8 +109,9 @@ class Renderer(private val clickHz: Double, private val source: SegmentSource?, 
         const val NS_PER_FRAME = 1e9 / RATE
         const val JUMP = 0.020 * RATE      // more than 20 ms out: jump straight there
         const val MAX_NUDGE = 0.001        // at most 0.1% faster or slower
-        const val KP = 1.0 / RATE          // 1 ms out gives the full 0.1% nudge; settles in about a second
-        const val KI = KP / 800            // the integral catches up over about 4 s (800 chunks): critically damped
+        const val TRACK_S = 3              // the audio clock tracking period: 3 s halves the time stamp jitter that 1 s lets through
+        const val KP = 1.0 / (RATE * TRACK_S)     // 3 ms out gives the full 0.1% nudge
+        const val KI = KP / (800 * TRACK_S)       // the integral catches up over about 12 s (2400 chunks): critically damped
         private const val BURST_NS = 5_000_000.0
         private const val ATTACK_NS = 200_000.0
 

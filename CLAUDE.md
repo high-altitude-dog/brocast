@@ -35,7 +35,8 @@ The whole point is to drive the spread of when listeners hear each sound to near
 |---|---|
 | `android/` | The app: Kotlin, no AndroidX, programmatic UI, package `org.beachsync.proto`. AGP 8.7.3, Kotlin 2.0.21, Gradle 8.11.1, compileSdk/targetSdk 35, minSdk 31. |
 | `android/.../Flow.kt` | `ClockFit`, `FlowTime` (source choice, with 20%-better-for-10-s hysteresis), line fits, `GpsFitter`, `NtpFitter` |
-| `android/.../Renderer.kt` | Tick and stream rendering, and the PI rate nudge (±0.1% at most, jump if more than 20 ms out) |
+| `android/.../Renderer.kt` | Tick and stream rendering, and the PI rate nudge that tracks the audio clock (±0.1% at most, jump if more than 20 ms out) |
+| `android/.../Nudge.kt` | How a gap closes when flowtime moves: Auto, Manual, Go and the period. The audio thread only reads one immutable `NudgeState`. Plain Kotlin, tested in `simtest/`. |
 | `android/.../Playout.kt` | The AudioTrack thread: output time stamps → flowtime at the ear → Renderer |
 | `android/.../GpsTime.kt` | GnssClock → UTC−boot samples, with full tracking on |
 | `android/.../NtpClient.kt` | SNTP to `ntp1`–`ntp3.npl.co.uk` every 16 s; `parseNtp` is pure |
