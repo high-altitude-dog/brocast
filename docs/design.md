@@ -127,7 +127,7 @@ The packager publishes each track or set once as a signed Opus file, with a sign
 | Timeline | A fixed start time, set once against NPL time. Sample k of a scheduled file is heard at start + (the file's start sample + k) / 48 kHz + D. | Counted from samples, never re-read from a clock, so moving or restarting a machine can't shift it |
 | Signed log | One schedule log per stream, listing each file's start sample, and one shared content log holding each file once, as 1 s blocks | The publisher's Ed25519 key is the stream's identity, and the signed Merkle tree replaces a manifest and separate hashes. One active writer only, because two writers or a stale backup could fork the log. |
 | Seed servers | Hold signed blocks and no secret key | Fixed capacity with a hard cap, from any provider. To move one: start the new seed, let it sync and announce, then retire the old one. |
-| Swarm | Peers find each other by topic over HyperDHT and share blocks directly | Seeders are phones on Wi-Fi, charging and not playing. Phones on mobile data download only. Many sub-topics avoid one overloaded DHT topic. |
+| Swarm | Peers find each other by topic over HyperDHT and share blocks directly | Seeders are phones on Wi-Fi, charging and not playing. Sharing is on by default, and a listener can turn it off. It stays off by default in Privacy mode. Phones on mobile data download only. Many sub-topics avoid one overloaded DHT topic. |
 | Starter nodes | First contact with the DHT | Saved peers first, then domain names across several domains, then built-in IP addresses |
 | Controller | Holds each event: stream, D, state, stop commands, announcements and an optional maximum sync error | A small signed state. Its polling rate needs setting for millions of phones. |
 | Time servers | NPL for the packager; regional servers that follow NPL time for phones without GPS, chosen from a signed list | Phones can't poll NPL directly at this scale: 62,500 queries a second per million phones at the prototype's 16 s interval |
@@ -162,7 +162,7 @@ The signed schedule says which file plays when, and the files never change. Each
 
 Listeners can opt in to keep files and replay them after flowtime. A kept file is byte for byte what the packager published, checked by its hash. Replay is ordinary offline playback with no flowtime or sync, so it stays outside the timing path.
 
-- **Storage:** the archive is separate from the fixed seeding allowance, and the listener sets its size. A track takes about 3.6 MB for 3 minutes at 160 kbps.
+- **Storage:** the archive is separate from the fixed seeding allowance, and the listener sets its size limit. Kept files stay outside that limit, so total storage can exceed it. A track takes about 3.6 MB for 3 minutes at 160 kbps.
 - **Tracks joined part-way:** the phone fetches the rest of the file on Wi-Fi.
 - **Other players:** some older players and car stereos can't play Opus. An export to AAC or MP3 can cover them later, outside the swarm.
 
@@ -264,7 +264,7 @@ These ways of improving on that are all proposed, and the nearby-phone method is
 - **Network correction table:** GPS phones report the NTP-versus-GPS gap by network, as opt-in telemetry. Other phones download the whole table and pick locally, so nothing is revealed.
 - **Longer averaging:** reduces noise for radio listening, but not bias.
 
-Turning GPS off doesn't hide a rough location if swarm peers can see the phone's IP address. So this mode defaults to no seeding or announcing and a new key each session, offers download from seed servers only (subject to the capacity cap), and states plainly what peers and servers can see.
+Turning GPS off doesn't hide a rough location if swarm peers can see the phone's IP address. So this mode defaults to no seeding or announcing and a new key each session, offers download from seed servers only (subject to the capacity cap), and states plainly what peers and servers can see. Social features, once built, are also off in this mode.
 
 ### Choosing NTP servers
 
@@ -361,7 +361,7 @@ Phones with satellites off or no usable GPS follow the figures in Without satell
 
 A radio listener opens the app and hears the station within seconds. At an event, a listener scans a code and joins the same timeline. A phone plays at once on the best time it has, and no failure ever makes it play late: it plays silence and rejoins instead.
 
-1. **Before listening:** install the app. On Wi-Fi, the phone can fetch ahead and seed while charging, if the listener allows it. Nothing asks for location at install.
+1. **Before listening:** install the app. On Wi-Fi, the phone can fetch ahead and seed while charging, unless the listener turns sharing off. Nothing asks for location at install.
 2. **Choose:** Use satellites and no satellites are offered as equal choices. The explanation appears once, and the app never asks again.
 3. **Join:** open the app for the station, or scan an event's QR code or tap its link. The event may be the main station or, if allowed, its own stream (open question).
 4. **Play:** output starts within seconds at the stream point due now, usually mid-track, on the best time available. With strict mode on, it waits until the error is under the listener's limit.
@@ -585,7 +585,7 @@ The app asks for precise location only if the listener turns Use satellites on, 
 - **Store listing:** Google Play asks apps to justify location use. The wording: “used only to read satellite time; your position is not stored or sent”.
 - **Privacy:** the app may have to request GPS position updates to keep the chip running; it discards the positions. Swarm peers can see a phone's IP address, which gives a rough location, so the app says so plainly and Privacy mode limits it (see Without satellites). Peers use a new key for each day's swarm, so a stable key can't track a phone. Calibration recordings never leave the phone and are discarded after the measurement. Telemetry is opt-in and carries time quality, buffer health, errors and measured headset delays, nothing else.
 - **Battery:** GPS, data and audio together for hours. Not yet measured; set a target before the field trials. GPS may not need polling continuously, especially for radio listening; this is being kept in view, with drift and re-lock time to measure first. Output chunks of 5 ms mean 200 wake-ups a second, and longer chunks may be possible for radio, if the rig shows the spread stays the same.
-- **CPU:** average load looks low: Opus decode is an estimated 2% of one core or less. Short stalls on the audio thread are the risk. Not yet measured on phones.
+- **CPU:** average load looks low: Opus decode is an estimated 2% of one core or less. Short stalls on the audio thread are the risk. On a Pixel 10 Pro release build, playing ticks with the test bench on screen and no decode yet, the app used about 15% of one core: screen 10%, audio thread 2.7%. The weaker Galaxy isn't measured yet.
 - **Data:** about 72 MB an hour at Opus 160 kbps. A full day is about 1.7 GB, and a 60 s buffer about 1.2 MB. A phone that still holds a file doesn't fetch it again when it repeats.
 
 ## Test plan and build phases
@@ -610,6 +610,7 @@ Ideas kept for later, not in the first build.
 - **iPhone support:** iPhones are half of UK phones but cannot read GPS time, so they would run flowtime on NTP (about 5–30 ms) with an honest, wider sync error estimate; later perhaps tighter via Wi-Fi Aware from nearby Android phones. Parked for now; the reach cost is the main reason to revisit it.
 - **Bluetooth control mesh:** a local backup for signed stop commands, announcements and schedule changes at events when the mobile network is congested. It suits small messages, not audio: 100 phones relaying 160 kbps would need about 16 Mbps of transmissions, against about 1.2 Mbps for a good single link. It must be shown not to disturb Bluetooth headphones first.
 - **Nearby handover:** a phone that arrives without the download gets it from a neighbour over Wi-Fi, checked against the signed log.
+- **Social features:** planned, with details still to decide. Privacy mode disables them.
 
 ## Open questions
 
