@@ -2,6 +2,14 @@
 
 Claude Desktop: read this before each design round. Newest notes go first.
 
+## 2026-11-02: required terms
+
+The user decided these words must always be used: **Rushing** (heard ahead of flowtime), **Dragging** (heard behind flowtime), **Catching-up** (nudging faster to catch up) and **Slowing-down** (nudging slower). They're in `CLAUDE.md`, the Stream gap screen, the gap row and the event log. Please update the spec, including `sound is behind flowtime` and `gap · closes in`. Those screens still show lag in the code's held gap only, not headphone lag. The pitch figure now shows a minus when Slowing-down.
+
+## 2026-11-02: output kinds and names
+
+The user decided: published results use the name the device reports, not editable, plus model number and firmware where available. Bluetooth portable speakers get their own label and icon. Built so far: tile labels `HEADPHONES`, `PORTABLE SPEAKER` and `CAR AUDIO`, from the class the device declares, which can be wrong. Please design an icon for each, and check the Earcup test's wording for a portable speaker, which has no cup.
+
 ## 2026-11-02: latest event wraps
 
 The user asked for the latest event row to grow onto more lines rather than overflow, so its text now wraps with no line limit and the row gets taller. Please update the design and spec.

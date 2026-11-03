@@ -3,6 +3,8 @@ package org.beachsync.proto
 import android.Manifest
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothClass
+import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
 import android.content.Context
 import android.content.pm.PackageManager
@@ -23,7 +25,9 @@ import java.util.Date
 import java.util.Locale
 
 /** The output a listener would hear, and the name Android gives it: for a Bluetooth headset, usually the name it reports. */
-class AudioOutput(val device: AudioDeviceInfo?, val name: String, val route: String) {
+enum class OutputKind(val label: String) { PHONE_SPEAKER("SPEAKER"), HEADPHONES("HEADPHONES"), PORTABLE_SPEAKER("PORTABLE SPEAKER"), CAR("CAR AUDIO") }
+
+class AudioOutput(val device: AudioDeviceInfo?, val name: String, val route: String, val kind: OutputKind) {
     val key get() = "$route|$name"
     val external get() = device != null && device.type != AudioDeviceInfo.TYPE_BUILTIN_SPEAKER
 }
@@ -37,27 +41,34 @@ fun currentOutput(ctx: Context): AudioOutput {
     )
     for ((type, route) in order) {
         val d = all.firstOrNull { it.type == type } ?: continue
-        val product = bluetoothName(ctx, d) ?: d.productName?.toString().orEmpty()
+        val bt = bluetoothDevice(ctx, d)
+        // The name the device itself reports, never the one a person gave it on their phone: results get compared across listeners.
+        @SuppressLint("MissingPermission") val reported = try { bt?.name } catch (_: Exception) { null }
+        val product = reported ?: d.productName?.toString().orEmpty()
         val name = if (type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER || product.isBlank() || product == Build.MODEL) route else product
-        return AudioOutput(d, name, route)
+        val kind = if (type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER) OutputKind.PHONE_SPEAKER else bluetoothKind(bt)
+        return AudioOutput(d, name, route, kind)
     }
-    return AudioOutput(null, "No output", "None")
+    return AudioOutput(null, "No output", "None", OutputKind.PHONE_SPEAKER)
 }
 
-/**
- * What a Bluetooth headset calls itself, which usually includes its model. Android's audio system often doesn't pass this on,
- * so it comes from Bluetooth instead, and needs the nearby devices permission. Null without it.
- */
+/** What's connected, as far as Bluetooth says. Null without the nearby devices permission. */
 @SuppressLint("MissingPermission")     // checked here
-private fun bluetoothName(ctx: Context, d: AudioDeviceInfo): String? {
+private fun bluetoothDevice(ctx: Context, d: AudioDeviceInfo): BluetoothDevice? {
     if (d.type != AudioDeviceInfo.TYPE_BLUETOOTH_A2DP && d.type != AudioDeviceInfo.TYPE_BLE_HEADSET) return null
     if (ctx.checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) return null
-    val address = d.address
-    if (!BluetoothAdapter.checkBluetoothAddress(address)) return null
-    return try {
-        val device = ctx.getSystemService(BluetoothManager::class.java).adapter?.getRemoteDevice(address)
-        device?.alias ?: device?.name
-    } catch (_: Exception) { null }
+    if (!BluetoothAdapter.checkBluetoothAddress(d.address)) return null
+    return try { ctx.getSystemService(BluetoothManager::class.java).adapter?.getRemoteDevice(d.address) } catch (_: Exception) { null }
+}
+
+/** The kind of Bluetooth audio device, from the class it declares. Some devices declare this wrongly or vaguely. */
+@SuppressLint("MissingPermission")
+private fun bluetoothKind(device: BluetoothDevice?): OutputKind {
+    return when (try { device?.bluetoothClass?.deviceClass } catch (_: Exception) { null }) {
+        BluetoothClass.Device.AUDIO_VIDEO_LOUDSPEAKER, BluetoothClass.Device.AUDIO_VIDEO_PORTABLE_AUDIO, BluetoothClass.Device.AUDIO_VIDEO_HIFI_AUDIO -> OutputKind.PORTABLE_SPEAKER
+        BluetoothClass.Device.AUDIO_VIDEO_CAR_AUDIO -> OutputKind.CAR
+        else -> OutputKind.HEADPHONES
+    }
 }
 
 /**
@@ -189,6 +200,8 @@ class EarcupRun(private val ctx: Context, private val output: AudioOutput) : Thr
     private fun log(o: EarcupOutcome) {
         val dir = ctx.getExternalFilesDir(null) ?: ctx.filesDir
         val f = File(dir, "earcup-results.csv")
+        // Rows gained a column: an older file keeps its own header, so it moves aside rather than mixing the two.
+        if (f.exists() && !f.useLines { it.first() }.contains(",kind,")) f.renameTo(File(dir, "earcup-results-old.csv"))
         val fresh = !f.exists()
         val time = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.UK).format(Date())
         val row = when (o) {
@@ -197,8 +210,8 @@ class EarcupRun(private val ctx: Context, private val output: AudioOutput) : Thr
             is EarcupOutcome.Problem -> "problem,,,,,,,,"
         }
         FileWriter(f, true).use {
-            if (fresh) it.write("time,phone,route,output,result,later_ms,speaker_ms,headphones_ms,scatter_ms,speaker_strength,headphones_strength,speaker_level,headphones_level\n")
-            it.write("$time,${Build.MODEL},${output.route},\"${output.name.replace("\"", "'")}\",$row\n")
+            if (fresh) it.write("time,phone,route,kind,output,result,later_ms,speaker_ms,headphones_ms,scatter_ms,speaker_strength,headphones_strength,speaker_level,headphones_level\n")
+            it.write("$time,${Build.MODEL},${output.route},${output.kind},\"${output.name.replace("\"", "'")}\",$row\n")
         }
     }
 

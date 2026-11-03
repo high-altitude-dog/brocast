@@ -30,6 +30,14 @@ class NudgeState(val fit: ClockFit?, val held0: Long, val boot0: Long, val rate:
     fun done(boot: Long) = rate != 0.0 && boot >= end
 }
 
+/** The project's terms. A positive held gap means the audio is heard behind flowtime, and a positive rate speeds it up. */
+fun gapWord(heldNs: Long) = when { heldNs > 0 -> "Dragging"; heldNs < 0 -> "Rushing"; else -> "In step" }
+fun nudgeWord(rate: Double) = when { rate > 0 -> "Catching-up"; rate < 0 -> "Slowing-down"; else -> "Not nudging" }
+
+/** Formats only the number: the sentence itself holds a percent sign, which a format string would read as an instruction. */
+fun tooFastNote(gapNs: Long, fastestS: Double) =
+    "Log scale. The hatched start is too fast: the 0.1% rate limit means ${fmtDuration(gapNs.toDouble())} takes at least " + "%.1f s.".format(java.util.Locale.ROOT, fastestS)
+
 class NudgeControl(mode: NudgeMode, periodS: Double?, private val note: (String) -> Unit = {}) {
     @Volatile var state = NudgeState(null, 0L, 0L, 0.0)
         private set
@@ -73,7 +81,7 @@ class NudgeControl(mode: NudgeMode, periodS: Double?, private val note: (String)
                 state = NudgeState(fit, 0L, boot, 0.0)   // routine: the Renderer takes a step this small in its stride
             }
             mode == NudgeMode.AUTO && abs(held) > JUMP_NS -> {
-                note("Gap of ${fmt(held)}: too large to nudge, jumping")
+                note("${gapWord(held)} ${fmt(held)}: too large to nudge, jumping")
                 state = NudgeState(fit, 0L, boot, 0.0)   // the Renderer jumps when it sees the difference
             }
             wasClosing -> {
@@ -82,7 +90,7 @@ class NudgeControl(mode: NudgeMode, periodS: Double?, private val note: (String)
             }
             mode == NudgeMode.AUTO -> begin(fit, held, boot)
             else -> {
-                if (cur.held0 == 0L || finished) note("Gap of ${fmt(held)} held: press Go to close it")
+                if (cur.held0 == 0L || finished) note("${gapWord(held)} ${fmt(held)}: press Go to correct it")
                 state = NudgeState(fit, held, boot, 0.0)
             }
         }
@@ -120,7 +128,7 @@ class NudgeControl(mode: NudgeMode, periodS: Double?, private val note: (String)
         if (!s.closing || s.done(boot)) return
         val h = s.heldAt(boot)
         state = NudgeState(s.fit, h, boot, 0.0)
-        note("Paused with ${fmt(h)} of the gap left")
+        note("Paused, still ${gapWord(h).lowercase()} ${fmt(h)}")
     }
 
     @Synchronized
@@ -129,16 +137,16 @@ class NudgeControl(mode: NudgeMode, periodS: Double?, private val note: (String)
         val h = s.heldAt(boot)
         if (h == 0L) return
         state = NudgeState(s.fit, 0L, boot, 0.0)
-        note("Jumped across a gap of ${fmt(h)}")
+        note("Jumped, was ${gapWord(h).lowercase()} ${fmt(h)}")
     }
 
     private fun begin(fit: ClockFit, held: Long, boot: Long) {
         closeStart = boot
         state = NudgeState(fit, held, boot, rateFor(held))
-        note("Gap of ${fmt(held)}: closing over %.0f s".format(effectivePeriodS(abs(held))))
+        note("${gapWord(held)} ${fmt(held)}: ${nudgeWord(state.rate).lowercase()} over %.0f s".format(effectivePeriodS(abs(held))))
     }
 
-    private fun closed(boot: Long) = note("Gap closed in %.0f s".format((boot - closeStart) / 1e9))
+    private fun closed(boot: Long) = note("Back in step after %.0f s".format((boot - closeStart) / 1e9))
 
     private fun rateFor(held: Long): Double {
         val r = abs(held) / (effectivePeriodS(abs(held)) * 1e9)

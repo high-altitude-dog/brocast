@@ -75,6 +75,9 @@ import org.beachsync.proto.Session
 import org.beachsync.proto.Source
 import org.beachsync.proto.fmtDuration
 import org.beachsync.proto.fmtSigned
+import org.beachsync.proto.gapWord
+import org.beachsync.proto.tooFastNote
+import org.beachsync.proto.nudgeWord
 import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.ln
@@ -227,12 +230,13 @@ fun StreamGapScreen(state: BenchState, actions: BenchActions, back: () -> Unit) 
     val closing = n != null && n.state.closing && gap != 0L
     val manual = state.nudgeMode == NudgeMode.MANUAL
     val period = if (n != null && gap != 0L) n.effectivePeriodS(abs(gap)) else state.nudgePeriodS ?: NudgeControl.RECOMMENDED_S
-    val rate = if (closing) abs(n!!.state.rate) else if (gap != 0L) abs(gap) / (period * 1e9) else 0.0
+    val rate = if (closing) n!!.state.rate else if (gap != 0L) gap / (period * 1e9) else 0.0   // signed: positive speeds the audio up
     Screen {
         ScreenHeader("Stream gap", back)
         Card {
             BasicText("HELD GAP", style = Tokens.Text.cardLabel.style())
-            BasicText(if (gap == 0L) "No gap" else fmtDuration(gap.toDouble()), style = Tokens.Text.hero.style())
+            BasicText(if (gap == 0L) "In step" else fmtDuration(gap.toDouble()), style = Tokens.Text.hero.style())
+            if (gap != 0L) BasicText(gapWord(gap) + (if (closing) " · " + nudgeWord(rate).lowercase() else ""), style = Tokens.Text.bodyStrong.style(Ink.accent))
             if (gap != 0L) {
                 val why = state.eventLog?.recent(200).orEmpty().firstOrNull { it.lane == Lane.CLOCK }
                 if (why != null) BasicText("Latest clock event at ${eventTime(why)}: ${why.text}", style = Tokens.Text.body.style())
@@ -263,7 +267,7 @@ fun StreamGapScreen(state: BenchState, actions: BenchActions, back: () -> Unit) 
             }
             SliderLabels()
             BasicText(
-                if (fastest > NudgeControl.MIN_PERIOD_S) "Log scale. The hatched start is too fast: the 0.1% rate limit means ${fmtDuration(gap.toDouble())} takes at least %.1f s.".format(Locale.ROOT, fastest)
+                if (fastest > NudgeControl.MIN_PERIOD_S) tooFastNote(gap, fastest)
                 else "Log scale. rec. marks the recommended period.",
                 style = Tokens.Text.small.style(),
             )
@@ -274,7 +278,7 @@ fun StreamGapScreen(state: BenchState, actions: BenchActions, back: () -> Unit) 
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 InsetTile("TIME LEFT", if (gap == 0L) "—" else "%.1f s".format(Locale.ROOT, if (closing) n!!.secondsLeft(boot) else period), "", Modifier.weight(1f))
-                InsetTile("PITCH CHANGE", if (rate == 0.0) "—" else "+%.3f%%".format(Locale.ROOT, rate * 100), if (rate == 0.0) "" else "%.1f ¢".format(Locale.ROOT, 1200 * log2(1 + rate)), Modifier.weight(1f))
+                InsetTile("PITCH CHANGE", if (rate == 0.0) "—" else fmtPitch(rate), if (rate == 0.0) "" else "%.1f ¢".format(Locale.ROOT, abs(1200 * log2(1 + rate))), Modifier.weight(1f))
             }
             if (gap != 0L) Preview(gap, period)
         }

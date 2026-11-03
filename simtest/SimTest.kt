@@ -247,7 +247,7 @@ fun testNudge() {
     check(a.state.closing && abs(a.state.heldAt(t0 + 2 * s) - 5_000_000) < 100, "Auto starts closing a 5 ms gap straight away")
     check(abs(a.state.heldAt(t0 + 32 * s) - 2_500_000) < 1000, "over the recommended 60 s: half gone after 30 s")
     a.tick(t0 + 63 * s, f5)
-    check(a.gapAt(t0 + 63 * s) == 0L && !a.state.closing && notes.last().startsWith("Gap closed"), "it closes and says so")
+    check(a.gapAt(t0 + 63 * s) == 0L && !a.state.closing && notes.last().startsWith("Back in step"), "it closes and says so")
     a.tick(t0 + 64 * s, fit(35_050_000))
     check(a.gapAt(t0 + 64 * s) == 0L && notes.last().contains("jumping"), "Auto jumps across a 30 ms gap")
 
@@ -516,6 +516,9 @@ fun testFetchPlan() {
 
 fun testLibrary() {
     println("Library")
+    check(tooFastNote(5_000_000L, 5.6).contains("0.1% rate limit") && tooFastNote(-5_000_000L, 5.6).contains("5.6 s"), "the rate limit note, with its percent sign, doesn't crash")
+    check(gapWord(5L) == "Dragging" && gapWord(-5L) == "Rushing" && gapWord(0L) == "In step", "a held gap means dragging, its opposite rushing")
+    check(nudgeWord(0.001) == "Catching-up" && nudgeWord(-0.001) == "Slowing-down", "a faster nudge is catching-up, a slower one slowing-down")
     val a = LibraryItem("a", "A", "", 3, 0, ""); val b = LibraryItem("b", "B", "", 2, 0, "")
     val e = Edition(1000L, listOf(a, b))
     check(e.at(0)!!.first === a && e.at(0)!!.second == 0L && e.at(2)!!.second == 2L, "segments fall in the first set")

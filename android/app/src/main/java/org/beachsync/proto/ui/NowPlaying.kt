@@ -112,7 +112,7 @@ fun NowPlaying(state: BenchState, actions: BenchActions, openLog: () -> Unit, op
             Tile("SOURCE", FlowTime.chosen?.name?.takeIf { s != null } ?: "—", if (s == null) "" else if (s.gps.active) "$gold${s.gps.used} sats" else "Satellites off", Modifier.weight(1f))
             // Named for the output in use: this lag also applies to a phone's own speaker.
             val out = actions.output()
-            Tile(if (out.external) "HEADPHONES" else "SPEAKER", "${s?.s?.lagMs ?: state.lag} ms", if (out.external) out.name else state.lagSource, Modifier.weight(1f))
+            Tile(out.kind.label, "${s?.s?.lagMs ?: state.lag} ms", if (out.external) out.name else state.lagSource, Modifier.weight(1f))
             Tile("AHEAD", "—", "downloaded", Modifier.weight(1f))
         }
         Card { SatellitesRow(state.satellites, actions::setSatellites, "Position stays on this phone · off = Privacy mode") }

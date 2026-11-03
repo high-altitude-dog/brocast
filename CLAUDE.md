@@ -59,6 +59,10 @@ To keep tokens low:
 | Headphone lag | Ear time minus Android's output time stamp. Entered per phone, in ms. |
 | Gold / Silver | Gold means the GNSS chip stamps its clock reports with the boot clock; Silver means a report is stamped when it arrives. These are labels only. |
 | Brocast clock | Any on-screen display of flowtime |
+| Rushing | The audio is heard by the user ahead of flowtime. Always use this word. |
+| Dragging | The audio is heard by the user behind flowtime. Always use this word. |
+| Catching-up | The audio is being nudged faster to catch up. Always use this word. |
+| Slowing-down | The audio is being nudged slower. Always use this word. |
 
 ## Sign conventions
 

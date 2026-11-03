@@ -462,7 +462,7 @@ private fun partsText(parts: List<StatusPart>) = buildAnnotatedString {
 }
 
 /** "+0.014%": the playback rate change while a gap closes. Very slow closes keep more places, so they don't read as zero. */
-private fun fmtPitch(rate: Double): String {
+internal fun fmtPitch(rate: Double): String {
     val percent = abs(rate) * 100
     val format = when { percent >= 0.1 -> "%.2f%%"; percent >= 0.01 -> "%.3f%%"; else -> "%.4f%%" }
     return (if (rate < 0) "−" else "+") + format.format(Locale.ROOT, percent)
@@ -490,7 +490,7 @@ internal fun NudgeRow(state: BenchState, openNudge: () -> Unit, tickMs: Long = S
             val small = Tokens.Text.small.style(Ink.muted).copy(fontSize = 11.sp)
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
                 BasicText(
-                    if (closing.closing) "gap · closes in " + fmtDuration(s.nudge.secondsLeft(boot) * 1e9) else "gap · paused",
+                    if (closing.closing) org.beachsync.proto.nudgeWord(closing.rate) + " · " + fmtDuration(s.nudge.secondsLeft(boot) * 1e9) + " left" else org.beachsync.proto.gapWord(gap) + " · paused",
                     style = small, overflow = TextOverflow.Ellipsis, maxLines = 1,
                 )
                 BasicText(
