@@ -43,6 +43,7 @@ class GpsTime(ctx: Context, private val log: CsvLog) {
     @Volatile var rmsNs = Double.NaN
     @Volatile var fitN = 0
     @Volatile var rejected = 0
+    @Volatile var rejectedNoFix = 0   // clock reports ignored because the chip had no satellites in use and gave no uncertainty
     @Volatile var resets = 0
     @Volatile var deliveryMs = Double.NaN
     /** What the chip says about itself, for the Satellites screen. Written on the gnss thread, read by the UI. */
@@ -112,6 +113,9 @@ class GpsTime(ctx: Context, private val log: CsvLog) {
         epochs++
         if (!c.hasFullBiasNanos()) { status = "waiting for GPS time"; return }
         val biasUnc = if (c.hasBiasUncertaintyNanos()) c.biasUncertaintyNanos else 0.0
+        // A chip with no satellites in use and no uncertainty to report has no time solution, and its clock can be a whole second out
+        // (seen on a Pixel 10 Pro on 2 Nov 2026: 1.03 s behind for three minutes). Ignore those reports and carry on from the last fit.
+        if (used == 0 && biasUnc <= 0.0) { rejectedNoFix++; status = "no satellites in use: ignoring the chip's clock"; return }
         if (biasUnc > 1e6) { status = "GPS time still rough (±%.1f ms)".format(biasUnc / 1e6); return }
         val leap = if (c.hasLeapSecond()) c.leapSecond else 18
         val bias = if (c.hasBiasNanos()) c.biasNanos else 0.0

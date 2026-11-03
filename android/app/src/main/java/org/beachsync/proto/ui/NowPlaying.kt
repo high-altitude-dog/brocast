@@ -298,6 +298,7 @@ private fun badge(s: Session?, boot: Long, lagUncNs: Double): Badge {
     val grade = when (s.gps.gold) { true -> "GPS · Gold"; false -> "GPS · Silver"; null -> "GPS" }
     return when {
         FlowTime.fit() == null -> Badge("NOT IN SYNC", "✕", Ink.danger, "", "No time source")
+        s.clockCheckFailed -> Badge("CLOCK CHECK FAILED", "✕", Ink.danger, figure, "GPS ≠ NTP")
         s.stream != null && s.stream.manifest == null -> Badge("NOT IN SYNC", "✕", Ink.danger, "", "No stream")
         !s.gps.active -> Badge("PRIVACY MODE", "⊘", Ink.textSecondary, figure, FlowTime.chosen?.name ?: "")
         FlowTime.chosen == Source.NTP -> Badge("INTERNET TIME", "▲", Ink.warn, figure, "NTP")

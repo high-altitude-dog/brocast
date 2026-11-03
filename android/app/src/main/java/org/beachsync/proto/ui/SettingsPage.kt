@@ -25,7 +25,7 @@ import androidx.compose.ui.unit.dp
 
 /** Only the LISTENING section for now: the design's other sections have nothing behind them yet. */
 @Composable
-fun SettingsPage(state: BenchState, actions: BenchActions, back: () -> Unit, openCalibration: () -> Unit, openSatellites: () -> Unit) {
+fun SettingsPage(state: BenchState, actions: BenchActions, back: () -> Unit, openCalibration: () -> Unit, openSatellites: () -> Unit, openSync: () -> Unit) {
     rememberTick(SETTINGS_TICK_MS).value    // the output's name can change during a run
     val s = state.session
     Column(
@@ -40,6 +40,10 @@ fun SettingsPage(state: BenchState, actions: BenchActions, back: () -> Unit, ope
             Column(Modifier.fillMaxWidth().heightIn(min = Tokens.Space.touchTarget.dp).clickable(role = Role.Button, onClick = openSatellites), Arrangement.Center) {
                 BasicText("Satellites", style = Tokens.Text.bodyStrong.style())
                 BasicText("Your chip, your sky and what limits timing", style = Tokens.Text.small.style(Ink.textSecondary))
+            }
+            Column(Modifier.fillMaxWidth().heightIn(min = Tokens.Space.touchTarget.dp).clickable(role = Role.Button, onClick = openSync), Arrangement.Center) {
+                BasicText("Sync view", style = Tokens.Text.bodyStrong.style())
+                BasicText("See whether phones agree, side by side", style = Tokens.Text.small.style(Ink.textSecondary))
             }
             Column(Modifier.fillMaxWidth().heightIn(min = Tokens.Space.touchTarget.dp).clickable(role = Role.Button, onClick = openCalibration), Arrangement.Center) {
                 BasicText("Calibration", style = Tokens.Text.bodyStrong.style())

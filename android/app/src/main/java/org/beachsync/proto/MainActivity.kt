@@ -23,6 +23,7 @@ import org.beachsync.proto.ui.BenchState
 import org.beachsync.proto.ui.CalibrationPage
 import org.beachsync.proto.ui.EarcupPage
 import org.beachsync.proto.ui.SatellitesScreen
+import org.beachsync.proto.ui.SyncScope
 import org.beachsync.proto.ui.NowPlaying
 import org.beachsync.proto.ui.EventLogScreen
 import org.beachsync.proto.ui.StreamGapScreen
@@ -96,8 +97,9 @@ class MainActivity : ComponentActivity(), BenchActions {
                 Page.CALIBRATION -> CalibrationPage(state, this, { page = home }, { resetEarcup(); page = Page.EARCUP })
                 Page.EARCUP -> EarcupPage(state, this) { page = Page.CALIBRATION }
                 Page.SIGNALS -> TimeSignalsScreen(state, this, { page = Page.SATELLITES }) { page = home }
+                Page.SYNC -> SyncScope(state) { page = Page.SETTINGS }
                 Page.SATELLITES -> SatellitesScreen(state, this, { page = home }, { page = Page.SIGNALS })
-                Page.SETTINGS -> SettingsPage(state, this, { page = home }, { page = Page.CALIBRATION }, { page = Page.SATELLITES })
+                Page.SETTINGS -> SettingsPage(state, this, { page = home }, { page = Page.CALIBRATION }, { page = Page.SATELLITES }, { page = Page.SYNC })
                 Page.BENCH -> TestBench(state, this, { logLane = it; from = Page.BENCH; page = Page.LOG }, { from = Page.BENCH; page = Page.NUDGE })
                 Page.LOG -> EventLogScreen(state, logLane) { page = from }
                 Page.NUDGE -> StreamGapScreen(state, this) { page = from }
@@ -262,7 +264,7 @@ class MainActivity : ComponentActivity(), BenchActions {
             .apply()
     }
 
-    private enum class Page { NOW, BENCH, LOG, NUDGE, SETTINGS, SIGNALS, CALIBRATION, EARCUP, SATELLITES }
+    private enum class Page { NOW, BENCH, LOG, NUDGE, SETTINGS, SIGNALS, CALIBRATION, EARCUP, SATELLITES, SYNC }
 
     companion object {
         /** Kept outside the activity, so a test run survives the screen being rebuilt. */

@@ -621,6 +621,30 @@ fun testCalibration() {
     check(parseHandshakeCode("12a4") == null && parseHandshakeCode("123") == null, "a mistyped code is refused")
 }
 
+/** GPS against internet time: only a gap beyond internet time's own error counts, and only after 10 s. */
+fun testClockCheck() {
+    println("Clock check (GPS against internet time)")
+    val s = 1_000_000_000L
+    fun reading(t: Long, diffMs: Double, ntpErrMs: Double) =
+        Reading(t * s, null, Source.GPS, 2e5, t * s, 0, 0, 0L, null, 0, null, null, null, 0, diffMs * 1e6, ntpErrMs * 1e6)
+    val a = EventDetector()
+    val noisy = (1..40L).flatMap { a.update(reading(it, if (it % 2 == 0L) 70.0 else -60.0, 150.0)) }.filter { it.text.startsWith("Clock check") }
+    check(!a.clockCheckFailed && noisy.isEmpty(), "normal internet-time noise (±70 ms against ±150 ms) never fails the check")
+    val b = EventDetector()
+    val early = (1..6L).flatMap { b.update(reading(it, 1000.0, 150.0)) }.filter { it.text.startsWith("Clock check") }
+    check(!b.clockCheckFailed && early.isEmpty(), "a 1 s gap isn't flagged until it has lasted 10 s")
+    val later = (7..20L).flatMap { b.update(reading(it, 1000.0, 150.0)) }.filter { it.text.startsWith("Clock check") }
+    check(b.clockCheckFailed && later.size == 1 && later[0].text.contains("1.00 s"), "a 1 s gap that lasts fails the check, with one event naming the size")
+    val back = (21..40L).flatMap { b.update(reading(it, -44.0, 260.0)) }.filter { it.text.startsWith("Clock check passed") }
+    check(!b.clockCheckFailed && back.size == 1, "and passes again, once, when the clocks agree for 10 s")
+    val c = EventDetector()
+    (1..30L).forEach { c.update(reading(it, 120.0, 400.0)) }
+    check(!c.clockCheckFailed, "a gap inside internet time's own error (120 ms against ±400 ms) is not a failure")
+    val d = EventDetector()
+    (1..30L).forEach { d.update(Reading(it * s, null, Source.GPS, 2e5, it * s, 0, 0, 0L, null, 0, null, null, null)) }
+    check(!d.clockCheckFailed, "with no internet-time reading there is nothing to check against")
+}
+
 fun main() {
     testLibrary()
     testOpusBlock()
@@ -629,6 +653,6 @@ fun main() {
     testFetchPlan()
     testTickPattern()
     testSoloGate()
-    testNtp(); testGps(); testGpsWeighting(); testGpsEstimate(); testNtpFit(); testPlayout(); testTickTiming(); testChannel(); testEvents(); testNudge()
+    testNtp(); testGps(); testGpsWeighting(); testGpsEstimate(); testNtpFit(); testPlayout(); testTickTiming(); testChannel(); testEvents(); testClockCheck(); testNudge()
     println(if (failures == 0) "ALL PASSED" else "$failures FAILED")
 }

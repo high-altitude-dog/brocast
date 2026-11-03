@@ -99,6 +99,13 @@ class Session(ctx: Context, val s: Settings, private val satellitesOn: Boolean) 
         note(Lane.CLOCK, "Satellites turned ${if (on) "on" else "off"} by you")
     }
 
+    /** The Sync view's temporary diagnostic offset (ms, larger plays earlier). Logged, because it changes what is heard; it ends with the session. */
+    fun setDiagnosticOffsetMs(ms: Double) {
+        play.extraLagNs = Math.round(ms * 1e6)
+        note(Lane.AUDIO, if (ms == 0.0) "Diagnostic audio offset cleared" else "Diagnostic audio offset set to %+.0f ms (%s)".format(java.util.Locale.ROOT, ms, if (ms > 0) "plays earlier" else "plays later"))
+    }
+    val diagnosticOffsetMs get() = play.extraLagNs / 1e6
+
     private fun note(lane: Lane, text: String) {
         val boot = nowBoot()
         events.add(Event(boot, FlowTime.fit()?.utcAt(boot), lane, text))
@@ -113,6 +120,11 @@ class Session(ctx: Context, val s: Settings, private val satellitesOn: Boolean) 
             if (gps.active) gps.lastBoot else 0L, play.underruns, renderer.jumps, renderer.missingFrames,
             stream?.lastError, stream?.errors ?: 0, ntp.lastError,
             if (play.track != null) routeName(play) else null, play.error, gps.used,
+            ntpMinusGpsNs = run {
+                val g = FlowTime.gps; val n = FlowTime.ntp
+                if (g != null && n != null) (n.utcAt(boot) - g.utcAt(boot)).toDouble() else Double.NaN
+            },
+            ntpErrNs = FlowTime.ntp?.errAt(boot) ?: Double.NaN,
         ))
         for (e in found) events.add(e)
     }
@@ -174,6 +186,9 @@ class Session(ctx: Context, val s: Settings, private val satellitesOn: Boolean) 
 
     /** True while a better error estimate is being confirmed, with the figure it improves on. */
     fun tighteningFromNs() = detector.tighteningFromNs
+
+    /** True while GPS and internet time disagree beyond internet time's own error: one of them is wrong. */
+    val clockCheckFailed get() = detector.clockCheckFailed
 
     /** The test bench's status grid, from the fields design/ui-spec.md names. */
     fun statusRows(boot: Long): List<StatusRow> {

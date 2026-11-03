@@ -58,6 +58,8 @@ class Reading(
     val route: String?,          // null until there is an output
     val audioError: String?,
     val satellites: Int = 0,
+    val ntpMinusGpsNs: Double = Double.NaN,   // NaN unless both fits exist
+    val ntpErrNs: Double = Double.NaN,
 )
 
 /** Turns successive readings into events: one for each change, not one for each second a state lasts. */
@@ -87,6 +89,12 @@ class EventDetector {
     private var tightSince = -1L
     private var shownFrom = Double.NaN
     private var shownUntil = 0L
+    private var checkBadSince = -1L
+    private var checkGoodSince = -1L
+
+    /** True while GPS and internet time disagree by more than internet time's own error (and 50 ms) for 10 s. The design's CLOCK CHECK FAILED. */
+    @Volatile var clockCheckFailed = false
+        private set
 
     /** For a short while after a lasting improvement is confirmed, the error it improved on; otherwise NaN. For the screens. */
     @Volatile var tighteningFromNs = Double.NaN
@@ -123,6 +131,25 @@ class EventDetector {
         } else tightSince = -1
         if (r.boot >= shownUntil) shownFrom = Double.NaN
         tighteningFromNs = shownFrom
+
+        // The cross-check: both clocks can't be right. Internet time is rough (tens to hundreds of ms), so it only counts when the gap is bigger than its own error.
+        if (!r.ntpMinusGpsNs.isNaN() && !r.ntpErrNs.isNaN()) {
+            val limit = maxOf(CHECK_MIN_NS, r.ntpErrNs)
+            if (abs(r.ntpMinusGpsNs) > limit) {
+                checkGoodSince = -1
+                if (checkBadSince < 0) checkBadSince = r.boot
+                if (!clockCheckFailed && r.boot - checkBadSince >= CHECK_HOLD_NS) {
+                    clockCheckFailed = true
+                    add(Lane.CLOCK, "Clock check failed: GPS and internet time differ by ${fmtDuration(abs(r.ntpMinusGpsNs))} (internet time ±${fmtDuration(r.ntpErrNs)})")
+                }
+            } else {
+                checkBadSince = -1
+                if (clockCheckFailed) {
+                    if (checkGoodSince < 0) checkGoodSince = r.boot
+                    if (r.boot - checkGoodSince >= CHECK_HOLD_NS) { clockCheckFailed = false; add(Lane.CLOCK, "Clock check passed: GPS and internet time agree again") }
+                }
+            }
+        }
 
         if (r.gpsLastBoot > 0) {
             if (!gpsSeen) { gpsSeen = true; add(Lane.CLOCK, "First GPS time report") }
@@ -195,6 +222,8 @@ class EventDetector {
 
     private companion object {
         const val GPS_LOST_NS = 5_000_000_000L
+        const val CHECK_MIN_NS = 50_000_000.0
+        const val CHECK_HOLD_NS = 10_000_000_000L
         const val FRAMES_PER_MS = 48L
         const val SILENCE_OVER_NS = 3_000_000_000L   // this long with nothing missing ends a silence
         const val TIGHT_BETTER = 0.8

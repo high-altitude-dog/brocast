@@ -26,6 +26,8 @@ class Playout(
     @Volatile var stampDevUs = Double.NaN   // average disagreement between successive output time stamps
     @Volatile var track: AudioTrack? = null
     @Volatile var error: String? = null
+    /** A temporary diagnostic offset on top of the headphone lag, in ns, set from the Sync view. Larger plays earlier. 0 unless someone is testing. */
+    @Volatile var extraLagNs = 0L
 
     override fun run() {
         Process.setThreadPriority(Process.THREAD_PRIORITY_URGENT_AUDIO)
@@ -72,7 +74,7 @@ class Playout(
                     // boot-clock time at which frame `written` leaves the phone, then flowtime at the ear
                     val bootOut = tsBoot + (written - tsFrame) * 1_000_000_000L / Renderer.RATE
                     aheadMs = (bootOut - now) / 1e6
-                    val ear = fit.utcAt(bootOut) + lagNs
+                    val ear = fit.utcAt(bootOut) + lagNs + extraLagNs
                     val held = hold.heldAt(bootOut)
                     if (m == null) {
                         renderer.ticks(buf, CHUNK, ear - held); state = "ticking"

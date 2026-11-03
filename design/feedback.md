@@ -248,3 +248,29 @@ Also built, FYI: the sky and tap-for-detail card are live. Android's satellite s
 The user decided: **show small time units in microseconds, consistently, not milliseconds.** Built as: any value under 1 ms is shown in µs (or ns under 1 µs), for example `±400 µs` instead of `±0.4 ms`, and `±10 µs` instead of `±0.01 ms`. From 1 ms upward it stays in ms. This follows the existing `fmtDuration` rule on Now playing and Time signals, and now also covers Satellites, the Earcup result, Calibration and Settings.
 
 Please update the designs and `ui-spec.md` examples that show sub-millisecond values in ms: Satellites (`±0.1 ms`, `±0.00 ms`, `±0.01 ms`, `±0.2 ms`), Now playing's held gap (`0.20 ms`), badges (`±0.4 ms`) and any others. Also built in hand-off 12: the output lag's uncertainty is now in the total (flowtime and output lag combined, plus the held gap), so a phone with no calibration shows about ±40 ms and an amber badge.
+
+## 2 Nov: Sync view (please design and refine)
+
+The user wants a screen to see, at a glance, whether two phones are in sync and by how much. Reached from **Settings** (a `Sync view` row under Satellites). I built an engineering prototype (`ui/SyncScope.kt`) so we can try it on two phones now; the visual design is yours, so please refine or replace it. The user was inspired by an "Audio Video Sync test - 25 fps" video on YouTube. I couldn't watch it, so this is the user's own description.
+
+**The idea (the user's words):** a circle that fills with a clockwise sweep from grey to white, and the screen flashes white exactly when the sweep hand is at 0/360 degrees. It could be synced to flowtime (one flash per second), the beat of the music, or both. With two phones side by side it's easy to see which is ahead and which is behind. The screen could also have nudge forward and back buttons, for temporary adjustments while diagnosing.
+
+**What the prototype does now (flowtime only):**
+- A grey disc with a white sector that grows clockwise from 12 o'clock once per flowtime second. The whole screen goes white for the first 50 ms of each second.
+- A readout of the milliseconds into the second, and the screen's refresh interval.
+- A Flash on/off switch. One flash a second is below the usual photosensitivity threshold, but your "No flashing" setting should win; please say how the two relate.
+- **Two diagnostic nudges, in steps of ±1 and ±10 ms, with a reset:**
+  - **Screen:** shifts only the picture, to allow for a display's own delay.
+  - **Audio:** changes the heard timing of this phone (it adds to the headphone lag while playing), logs an event, and ends with the session.
+- Keeps the screen on. Needs a running session; otherwise it says "No clock yet".
+
+**Not built yet:** the **music-beat mode**. It needs the beat taken from the audio at the position being heard. I'll build the engineering side once you've decided how it should look and how it combines with the flowtime flash.
+
+**Please decide or design:**
+1. The look: the circle, the flash, the contrast with a dark UI, and how it reads on two phones side by side. Landscape may give more room.
+2. Where the nudge buttons sit, and a clear warning that the **Audio nudge changes what is heard** and isn't saved. Should leaving the screen reset it, or should a banner remind the user?
+3. Beat mode: one circle that sweeps once per beat, a second ring, or a toggle between flowtime and beat? Beat is not a fixed period, so a sweep per beat would need to follow tempo.
+4. How the user reads the result: for example, show the audio nudge needed to line up two phones as "this phone is X ms ahead".
+5. A way to say that a phone's display adds its own delay, so a visible gap is not always an audio gap.
+
+Constraints: a flash at 1 Hz at most; no strobing; the screen has to be readable in a dark room; sub-millisecond values are shown in µs.
