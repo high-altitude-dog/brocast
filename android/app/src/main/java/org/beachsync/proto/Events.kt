@@ -23,6 +23,14 @@ fun fmtDuration(ns: Double): String {
     return "%.${digits}f %s".format(Locale.ROOT, v, unit)
 }
 
+/** A value given in milliseconds, in microseconds (or nanoseconds) when it is under 1 ms, as the user decided on 2 Nov. [digits] applies to the milliseconds form. */
+fun fmtMillis(ms: Double, digits: Int = 1): String {
+    if (ms.isNaN() || ms.isInfinite()) return "—"
+    val a = abs(ms)
+    if (a != 0.0 && a < 1.0) return (if (ms < 0) "-" else "") + fmtDuration(a * 1e6)
+    return "%.${digits}f ms".format(Locale.ROOT, ms)
+}
+
 /** The same, with a sign in front. */
 fun fmtSigned(ns: Double): String = when {
     ns.isNaN() || ns.isInfinite() -> "—"

@@ -12,7 +12,7 @@ a{color:#C8FF4D}a:hover{color:#E2FF9E}
 </style>
 </head>
 <body>
-<div style="width: 390px; height: 844px; box-sizing: border-box; background: #0A0C0F; color: #ECEFF2; font-family: 'Space Grotesk', system-ui, sans-serif; padding: 12px 18px 16px; display: flex; flex-direction: column; gap: 8px; overflow: hidden">
+<div style="width: 390px; height: 844px; box-sizing: border-box; background: #0A0C0F; color: #ECEFF2; font-family: 'Space Grotesk', system-ui, sans-serif; padding: 10px 18px 10px; display: flex; flex-direction: column; gap: 8px; overflow: hidden">
 
   <div style="display: flex; justify-content: space-between; align-items: center">
     <div style="display: flex; flex-direction: column; gap: 2px">
@@ -41,19 +41,17 @@ a{color:#C8FF4D}a:hover{color:#E2FF9E}
         <span style="font-size: 20px; font-weight: 700; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Sundown Tide</span>
         <span style="font-size: 13px; color: #C4CBD2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Mara Okoye · Golden Hour Set</span>
       </div>
-      <button aria-pressed="false" aria-label="Keep this set in your archive" style="appearance: none; min-width: 44px; height: 44px; padding: 0 12px; border-radius: 999px; border: 1px solid #2A323C; background: transparent; color: #ECEFF2; font-family: inherit; font-size: 12.5px; display: flex; align-items: center; gap: 6px; cursor: pointer">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M6 3h12v18l-6-4-6 4z"></path></svg>Keep set
-      </button>
+      <span aria-label="Kept in your library" style="min-height: 32px; padding: 0 10px; border-radius: 999px; border: 1px solid #2A323C; color: #C4CBD2; font-size: 12px; display: flex; align-items: center; gap: 5px; flex: none"><svg width="14" height="14" viewBox="0 0 24 24" fill="#C4CBD2" aria-hidden="true"><path d="M6 3h12v18l-6-4-6 4z"></path></svg>Kept</span>
     </div>
-    <div style="display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: center; margin-top: 3px; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 10.5px; color: #8B95A1">
-      <span>2:14</span>
-      <span style="height: 2px; border-radius: 1px; background: #1A1F26; position: relative"><span style="position: absolute; left: 0; top: 0; bottom: 0; width: 37%; border-radius: 1px; background: #ECEFF2"></span></span>
-      <span>−3:51</span>
+    <div aria-label="Library: 38 of 52 sets downloaded" style="display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: center; margin-top: 3px; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 10.5px; color: #8B95A1">
+      <span>LIBRARY</span>
+      <span style="height: 2px; border-radius: 1px; background: #1A1F26; position: relative"><span style="position: absolute; left: 0; top: 0; bottom: 0; width: 73%; border-radius: 1px; background: #8B95A1"></span></span>
+      <span>38 of 52 sets</span>
     </div>
   </div>
 
   <div style="position: relative; width: 206px; height: 206px; flex: none; align-self: center">
-    <svg width="206" height="206" viewBox="0 0 252 252" role="img" aria-label="Brocast clock: Teddington and Greenwich time on the bezel, a seconds sweep, a sub-second dial, and a precision ring of plus or minus 0.4 milliseconds" style="position: absolute; left: 0; top: 0">
+    <svg width="206" height="206" viewBox="0 0 252 252" role="img" aria-label="Brocast clock: Teddington and Greenwich time on the bezel, a seconds sweep, the time source, and a precision ring of plus or minus 0.4 milliseconds" style="position: absolute; left: 0; top: 0">
       <defs>
         <path id="bezel-top" d="M 13 126 A 113 113 0 0 1 239 126"></path>
         <path id="bezel-bottom" d="M 7 126 A 119 119 0 0 0 245 126"></path>
@@ -70,61 +68,58 @@ a{color:#C8FF4D}a:hover{color:#E2FF9E}
     <div style="position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px">
       <span style="font-size: 10.5px; letter-spacing: 0.2em; color: #8B95A1">GMT</span>
       <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 30px; font-weight: 600; letter-spacing: -0.02em">22:43:51</span>
-      <svg width="40" height="40" viewBox="0 0 40 40" role="img" aria-label="Sub-second dial: two tenths" style="margin: 2px 0">
-        <circle cx="20" cy="20" r="18.5" fill="#0A0C0F" stroke="#2A323C" stroke-width="1"></circle>
-        <line x1="20.00" y1="4.50" x2="20.00" y2="1.50" stroke="#C8FF4D" stroke-width="1.6"></line><line x1="29.11" y1="7.46" x2="30.87" y2="5.03" stroke="#6B7580" stroke-width="1.1"></line><line x1="34.74" y1="15.21" x2="37.59" y2="14.28" stroke="#6B7580" stroke-width="1.1"></line><line x1="34.74" y1="24.79" x2="37.59" y2="25.72" stroke="#6B7580" stroke-width="1.1"></line><line x1="29.11" y1="32.54" x2="30.87" y2="34.97" stroke="#6B7580" stroke-width="1.1"></line><line x1="20.00" y1="35.50" x2="20.00" y2="38.50" stroke="#6B7580" stroke-width="1.1"></line><line x1="10.89" y1="32.54" x2="9.13" y2="34.97" stroke="#6B7580" stroke-width="1.1"></line><line x1="5.26" y1="24.79" x2="2.41" y2="25.72" stroke="#6B7580" stroke-width="1.1"></line><line x1="5.26" y1="15.21" x2="2.41" y2="14.28" stroke="#6B7580" stroke-width="1.1"></line><line x1="10.89" y1="7.46" x2="9.13" y2="5.03" stroke="#6B7580" stroke-width="1.1"></line>
-        <circle cx="20" cy="20" r="11" fill="none" stroke="#C8FF4D" stroke-opacity="0.25" stroke-width="3" stroke-dasharray="13.8 69.1" transform="rotate(-90 20 20)"></circle>
-        <line x1="20" y1="20" x2="34.27" y2="15.36" stroke="#C8FF4D" stroke-width="1.6" stroke-linecap="round"></line>
-        <circle cx="20" cy="20" r="2" fill="#ECEFF2"></circle>
-      </svg>
+<div style="display: flex; flex-direction: column; align-items: center; gap: 2px; margin: 2px 0 0"><a href="satellites.html" aria-label="Satellites: 10 in use of 14 in view. Open Satellites" style="display: block; line-height: 0"><svg width="104" height="40" viewBox="0 0 104 40" aria-hidden="true" style="display: block"><ellipse cx="52.0" cy="20.0" rx="50.0" ry="18.5" fill="none" stroke="#2A323C" stroke-width="0.8"></ellipse><line x1="61.6" y1="15.9" x2="59.9" y2="20.5" stroke="#C8FF4D" stroke-width="0.8" opacity="0.55"></line><line x1="59.9" y1="20.5" x2="52.0" y2="24.9" stroke="#C8FF4D" stroke-width="0.8" opacity="0.55"></line><line x1="59.9" y1="20.5" x2="68.6" y2="23.4" stroke="#C8FF4D" stroke-width="0.8" opacity="0.55"></line><line x1="52.0" y1="24.9" x2="42.8" y2="18.1" stroke="#C8FF4D" stroke-width="0.8" opacity="0.55"></line><line x1="42.8" y1="18.1" x2="47.4" y2="10.7" stroke="#C8FF4D" stroke-width="0.8" opacity="0.55"></line><line x1="42.8" y1="18.1" x2="31.0" y2="22.7" stroke="#C8FF4D" stroke-width="0.8" opacity="0.55"></line><line x1="31.0" y1="22.7" x2="36.0" y2="29.8" stroke="#C8FF4D" stroke-width="0.8" opacity="0.55"></line><line x1="31.0" y1="22.7" x2="19.4" y2="18.0" stroke="#C8FF4D" stroke-width="0.8" opacity="0.55"></line><line x1="68.6" y1="23.4" x2="80.9" y2="18.2" stroke="#C8FF4D" stroke-width="0.8" opacity="0.55"></line><circle cx="61.6" cy="15.9" r="3.4" fill="#C8FF4D" opacity="0.18"></circle><circle cx="61.6" cy="15.9" r="1.9" fill="#C8FF4D"></circle><circle cx="68.6" cy="23.4" r="3.4" fill="#C8FF4D" opacity="0.18"></circle><circle cx="68.6" cy="23.4" r="1.9" fill="#C8FF4D"></circle><circle cx="36.0" cy="29.8" r="3.4" fill="#C8FF4D" opacity="0.18"></circle><circle cx="36.0" cy="29.8" r="1.9" fill="#C8FF4D"></circle><circle cx="42.8" cy="18.1" r="3.4" fill="#C8FF4D" opacity="0.18"></circle><circle cx="42.8" cy="18.1" r="1.9" fill="#C8FF4D"></circle><circle cx="33.9" cy="8.9" r="1.5" fill="#4A5562"></circle><circle cx="80.9" cy="18.2" r="3.4" fill="#C8FF4D" opacity="0.18"></circle><circle cx="80.9" cy="18.2" r="1.9" fill="#C8FF4D"></circle><circle cx="65.7" cy="33.3" r="1.5" fill="#4A5562"></circle><circle cx="31.0" cy="22.7" r="3.4" fill="#C8FF4D" opacity="0.18"></circle><circle cx="31.0" cy="22.7" r="1.9" fill="#C8FF4D"></circle><circle cx="65.1" cy="7.2" r="1.5" fill="#4A5562"></circle><circle cx="52.0" cy="24.9" r="3.4" fill="#C8FF4D" opacity="0.18"></circle><circle cx="52.0" cy="24.9" r="1.9" fill="#C8FF4D"></circle><circle cx="19.4" cy="18.0" r="3.4" fill="#C8FF4D" opacity="0.18"></circle><circle cx="19.4" cy="18.0" r="1.9" fill="#C8FF4D"></circle><circle cx="59.9" cy="20.5" r="3.4" fill="#C8FF4D" opacity="0.18"></circle><circle cx="59.9" cy="20.5" r="1.9" fill="#C8FF4D"></circle><circle cx="80.1" cy="31.9" r="1.5" fill="#4A5562"></circle><circle cx="47.4" cy="10.7" r="3.4" fill="#C8FF4D" opacity="0.18"></circle><circle cx="47.4" cy="10.7" r="1.9" fill="#C8FF4D"></circle></svg></a><span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 9.5px; color: #8B95A1; letter-spacing: 0.04em">GPS · <span style="color: #C8FF4D">10</span> of 14</span></div>
       <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 11px; color: #8B95A1; margin-top: 3px">23:43:51 CET · local</span>
     </div>
   </div>
 
-  <button aria-label="Sync status: in sync, plus or minus 3.2 milliseconds. Open sync error budget" style="appearance: none; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; min-height: 52px; border-radius: 999px; border: 1.5px solid #C8FF4D; background: rgba(200, 255, 77, 0.07); color: #ECEFF2; font-family: inherit; cursor: pointer">
+  <div style="display: flex; gap: 8px; align-items: stretch">
+  <button aria-label="Stop" style="appearance: none; width: 52px; height: 52px; flex: none; border-radius: 50%; border: 1.5px solid #ECEFF2; background: transparent; display: flex; align-items: center; justify-content: center; cursor: pointer"><span style="width: 14px; height: 14px; border-radius: 2px; background: #ECEFF2"></span></button>
+  <button aria-label="Sync status: in sync, plus or minus 3.0 milliseconds. Open sync error budget" style="appearance: none; flex: 1; min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; min-height: 52px; border-radius: 999px; border: 1.5px solid #C8FF4D; background: rgba(200, 255, 77, 0.07); color: #ECEFF2; font-family: inherit; cursor: pointer">
     <span style="display: flex; align-items: center; gap: 10px">
       <span style="width: 10px; height: 10px; border-radius: 50%; background: #C8FF4D; box-shadow: 0 0 12px #C8FF4D"></span>
       <span style="font-size: 14px; font-weight: 700; letter-spacing: 0.12em">IN SYNC</span>
     </span>
-    <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 18px; font-weight: 600">±3.2 ms</span>
+    <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 18px; font-weight: 600">±3.0 ms</span>
     <span style="font-size: 12px; color: #8B95A1">GPS · Gold</span>
   </button>
+  </div>
 
-  <a href="event-log.html" aria-label="Latest event: 22:43:29, GPS back after 41 seconds. Open the event log" style="text-decoration: none; color: #ECEFF2; min-height: 44px; display: grid; grid-template-columns: 62px 64px minmax(0, 1fr) 16px; gap: 8px; align-items: center; background: #12161B; border: 1px solid #222932; border-radius: 12px; padding: 0 12px; font-size: 12.5px">
+  <a href="event-log.html" aria-label="Latest event: 22:43:29, GPS back after 41 seconds. Open the event log" style="text-decoration: none; color: #ECEFF2; min-height: 44px; display: grid; grid-template-columns: 62px 64px minmax(0, 1fr) 16px; gap: 8px; align-items: start; background: #12161B; border: 1px solid #222932; border-radius: 12px; padding: 13px 12px 11px; font-size: 12.5px; line-height: 1.3">
     <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px; color: #8B95A1">22:43:29</span>
     <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 10px; letter-spacing: 0.1em; color: #C8FF4D">● CLOCK</span>
-    <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis">GPS back after 41 s</span>
+    <span>GPS back after 41 s</span>
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 5l7 7-7 7"></path></svg>
   </a>
 
   <div style="background: #12161B; border: 1px solid #222932; border-radius: 14px; padding: 10px 14px; display: flex; flex-direction: column; gap: 6px">
     <div style="display: flex; justify-content: space-between; align-items: baseline">
-      <span style="font-size: 10.5px; letter-spacing: 0.16em; color: #8B95A1">SYNC ERROR BUDGET · 95%</span>
-      <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 13px; color: #C8FF4D">±3.2 ms</span>
+      <span style="font-size: 10.5px; letter-spacing: 0.16em; color: #8B95A1">SYNC ERROR BUDGET</span>
+      <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 13px; color: #C8FF4D">±3.0 ms</span>
     </div>
     <div style="display: grid; grid-template-columns: 92px minmax(0, 1fr) 58px; gap: 6px 10px; align-items: center; font-size: 12px">
       <span style="color: #C4CBD2">Flowtime</span>
       <div style="height: 8px; border-radius: 4px; background: #1A1F26"><div style="width: 52%; height: 8px; border-radius: 4px; background: #C8FF4D"></div></div>
       <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; text-align: right">±0.4 ms</span>
-      <span style="color: #C4CBD2">Headphone lag</span>
+      <span style="color: #C4CBD2">Output lag</span>
       <div style="height: 8px; border-radius: 4px; background: #1A1F26"><div style="width: 69%; height: 8px; border-radius: 4px; background: #FFB547"></div></div>
       <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; text-align: right">±2.8 ms</span>
+      <span style="color: #8B95A1">Held gap</span>
+      <div style="height: 8px; border-radius: 4px; background: #1A1F26"><div style="width: 50%; height: 8px; border-radius: 4px; background: #4A5562"></div></div>
+      <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; text-align: right; color: #8B95A1">0.20 ms</span>
       <span style="color: #ECEFF2; font-weight: 700">Total</span>
       <div style="height: 8px; border-radius: 4px; background: #1A1F26"><div style="width: 70%; height: 8px; border-radius: 4px; background: #ECEFF2"></div></div>
-      <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; text-align: right; font-weight: 600">±3.2 ms</span>
-      <span style="color: #8B95A1">Screenlag</span>
-      <div style="height: 8px; border-radius: 4px; background: #1A1F26"><div style="width: 61%; height: 8px; border-radius: 4px; background: #4A5562"></div></div>
-      <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; text-align: right; color: #8B95A1">±1.1 ms</span>
+      <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; text-align: right; font-weight: 600">±3.0 ms</span>
     </div>
     <div style="display: flex; justify-content: space-between; margin-left: 102px; margin-right: 68px; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 10.5px; color: #8B95A1">
       <span>1µs</span><span>100µs</span><span>10ms</span>
     </div>
   </div>
 
-  <a href="nudge-control.html" aria-label="Stream gap 0.20 milliseconds, closing on Auto in 1.40 seconds. Open nudge control" style="text-decoration: none; color: #ECEFF2; min-height: 48px; display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto; gap: 10px; align-items: center; background: #12161B; border: 1px solid #222932; border-radius: 12px; padding: 0 12px;">
+  <a href="nudge-control.html" aria-label="Dragging 0.20 milliseconds, catching up on Auto in 1.40 seconds. Open nudge control" style="text-decoration: none; color: #ECEFF2; min-height: 48px; display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto; gap: 10px; align-items: center; background: #12161B; border: 1px solid #222932; border-radius: 12px; padding: 0 12px;">
       <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.12em; padding: 3px 8px; border-radius: 6px; border: 1px solid #4A5562">AUTO</span>
       <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 14px; font-weight: 600">0.20 ms</span>
-      <span style="display: flex; flex-direction: column; gap: 1px; min-width: 0; font-size: 11px; color: #8B95A1"><span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis">gap · closes in 1.40 s</span><span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis">pitch +0.014%</span></span>
+      <span style="display: flex; flex-direction: column; gap: 1px; min-width: 0; font-size: 11px; color: #8B95A1"><span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Dragging · Catching-up, 1.40 s</span><span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis">pitch +0.014%</span></span>
       <span style="display: flex; align-items: center; color: #8B95A1"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 5l7 7-7 7"></path></svg></span>
     </a>
 
@@ -137,7 +132,7 @@ a{color:#C8FF4D}a:hover{color:#E2FF9E}
     <a href="headphone-lag.html" style="text-decoration: none; color: #ECEFF2; background: #12161B; border: 1px solid #222932; border-radius: 12px; padding: 8px 10px; display: flex; flex-direction: column; gap: 2px">
       <span style="font-size: 10px; letter-spacing: 0.14em; color: #8B95A1">HEADPHONES</span>
       <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 15px; font-weight: 600">182 ms</span>
-      <span style="font-size: 11px; color: #8B95A1">measured ±2.8</span>
+      <span style="font-size: 11px; color: #8B95A1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">[Headset name]</span>
     </a>
     <a href="buffer.html" style="text-decoration: none; color: #ECEFF2; background: #12161B; border: 1px solid #222932; border-radius: 12px; padding: 8px 10px; display: flex; flex-direction: column; gap: 2px">
       <span style="font-size: 10px; letter-spacing: 0.14em; color: #8B95A1">AHEAD</span>

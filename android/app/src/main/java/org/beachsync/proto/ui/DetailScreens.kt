@@ -108,7 +108,7 @@ internal fun ScreenHeader(title: String, back: () -> Unit, trailing: @Composable
 }
 
 @Composable
-private fun Screen(content: @Composable () -> Unit) {
+internal fun Screen(content: @Composable () -> Unit) {
     Column(
         Modifier.fillMaxSize().background(Ink.bg).safeDrawingPadding().verticalScroll(rememberScrollState())
             .padding(top = Tokens.Space.screenPaddingTop.dp, start = Tokens.Space.screenPaddingSide.dp, end = Tokens.Space.screenPaddingSide.dp, bottom = Tokens.Space.screenPaddingBottom.dp),
@@ -379,7 +379,7 @@ private fun Preview(gap: Long, period: Double) {
 
 /** The app asks one NPL server at a time, so the design's several NTP nodes and rows are one. Satellite positions aren't collected yet. */
 @Composable
-fun TimeSignalsScreen(state: BenchState, actions: BenchActions, back: () -> Unit) {
+fun TimeSignalsScreen(state: BenchState, actions: BenchActions, openSatellites: () -> Unit, back: () -> Unit) {
     val boot = rememberTick(SCREEN_TICK_MS).value
     val s = state.session
     val fit = FlowTime.fit()
@@ -400,6 +400,7 @@ fun TimeSignalsScreen(state: BenchState, actions: BenchActions, back: () -> Unit
         Card {
             BasicText("SKY", style = Tokens.Text.cardLabel.style())
             SatellitesRow(state.satellites, actions::setSatellites, "Position stays on this phone · Off = Privacy mode")
+            BasicText("Your chip and sky in Satellites", Modifier.clickable(onClick = openSatellites).padding(vertical = 6.dp), Tokens.Text.body.style(Ink.accent))
             if (s != null && s.gps.active) {
                 BasicText("${s.gps.used} used / ${s.gps.seen} seen", style = Tokens.Text.value.style())
                 val grade = when (s.gps.gold) { true -> "Gold · "; false -> "Silver · "; null -> "" }

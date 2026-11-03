@@ -111,10 +111,10 @@ class EarcupRun(private val ctx: Context, private val output: AudioOutput) : Thr
         reader.start()
         try {
             sleep(300)
-            val first = playLeg(speaker, rec)
+            val first = playLeg(speaker, rec, driftSpeaker)
             if (cancelled) return
             phase = Phase.HEADPHONES
-            val second = playLeg(output.device, rec)
+            val second = playLeg(output.device, rec, driftHeadphones)
             recording = false
             reader.join(500)
             if (cancelled) return
@@ -135,8 +135,14 @@ class EarcupRun(private val ctx: Context, private val output: AudioOutput) : Thr
     private fun finish(o: EarcupOutcome) { outcome = o; phase = Phase.DONE }
 
     @SuppressLint("MissingPermission")
+    @Volatile private var micSource = "?"
+    /** How far the output time stamp's offset moved during a leg, in ms: from near the start to the middle stamp, and the middle to the end. Logged only. */
+    private val driftSpeaker = DoubleArray(2) { Double.NaN }
+    private val driftHeadphones = DoubleArray(2) { Double.NaN }
+
     private fun makeRecorder(am: AudioManager, mic: AudioDeviceInfo): AudioRecord {
         val unprocessed = am.getProperty(AudioManager.PROPERTY_SUPPORT_AUDIO_SOURCE_UNPROCESSED) == "true"
+        micSource = if (unprocessed) "UNPROCESSED" else "MIC"
         val min = AudioRecord.getMinBufferSize(Earcup.RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
         val r = AudioRecord.Builder()
             .setAudioSource(if (unprocessed) MediaRecorder.AudioSource.UNPROCESSED else MediaRecorder.AudioSource.MIC)
@@ -148,7 +154,7 @@ class EarcupRun(private val ctx: Context, private val output: AudioOutput) : Thr
     }
 
     /** Built like Playout's track, so its output time stamp means the same thing. Returns where each click would be in the recording. */
-    private fun playLeg(device: AudioDeviceInfo, rec: AudioRecord): LongArray? {
+    private fun playLeg(device: AudioDeviceInfo, rec: AudioRecord, drift: DoubleArray): LongArray? {
         val fmt = AudioFormat.Builder().setEncoding(AudioFormat.ENCODING_PCM_FLOAT).setSampleRate(Earcup.RATE).setChannelMask(AudioFormat.CHANNEL_OUT_STEREO).build()
         val attrs = AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).build()
         val min = AudioTrack.getMinBufferSize(Earcup.RATE, AudioFormat.CHANNEL_OUT_STEREO, AudioFormat.ENCODING_PCM_FLOAT)
@@ -156,6 +162,10 @@ class EarcupRun(private val ctx: Context, private val output: AudioOutput) : Thr
             .setTransferMode(AudioTrack.MODE_STREAM).setPerformanceMode(AudioTrack.PERFORMANCE_MODE_LOW_LATENCY).build()
         val ts = AudioTimestamp()
         val rs = AudioTimestamp()
+        val tsx = AudioTimestamp()
+        fun offsetMs(x: AudioTimestamp) = (x.nanoTime - x.framePosition * 1_000_000_000L / Earcup.RATE) / 1e6
+        var offStart = Double.NaN
+        var offEnd = Double.NaN
         try {
             t.preferredDevice = device
             t.play()
@@ -185,8 +195,13 @@ class EarcupRun(private val ctx: Context, private val output: AudioOutput) : Thr
                     routed = true
                 }
                 if (!stamped && frame >= stampAt) stamped = t.getTimestamp(ts) && rec.getTimestamp(rs, AudioTimestamp.TIMEBASE_MONOTONIC) == AudioRecord.SUCCESS
+                if (offStart.isNaN() && frame >= Earcup.RATE / 2 && t.getTimestamp(tsx) && tsx.framePosition > 0) offStart = offsetMs(tsx)
+                if (offEnd.isNaN() && total - frame <= 960 && t.getTimestamp(tsx) && tsx.framePosition > 0) offEnd = offsetMs(tsx)
             }
             if (!stamped || cancelled) return null
+            val mid = offsetMs(ts)
+            drift[0] = offStart - mid
+            drift[1] = offEnd - mid
             return LongArray(Earcup.CLICKS) { c ->
                 val start = firstClick + c * spacing
                 val outNs = ts.nanoTime + (start - ts.framePosition) * 1_000_000_000L / Earcup.RATE
@@ -201,16 +216,22 @@ class EarcupRun(private val ctx: Context, private val output: AudioOutput) : Thr
         val dir = ctx.getExternalFilesDir(null) ?: ctx.filesDir
         val f = File(dir, "earcup-results.csv")
         // Rows gained a column: an older file keeps its own header, so it moves aside rather than mixing the two.
-        if (f.exists() && !f.useLines { it.first() }.contains(",kind,")) f.renameTo(File(dir, "earcup-results-old.csv"))
+        if (f.exists() && !f.useLines { it.first() }.contains("headphones_drift_end_ms")) f.renameTo(File(dir, "earcup-results-old.csv"))
         val fresh = !f.exists()
         val time = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.UK).format(Date())
         val row = when (o) {
-            is EarcupOutcome.Pass -> "pass,%.2f,%.2f,%.2f,%.2f,%.1f,%.1f,%.3f,%.3f".format(Locale.ROOT, o.laterMs, o.speaker.peakMs, o.headphones.peakMs, o.scatterMs, o.speaker.strength, o.headphones.strength, o.speaker.level, o.headphones.level)
-            is EarcupOutcome.Fail -> "${o.fault},,,,,,,,"
-            is EarcupOutcome.Problem -> "problem,,,,,,,,"
+            is EarcupOutcome.Pass -> {
+                val a = summarise(o.speaker.readingsMs)
+                val b = summarise(o.headphones.readingsMs)
+                "pass,%.2f,%.2f,%.2f,%.2f,%.1f,%.1f,%.3f,%.3f,%.2f,%.2f,%d,%d,%s,%.3f,%.3f,%.3f,%.3f".format(Locale.ROOT, o.laterMs, o.speaker.peakMs, o.headphones.peakMs, o.scatterMs, o.speaker.strength, o.headphones.strength, o.speaker.level, o.headphones.level,
+                    a?.scatterMs ?: Double.NaN, b?.scatterMs ?: Double.NaN, o.speaker.readingsMs.size, o.headphones.readingsMs.size, micSource,
+                    driftSpeaker[0], driftSpeaker[1], driftHeadphones[0], driftHeadphones[1])
+            }
+            is EarcupOutcome.Fail -> "${o.fault},,,,,,,,,,,,,,,,,"
+            is EarcupOutcome.Problem -> "problem,,,,,,,,,,,,,,,,,"
         }
         FileWriter(f, true).use {
-            if (fresh) it.write("time,phone,route,kind,output,result,later_ms,speaker_ms,headphones_ms,scatter_ms,speaker_strength,headphones_strength,speaker_level,headphones_level\n")
+            if (fresh) it.write("time,phone,route,kind,output,result,later_ms,speaker_ms,headphones_ms,scatter_ms,speaker_strength,headphones_strength,speaker_level,headphones_level,speaker_scatter_ms,headphones_scatter_ms,speaker_clicks,headphones_clicks,mic_source,speaker_drift_start_ms,speaker_drift_end_ms,headphones_drift_start_ms,headphones_drift_end_ms\n")
             it.write("$time,${Build.MODEL},${output.route},${output.kind},\"${output.name.replace("\"", "'")}\",$row\n")
         }
     }

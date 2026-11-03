@@ -25,7 +25,7 @@ import androidx.compose.ui.unit.dp
 
 /** Only the LISTENING section for now: the design's other sections have nothing behind them yet. */
 @Composable
-fun SettingsPage(state: BenchState, actions: BenchActions, back: () -> Unit, openCalibration: () -> Unit) {
+fun SettingsPage(state: BenchState, actions: BenchActions, back: () -> Unit, openCalibration: () -> Unit, openSatellites: () -> Unit) {
     rememberTick(SETTINGS_TICK_MS).value    // the output's name can change during a run
     val s = state.session
     Column(
@@ -37,11 +37,15 @@ fun SettingsPage(state: BenchState, actions: BenchActions, back: () -> Unit, ope
         BasicText("LISTENING", Modifier.padding(top = 6.dp), Tokens.Text.cardLabel.style())
         Card {
             SatellitesRow(state.satellites, actions::setSatellites, "Position stays on this phone · off = Privacy mode")
+            Column(Modifier.fillMaxWidth().heightIn(min = Tokens.Space.touchTarget.dp).clickable(role = Role.Button, onClick = openSatellites), Arrangement.Center) {
+                BasicText("Satellites", style = Tokens.Text.bodyStrong.style())
+                BasicText("Your chip, your sky and what limits timing", style = Tokens.Text.small.style(Ink.textSecondary))
+            }
             Column(Modifier.fillMaxWidth().heightIn(min = Tokens.Space.touchTarget.dp).clickable(role = Role.Button, onClick = openCalibration), Arrangement.Center) {
                 BasicText("Calibration", style = Tokens.Text.bodyStrong.style())
                 val out = actions.output()
                 val cal = actions.savedCalibration(out) ?: actions.tableCalibration(out)
-                val value = if (cal.source == org.beachsync.proto.CalSource.NONE) "Not measured" else "%.1f ms · ${cal.source.name.lowercase().replaceFirstChar { it.uppercase() }}".format(java.util.Locale.ROOT, cal.lagMs)
+                val value = if (cal.source == org.beachsync.proto.CalSource.NONE) "Not measured" else "${org.beachsync.proto.fmtMillis(cal.lagMs)} · ${cal.source.name.lowercase().replaceFirstChar { it.uppercase() }}"
                 BasicText("${out.name} · $value", style = Tokens.Text.small.style(), maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             Row(

@@ -98,6 +98,7 @@ To keep tokens low:
 | `server/dht/`, `server/Dockerfile.dht` | Reach the server by its ed25519 public key over HyperDHT: `gateway.js` on the server, `connect.js` as a test client. The key locates the server, so it stays out of this repo, like its address. |
 | `measure/beachsync_measure.py` | Analyses a WAV recording (numpy). Modes: `ticks-stereo`, `ticks-tones`, `music-stereo`. |
 | `measure/quicktest.py` | The acoustic two-phone test as one command: use this first. Phones stay silent until the test, then tick for about 10 s at five pitches, giving the gap at each. It logs to `measure/results.csv`, which git ignores. `measure/test_pattern.py` tests its analysis. |
+| `measure/earcup_run.py` | Runs the earcup test over adb (10 s countdown, then about 15 s of clicks) and logs each result with the Bluetooth codec, adaptive-bitrate state and the headset's reported delay, to `measure/earcup-results.csv`, which git ignores. |
 | `android/.../TickWindowReceiver.kt` | Starts and stops the tick pattern's sound over adb, for `quicktest.py`. Only adb can send it. |
 | `simtest/SimTest.kt` | Desktop tests of the pure timing code. The commands are in its header. |
 | `README.md` | The human test guide, from build to results |

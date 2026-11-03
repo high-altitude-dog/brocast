@@ -1,4 +1,4 @@
-# UI spec (hand-off 10)
+# UI spec (hand-off 13)
 
 Field names come from Claude Code's "Fields that exist today" table in `feedback.md`, as of 1 Nov 2026. If one has been renamed since, use the new name.
 
@@ -10,12 +10,14 @@ Field names come from Claude Code's "Fields that exist today" table in `feedback
 **Rules for every screen:**
 
 - **Units:** every duration uses adaptive units, like `Session.fmtNs` (ns, µs, ms), at three significant figures. Every live number is in JetBrains Mono.
-- **Sync error:** the figure shown to the listener is `errAt(boot)` plus the absolute held gap (`NudgeControl.gapAt`). It will add the headphone-lag uncertainty **later**. Every ± in a badge is this number.
+- **Sync error** (the user agreed, 2 Nov): the figure shown to the listener is √(flowtime error² + output lag uncertainty²) plus the absolute held gap. Flowtime error is `errAt(boot)`; output lag uncertainty is the ± of the saved value in use (Calibration); the held gap is `NudgeControl.gapAt`, added in full because it is known, not uncertain. Example: √(0.4² + 2.8²) + 0.20 = ±3.0 ms. Every term must be the same kind of range (95% is the aim) before the budget may say `95%`; until confirmed it says no percentage. Every ± in a badge is this number.
 - **Flowtime error and stream gap are separate.** Never add them together on screen, except in the badge figure above.
 - **Times** come from flowtime, never the system clock. Show `--:--:--` before there is a time source. The main clock and the event log show UK time (`Europe/London`, GMT or BST), branded **Teddington · Greenwich**. Local time sits beneath, using only the phone's time-zone setting, never its clock. Hide it when its offset equals UK time's. CSV logs stay in UTC ns.
 - **Tightening** (see Badge states) appears once the error estimate has improved by at least 20% for 10 s, and stays for 10 s (Claude Code's `tighteningFromNs` behaviour, 2 Nov). Smaller changes update quietly, with no animation. When both figures share a unit, the unit is written once (`±11.4 → ±8.20 ms`); otherwise both are written out (`±11.4 ms → ±400 µs`).
 - **Track names** (title, artist, set or show) come from the stream, stamped by sample number. They switch when the new track's first sample reaches the ear (start + n / 48 kHz + D), never when the name arrives, so the name changes with the music. With no track name, show the set or show; with neither, show the station or event, with `Live` as the second line. Show the progress line only when the stream gives the track's start and length.
 - **Parked** until the Pears proof of concept is validated (user, 2 Nov): **Privacy mode** (satellites off) also turns off sharing, and any social feature added later (the user's decision, 2 Nov). It never changes the listener's saved choices: they come back when satellites go back on. Nothing in Privacy mode asks the listener to turn satellites on.
+- **Required terms** (the user's decision, 2 Nov): **Rushing** (heard ahead of flowtime), **Dragging** (heard behind flowtime), **Catching-up** (nudging faster to catch up) and **Slowing-down** (nudging slower). Always these words, never "gap closes" or "sound is behind flowtime". The pitch figure shows a minus when Slowing-down.
+- **Now playing updates once a second** (the user's decision, 2 Nov). Nothing on it needs a faster refresh.
 - **Screen levels** (Full, Reduced, Minimal, Off): see the last section. Every screen follows them.
 - **Accessibility:** use words and a mark, never colour alone. Every tappable item is at least 44 × 44. Respect reduced motion: no sweep and no glow pulse. Screen-reader labels match the visible words.
 
@@ -28,16 +30,16 @@ Field names come from Claude Code's "Fields that exist today" table in `feedback
 | Element | Shows | Source | States and taps | Status |
 |---|---|---|---|---|
 | Header | Station or event name (eyebrow), `Live · D 60 s` | `StreamClient.manifest.dMs`; the name is **later** | Icon buttons (44 × 44) for Time signals, Calibration, Archive and Settings | now |
-| Now playing | Track title (20 px, bold, one line), `artist · set` (13 px, `textSecondary`), a **Keep** button, and a thin progress line with elapsed and remaining time | The signed file record and cue list (**later**; the prototype can show the manifest `source`) | Follows the Track names rule; long names end with an ellipsis. Keep pins the file being heard: `Keep` for a single track, `Keep set` inside a set, `Kept` (filled accent mark) once pinned. Hidden while the archive is Off. | later |
-| Brocast clock | A dial. Along the top of the bezel, curved: `TEDDINGTON · GREENWICH`, with an accent meridian tick at 12 o'clock between the two names. Inside: the zone (GMT or BST), HH:MM:SS large, a **sub-second dial** (40 px: 10 tenth ticks with the 0 tick in accent, a faint accent arc and an accent hand), then local time beneath (`23:43:51 CET · local`). Along the bottom of the bezel, curved: `FLOWTIME ±error` in accent. Tapping the dial swaps the sub-dial for the digits to the ns (finer than the error in `faded`), for side-by-side photos; tapping again swaps back. | `FlowTime.fit().utcAt(boot)` at the frame's presentation time; `ZoneId.of("Europe/London")`; `ZoneId.systemDefault()` for the local line | Local line hidden when its offset equals UK time's. Screenlag correction is **later**. Draw the curved text with `drawTextOnPath`, or the Compose equivalent. | now |
+| Now playing | Track title (20 px, bold, one line), `artist · set` (13 px, `textSecondary`), a **Kept** marker, then the **library line**: `LIBRARY`, a thin bar and `38 of 52 sets` | File record and cue list; library download state | Kept is locked on for the beta (the user's decision): a bookmark and `Kept`, not a button, no tap. The library line shows download progress of the whole library; when it is complete it reads `52 sets · all here`. | partly |
+| Brocast clock | A dial. Along the top of the bezel, curved: `TEDDINGTON · GREENWICH`, with an accent meridian tick at 12 o'clock between the two names. Inside: the zone (GMT or BST), HH:MM:SS large, the **time-source pictogram**, then local time. Updates once a second; no sub-second dial and no ns digits. | Flowtime | See the Times rule | now |
 | Seconds sweep | The outer accent arc fills once per flowtime **minute**, like a second hand | Seconds of the current minute | Steps once a second at Reduced level | now |
-| Sub-second dial | The hand **steps in tenths** at 10 Hz, landing on the ticks, and the arc fills by tenths. A smooth sweep at frame rate comes only if a release build shows the UI thread can afford it (Claude Code, 2 Nov: 18–25% of a core at 10 Hz in a debug build). | The fraction of the current second | Hidden at Reduced and Minimal levels and with reduced motion | now |
+| Time-source pictogram | **Satellites:** a mini constellation: the sky squashed into a small ellipse, one dot per satellite in view, lit in accent for each one in use, the ones in use joined by faint lines (the same shortest-path pattern as the Satellites screen), no labels; then `GPS · 10 of 14`. Tapping it opens Satellites. **Hold:** an accent hourglass beside the same sky gone dark, `HOLDING · 41 s`. **NTP:** a cell tower with radio waves, `NTP · stratum 1` (Privacy mode shows this one). **None yet:** a grey tower with a red ✕, `NO TIME YET`. | `FlowTime.chosen`, `GpsTime.used`, `seen`, `lastBoot`, `NtpClient.stratum`; per-satellite positions **later** (until then, place dots evenly) | Updates once a second | partly |
 | Precision ring | A glow whose width shows the sync error on the budget's log scale; its figure is on the bottom bezel | Sync error | | now |
-| Sync badge | Words, the ± figure and the source | See Badge states | Tapping opens the error budget detail | now |
-| Latest event | Time, lane mark and name, and one line of text, **directly under the badge** | `EventLog.latest()` | Tapping opens the Event log. A banner elsewhere links to its own event. | now |
-| Sync error budget | Bars on a log scale from 1 µs to 10 ms: flowtime, headphone lag, total, screenlag | `errAt` now; headphone-lag uncertainty and screenlag **later** | | partly |
-| Gap row | The rate nudge row: mode chip, the gap value, then two small lines (`gap · closes in 1.40 s` and `pitch +0.014%`) | `NudgeControl.gapAt`, `mode`, `secondsLeft`, `state.rate` | Opens Nudge control. The 60 s gap trace has left this screen to make room for the track; history belongs on Nudge control, **later**. | now |
-| Tiles | SOURCE, HEADPHONES, AHEAD (how much is downloaded ahead, in hours and minutes) | `FlowTime.chosen`, `GpsTime`, `Settings.lagMs`, download state (**later**) | SOURCE opens Time signals; HEADPHONES opens Calibration; AHEAD opens Buffer | partly |
+| Play control and sync badge | A 52 px round button left of the badge: **Stop** (a white square, outlined) while playing; **Play** (an accent-filled circle with a dark triangle) when stopped; dashed and disabled while the set due now is downloading. The badge shows words, the ± figure and the source. | See Badge states | Play starts in sync at once. Tapping the badge opens the error budget detail. | now |
+| Latest event | Time, lane mark and name, and the event text, **directly under the badge**. The text wraps onto as many lines as it needs, with no ellipsis, and the row grows (the user's decision, 2 Nov). | `EventLog.latest()` | Tapping opens the Event log. A banner elsewhere links to its own event. | now |
+| Sync error budget | Bars on a log scale from 1 µs to 10 ms: flowtime, output lag, held gap, then Total (the Sync error rule). Screenlag left this card: it affects only the light show and belongs with it. | `errAt` now; headphone-lag uncertainty and screenlag **later** | | partly |
+| Gap row | The rate nudge row: mode chip, the gap value, then two small lines (`Dragging · Catching-up, 1.40 s` and `pitch +0.014%`; Rushing with Slowing-down shows `pitch −0.014%`) | `NudgeControl.gapAt`, `mode`, `secondsLeft`, `state.rate` | Opens Nudge control. The 60 s gap trace has left this screen to make room for the track; history belongs on Nudge control, **later**. | now |
+| Tiles | SOURCE, the output tile (`HEADPHONES`, `SPEAKER`, `PORTABLE SPEAKER` or `CAR AUDIO` by the output in use, with lag and the device's reported name), AHEAD (how much is downloaded ahead, in hours and minutes) | `FlowTime.chosen`, `GpsTime`, `Settings.lagMs`, download state (**later**) | SOURCE opens Time signals; HEADPHONES opens Calibration; AHEAD opens Buffer | partly |
 | Use satellites | A full-width row with a switch, never locked, one tap from the main screen. Shows `Position stays on this phone · off = Privacy mode`. | `GpsTime.active` | Off: the badge becomes Privacy mode. On: asks for location permission if needed; if refused, it returns to off. | now |
 
 ## Settings
@@ -215,6 +217,33 @@ The user wants this to be a showcase for peer delivery (2 Nov), so the swarm get
 | All relayed | ▲ amber, `All connections relayed` | Every peer connection goes through a relay: it works but fills more slowly |
 | Offline | ○ `Offline · plays for 6 h 12 m` | Nothing connected; the phone dims to grey |
 
+## Satellites
+
+![](screens/satellites.png)
+
+**A new detail screen**, not an extension of Time signals: Time signals compares sources (GPS against internet time); Satellites explains this phone's own GPS chip and sky. It opens from Settings › Listening (a `Satellites` row under Use satellites), from the clock-face pictogram, and from Time signals. It replaces the later Sky plot.
+
+| Element | Shows | Source | Status |
+|---|---|---|---|
+| Verdict | One plain sentence naming the largest limit and its size (`Your phone's GPS chip limits timing to about ±10 ms.`), then the reason in words. A neutral info mark, not a fault: amber outline for a hardware limit, accent tick when the signal is the limit. | Largest of the What limits it rows | now |
+| Your sky | Sky view: horizon circle, 30° and 60° rings, N E S W. One mark per satellite in view, shaped by system (GPS circle, Galileo diamond, GLONASS triangle, BeiDou square), filled accent when in use, outlined grey when not, each labelled (`G12`, `E05`, `R07`, `C21`). The satellites in use are joined into a **constellation**: faint accent lines along the shortest tree that links them. `10 in use of 14` top right. | Per-satellite azimuth, elevation, system, used-in-fix | later |
+| Tap a satellite | A 44 px target round each mark. The tapped one gets a white ring, and a card below shows label, system, in use or not, height (elevation), direction (azimuth and compass word), signal (dB-Hz) with a bar, and one line in words. Close with ×. | Per-satellite C/N0 | later |
+| What limits it | Three rows, each with figure and bar, the largest tagged `LIMIT` in amber: **Chip time stamp** (the chip's declared uncertainty, `erUnc`), **Satellite signal** (how well the satellites agree), **Link to the Brocast clock** (Gold or Silver). A note says which figures are 95% ranges and which one standard deviation. | `erUnc`, `biasUnc`, `gold`, the fit | now |
+| Will more satellites help? | A direct answer: `No, not on this phone` when the chip or the link is the limit; `Yes` with open-sky advice when the signal is. | Which row is largest | now |
+| Gold or Silver | A `GOLD` or `SILVER` chip and plain words for both. Then the chip name, whether it gives raw clock reports, and where leap seconds came from. | `gnssHardwareModelName`, `gold`, leap-second source | now |
+| Use satellites | The same switch as everywhere, never locked, with `Off: Privacy mode. Brocast uses internet time instead.` and a link to Time signals | `GpsTime.active` | now |
+
+## Satellites states
+
+![](screens/satellites-states.png)
+
+| State | Verdict |
+|---|---|
+| Chip is the limit | See Satellites (the Moto G32 case: ±10 ms with 9 to 15 satellites) |
+| Signal is the limit | `Timing is limited by the satellite signal: about ±0.4 ms.` More satellites or a clearer sky will help |
+| Silver link | `Your phone links GPS time to its clock less directly: about ±2 ms.` More satellites won't change it |
+| No raw clock reports | `This phone's GPS chip doesn't share its clock.` Brocast uses internet time instead; the sky still shows, but Use satellites can't improve timing on this phone |
+
 ## Badge states
 
 ![](screens/badge-states.png)
@@ -228,7 +257,9 @@ The user wants this to be a showcase for peer delivery (2 Nov), so the swarm get
 | REJOINING | ▲ amber | A data gap longer than D, or a jump of more than 20 ms |
 | SILENT · OVER LIMIT ± | ▲ amber, with offers | Over the event's limit. Offer what could help: **Sync from nearby phones** (**later**), and **Use satellites** if they're off. GPS is never required. |
 | CLOCK CHECK FAILED | ✕ red (`danger`) | GPS and NTP differ by more than 50 ms |
-| NOT IN SYNC | ✕ red | No time source, or no stream |
+| NOT IN SYNC | ✕ red | No time source, or no stream, while playing |
+| STOPPED ± | ■ grey (`textMuted`), neutral outline | The listener has not pressed Play, or pressed Stop. Never red. The figure is the clock's own error and the source line reads `clock ready`. |
+| DOWNLOADING n% | download arrow, neutral outline, with the time left | The set due now hasn't arrived; Play is disabled until it has |
 | TIGHTENING chip | accent text | Under the badge, only when the tightening rule above holds |
 
 ## Stream gap · nudge control
@@ -285,7 +316,7 @@ The user asked for calibration in Settings (2 Nov). It replaces the Headphone la
 | Actions | `Earcup test · about 10 s` (primary), `Two-phone test`, and a `Type a value` link | | later |
 | Mic note | The mic is on only during a test, and no audio leaves the phone | | |
 
-**Applying a value:** a saved value takes effect when playback next starts, because lag is fixed for a run today. When a value is saved during playback, show `Saved: 182 ms ±2.8 · Playing with 175 ms until playback next starts` with `Apply now` and `Later`. Apply now restarts playback, which rejoins in sync with a short fade. That makes a change during playback a deliberate restart, not a live timing change, so nothing new needs agreeing.
+**Applying a value:** a saved value takes effect when playback next starts, because lag is fixed for a run today. Tests stop playback, so there is no `Apply now` (Claude Code, 2 Nov).
 
 **Sync error budget:** the Headphone lag bar uses the ± of the value in use (Typed counts as ±20 ms, Not measured as ±40 ms).
 
@@ -297,10 +328,39 @@ The board shows the steps of one flow stacked; on the phone each is one screen.
 
 | Step | Shows | Taps |
 |---|---|---|
-| 1 · Place the cup | A drawing of a cup held over the phone's mic; instructions; `Needs the mic for about 10 s. Nothing is recorded or sent.` | Start. The system mic permission appears the first time. |
+| 1 · Place the cup | A drawing of a cup held over the phone's mic; instructions; `Needs the mic for about 15 s. Nothing is recorded or sent. Playback stops during the test.` For a portable speaker: no cup, `put the phone right next to it, mic towards the speaker`. | Start. The system mic permission appears the first time. |
 | 2 · Listening | Two stages, `Speaker clicks` then `Headphone clicks` (✓ done, ● now), a progress bar, clicks heard (`14 of 20`) and time left | Cancel |
-| 3 · Result | Lag and ± large, the old value for comparison (`was 175 ±20, table`), and the match strength by delay with its single peak (kept from the old Headphone lag scope) | Save, Apply now, Try again |
+| 3 · Result | See Earcup result | Save, Try again |
 | Failures | ▲ `Too quiet`, ▲ `Too noisy`, ▲ `Readings disagree` (with the spread, `150–230 ms`), each with the fix in one line | Try again, Cancel. Nothing is saved. |
+
+## Earcup result
+
+![](screens/earcup-result.png)
+
+Redesigned after a real run (Galaxy with ATH-M50xBT2) where `-19.7 ms ±4.0` and `-39.7 ms later than this phone's speaker` left the direction unclear. **Rule: no signs anywhere on this screen. Direction is always a word: later or earlier, early or late.**
+
+| Element | Shows | Source |
+|---|---|---|
+| Eyebrow | Device's reported name · route (`[HEADSET NAME] · BLUETOOTH`); `SPEAKER` wording for a portable speaker | Output |
+| Headline | `Your headphones play 182 ms later than the phone's speaker.` The number and direction word in accent, mono for the number | Measured gap: headphones minus speaker (mic) |
+| Confidence | Words plus mark plus the ±: ● `GOOD` (± under 5 ms), ▲ `UNSTEADY` (5–15 ms), ✕ `TRY AGAIN` (over 15 ms) | ± = speaker's uncertainty + 1.0 + both legs' scatter. Thresholds are starting values. |
+| Timeline | Two clicks on a time line, speaker then headphones, with an arrow from the speaker click to the headphone click and `182 ms later` under it. Gaps under 120 ms are drawn wider so the labels fit (schematic). | |
+| What gets saved | Three labelled rows: `Phone speaker's own delay` (value, and where it comes from: `from the shared table for [Phone model]`, or `measured`), `Headphones vs speaker` (`182.0 ms later`, measured just now by the mic), `Saved delay for these headphones` (accent, bold). Then: `Brocast will send audio 202 ms early, so it reaches your ears on time.` | Saved = speaker's own + gap. A positive saved value reads `early`, a negative one `late`. |
+| Mic check | Renamed from "ms from the output stamp": `How long after each headphone click left the phone the mic heard it. Good: one sharp peak. Several peaks or a flat line: try again.` Status `✓ ONE CLEAR PEAK`, or ▲ `SEVERAL PEAKS` / `NO CLEAR PEAK`. Plus the match plot. It is the mic's own measurement, not a cross-check. | Correlation by delay |
+| Share this result | Switch, on by default, `Shared as [nym], with the device's own name and model` | Publishes to Hyperdrive under the listener key and nym (**later**, needs the Pears spike) |
+| Applies | `Applies when playback next starts.` | |
+| Buttons | Save (primary) and Try again. With ✕ TRY AGAIN: Try again only. | |
+
+## Earcup result states
+
+![](screens/earcup-result-states.png)
+
+| State | Shows | Buttons |
+|---|---|---|
+| Unusual direction | ▲ amber `UNUSUAL RESULT`; `Your headphones played 39.7 ms earlier than the phone's speaker.`; the timeline reversed in amber; `Bluetooth headphones are almost always later. Press the cup flat over the mic and try again.`; then what saving would do (`Brocast would send audio 19.7 ms late`) | Try again (primary), Save anyway |
+| Confidence | The three levels and what each allows: Good, Save is primary; Unsteady, Save allowed and Try again suggested; Try again, not saved or shared | |
+| Share this result | Off by choice (`The result stays on this phone`); locked off in Privacy mode (parked); hidden for a failed test, because only passed tests publish | |
+| Portable speaker | `Your speaker plays 145 ms later than the phone's own speaker.` Step 1 without a cup | |
 
 ## Two-phone test
 
@@ -377,7 +437,7 @@ Android draws all three from one `MediaSession` and its media notification. The 
 | Start / Stop | START RUN: filled accent with dark text and a ▶. STOP RUN: a `text` outline with a ■. Both 52 high and full width. |
 | Settings | 100% opacity and editable while stopped; 55% and locked while running. Use satellites is never locked. |
 | Satellites switch, off | Track: a 1.5 px outline in `faint`; thumb: 18 px in `muted`, on the left. On: an accent track with a 22 px thumb in `bg`, on the right. The same on every screen. |
-| Rate nudge row | A 48 px row: the mode chip (AUTO outlined in `faint`; MANUAL outlined and lettered in accent), the gap value in 14 px mono, two 11 px lines (`gap · closes in 1.40 s` over `pitch +0.014%`; Manual and paused: `gap · paused` over `period 20 s`), then a chevron. No gap: the value reads `in step` in `muted`, with no small lines. Opens Nudge control. The same row appears on Now playing. |
+| Rate nudge row | A 48 px row: the mode chip (AUTO outlined in `faint`; MANUAL outlined and lettered in accent), the gap value in 14 px mono, two 11 px lines (`Dragging · Catching-up, 1.40 s` over `pitch +0.014%`; Manual and paused: `gap · paused` over `period 20 s`), then a chevron. No gap: the value reads `in step` in `muted`, with no small lines. Opens Nudge control. The same row appears on Now playing. |
 | STREAM row | Stream mode only, after PLAYOUT: newest segment, seconds buffered, fetch errors, server−flowtime |
 | Error lines | One extra line under the row, in `warn` with ▲, cut to one line. The **whole status row** (label, value and error line) is the tap target, at least 44 px tall. It opens the event log at that row's lane: OUTPUT opens AUDIO, NTP and STREAM open NET. The row always shows the latest error text. If the text changes while the error continues, the log adds a line (`still failing: …`). |
 | Tightening | One line under the source detail in the flowtime card: `TIGHTENING` in accent, then `±from → ±to` in `muted` mono. Only under the tightening rule. |

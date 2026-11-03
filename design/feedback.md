@@ -155,3 +155,96 @@ Designing these is fine, but they need building first, so please mark them in `u
 
 - From memory and not yet confirmed: Android may kill the app if location permission is revoked in system settings during playback, which would stop the music. The planned response is to restart in the Off state, but that isn't built.
 - Precise location is what Android requires for GPS time, so the wording around "Use satellites" should say that position never leaves the phone.
+
+## 2 Nov: Earcup test result screen is unclear (please redesign)
+
+Found in a real run on the Galaxy with ATH-M50xBT2. The result card shows "-19.7 ms ±4.0", then "-39.7 ms later than this phone's speaker", then a match graph labelled "29 ms from the output stamp". The user can't tell which way the correction goes.
+
+**What each number really is** (from `Calibration.kt` and `CalibrationScreens.kt`):
+- **Headline (-19.7):** the lag that will be saved = the phone speaker's own lag (+20.0 here) + the measured difference. A larger lag means Brocast sends audio earlier.
+- **Second line (-39.7):** headphones minus speaker, measured by the mic. Negative means the headphones were heard *earlier* than the speaker, which is unexpected for Bluetooth, so the wording "later than" with a minus sign is confusing.
+- **"29 ms from the output stamp":** the delay from the headphone leg's output time stamp to the mic hearing the click. It is not Android's latency estimate, and it is the mic's measurement, so it isn't a cross-check.
+- **±4.0:** the speaker's uncertainty + 1.0 + both legs' scatter.
+
+**Please design:**
+1. One plain headline in words, with no signs: "Headphones play X ms later/earlier than the speaker".
+2. A separate line for what will be saved and what Brocast will do ("Brocast sends audio X ms early/late").
+3. Label the saved value and the measured gap so they can't be confused, and show where the speaker's own value comes from.
+4. Rename the match graph's caption to say what it is (delay from the output stamp, from the mic) and say what a good one looks like.
+5. Confidence in words (good, unsteady, try again) alongside the ±.
+6. A small two-click timeline (speaker, then headphones) showing the gap and its direction.
+7. A state for an unexpected direction (headphones earlier than speaker), saying the result is unusual and suggesting a retry.
+
+Existing decisions still apply: the Share this result switch, and "Applies when playback next starts."
+
+## 2 Nov: A Satellites setting that explains the phone's GPS clock (please design)
+
+The user wants listeners to understand their hardware, and probably wants this as a **Satellites** setting inside Settings. `ui-spec.md` already has Time signals and a later Sky plot, so please say whether this is a new detail screen, an extension of Time signals, or the same screen.
+
+**Why:** on a Moto G32 the clock error sits at ±10 ms however many satellites it sees (9 to 15), and it never improves. The cause isn't visible anywhere in the app: the chip declares a 5 ms uncertainty on its own boot-clock stamp (`er_unc_ns`), and the app can't beat it. A listener sees "±10 ms" and a healthy satellite count and can't tell why.
+
+**Data the app already has** (`GpsTime.kt`, per second):
+- Chip name (`gnssHardwareModelName`), and whether raw clock reports are supported.
+- Gold or Silver (`gold`): whether the chip stamps reports with the boot clock.
+- Chip-declared stamp uncertainty (`erUnc`), bias uncertainty (`biasUnc`), and the resulting clock error.
+- Satellites in use, leap seconds (and whether the chip supplied them), and the current time source.
+
+**Data it doesn't have:** per-satellite positions and signal strength (counts only today), and which constellations are in use. These need building first, so please mark them *later* in `ui-spec.md`.
+
+**Please design:**
+1. A plain verdict, for example "Your phone's GPS chip limits timing to about ±10 ms", with the reason in words.
+2. What is limiting it: the chip's declared stamp uncertainty, the satellite signal, or a Silver link, each shown with its figure.
+3. Whether more satellites will help. This is the question the user hit. If the limit is the chip, say so.
+4. Gold or Silver in plain words, with what it means for sync quality.
+5. A state for a chip with no raw clock reports at all (the app falls back to NTP).
+6. How it relates to the "Use satellites" switch and to Time signals.
+
+Wording rules still apply: say Flowtime and Brocast clock, not "system time".
+
+## 2 Nov: Earcup results depend on the Bluetooth codec, and one run isn't enough (design impact)
+
+Measured on the Galaxy A16 with one headset (ATH-M50xBT2), cup over the phone's mic, 24 runs. Log: `measure/earcup-results.csv` on the laptop. The headset reports a 360 ms delay under every codec.
+
+| Codec | Headphones vs phone speaker | Spread between runs |
+|---|---|---|
+| LDAC, adaptive | about 38 ms **earlier** (9 runs) | about ±9 ms |
+| SBC | about 3 ms later (10 runs; range 19 ms earlier to 24 ms later) | about ±22 ms |
+| AAC | about 90 to 96 ms **later** (5 runs; one outlier at 120) | about ±5 ms |
+
+Inside a single run the clicks agree to 0.01 to 0.06 ms every time, so the scatter the screen uses for its ± says nothing about this spread.
+
+Likely cause (**not confirmed**): Android compensates its output time stamp with the headset's declared 360 ms, which doesn't change with the codec. Each codec's real delay differs, so the leftover error differs too.
+
+**Please change in the Earcup result design:**
+1. **The ± and the confidence words can't come from one run.** Today they come from within-run scatter, which is about 0.03 ms. A real result needs the spread across several runs. Suggest a multi-run flow ("Run it three times"), with the confidence words (Good, Unsteady, Try again) based on how far the runs disagree. A single run is at best Unsteady for Bluetooth.
+2. **A saved value belongs to one codec.** The same headset can read about 130 ms differently on another codec. Show the codec on the result and on Calibration (`LDAC`, `SBC`, `AAC`), and say that a saved value applies to that codec only. Add a state for "codec changed since this test", which should prompt a retest.
+3. **A reconnect or a codec change may invalidate a saved value.** Please extend the existing "Bluetooth delay can change each time headphones connect" note: say why, and when it matters.
+
+**Needs checking on the code side before you design around it:** whether the app can read the active codec without special permissions. I haven't verified this. Treat the codec label as *later* in `ui-spec.md` until I confirm.
+
+Existing decisions still apply: lag is relative to a common reference, no signs on the result screen, and "Applies when playback next starts."
+
+## 2 Nov: No codec switch in the app (decision)
+
+The user asked for a toggle between LDAC and AAC. An ordinary app can't change the Bluetooth codec: it needs a system permission, and today the only route is Android's Developer options (from my knowledge of Android, not tried in this app). So **don't design a codec switch.**
+
+**Please design instead:**
+1. **Show the codec in use** (`LDAC`, `AAC` or `SBC`) on the Calibration screen and the Earcup result. Mark it *later* in `ui-spec.md` until I confirm that an app can read it.
+2. **A "codec changed" prompt:** when the codec changes after a saved test, offer a retest (same sheet style as the new-headphones prompt). A saved value applies to one codec only. See the section above.
+3. **Optional, advanced:** a link row that opens Android's own settings, with a note that it only works if Developer options are already on. Say whether you want it at all.
+
+LDAC sounds best on paper and AAC was the steadiest in timing, so don't promise either. The user's reason for the switch is to compare them, which the codec label and the retest prompt cover.
+
+## 2 Nov: Satellites verdict when the limit is tiny (please add a wording)
+
+Built Satellites (hand-off 13) and ran it on the Galaxy A16 on a good fix. Its chip stamp is ±0.1 ms and the total ±0.2 ms. The screen still says **"Your phone's GPS chip limits timing to about ±0.2 ms"** in an amber box with a LIMIT tag, because the chip stamp is the largest of the three rows. ±0.2 ms is excellent, so the warning is out of proportion.
+
+Please design a fourth verdict, for example "Your phone's GPS clock is accurate to about ±0.2 ms. Nothing is holding it back.", with the accent tick instead of amber and no LIMIT tag. Suggested rule: when the total is under 1 ms, no row is tagged LIMIT. You pick the threshold.
+
+Also built, FYI: the sky and tap-for-detail card are live. Android's satellite status gives height, direction, signal and system per satellite, so they weren't *later* after all. Labels that would overlap now move to another side of their mark; on a real indoor sky the satellites bunch low in one direction.
+
+## 2 Nov: Small times in microseconds (decision)
+
+The user decided: **show small time units in microseconds, consistently, not milliseconds.** Built as: any value under 1 ms is shown in µs (or ns under 1 µs), for example `±400 µs` instead of `±0.4 ms`, and `±10 µs` instead of `±0.01 ms`. From 1 ms upward it stays in ms. This follows the existing `fmtDuration` rule on Now playing and Time signals, and now also covers Satellites, the Earcup result, Calibration and Settings.
+
+Please update the designs and `ui-spec.md` examples that show sub-millisecond values in ms: Satellites (`±0.1 ms`, `±0.00 ms`, `±0.01 ms`, `±0.2 ms`), Now playing's held gap (`0.20 ms`), badges (`±0.4 ms`) and any others. Also built in hand-off 12: the output lag's uncertainty is now in the total (flowtime and output lag combined, plus the held gap), so a phone with no calibration shows about ±40 ms and an amber badge.

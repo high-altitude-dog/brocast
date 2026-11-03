@@ -58,6 +58,7 @@ import org.beachsync.proto.Source
 import org.beachsync.proto.fmtDuration
 import java.time.Instant
 import java.time.ZoneId
+import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.log10
 import kotlin.math.min
@@ -83,35 +84,40 @@ private fun rememberSecondTick(): State<Long> = produceState(Session.nowBoot()) 
 private fun logScale(ns: Double) = if (ns.isNaN() || ns <= 0.0) 0f else ((log10(ns) - 3.0) / 4.0).coerceIn(0.0, 1.0).toFloat()
 
 @Composable
-fun NowPlaying(state: BenchState, actions: BenchActions, openLog: () -> Unit, openNudge: () -> Unit, openBench: () -> Unit, openSettings: () -> Unit, openSignals: () -> Unit, openCalibration: () -> Unit) {
+fun NowPlaying(state: BenchState, actions: BenchActions, openLog: () -> Unit, openNudge: () -> Unit, openBench: () -> Unit, openSettings: () -> Unit, openSignals: () -> Unit, openCalibration: () -> Unit, openSatellites: () -> Unit) {
     val boot by rememberSecondTick()
     val s = state.session
     val listen = {
         if (s == null) { state.stream = true; actions.listen() } else actions.startOrStop()
     }
+    // The output lag's uncertainty is part of the sync error (hand-off 12): from this output's saved test, else the shared table.
+    val out = actions.output()
+    val cal = actions.savedCalibration(out) ?: actions.tableCalibration(out)
+    val lagUncNs = cal.plusMinusMs * 1e6
     Column(
         Modifier.fillMaxSize().background(Ink.bg).safeDrawingPadding().verticalScroll(rememberScrollState())
             .padding(top = Tokens.Space.screenPaddingTop.dp, start = Tokens.Space.screenPaddingSide.dp, end = Tokens.Space.screenPaddingSide.dp, bottom = Tokens.Space.screenPaddingBottom.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Masthead(s, openBench, openSettings, openSignals, openCalibration)
-        BasicText(s?.stream?.manifest?.source?.ifEmpty { null } ?: "Beach Sync Radio", style = Tokens.Text.screenTitle.style().copy(fontSize = 20.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            BasicText(state.library?.status ?: "Live", Modifier.weight(1f), Tokens.Text.body.style(Ink.textSecondary).copy(fontSize = 13.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            // Track and set names aren't in the stream yet, so the station name stands in for the title.
+            BasicText(s?.stream?.manifest?.source?.ifEmpty { null } ?: "Beach Sync Radio", Modifier.weight(1f), Tokens.Text.screenTitle.style().copy(fontSize = 20.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
             KeptBadge()
         }
-        Dial(s, boot, state.localTime)
-        SyncBadge(s, boot)
-        // There's no Play control in the design yet. This is the test bench's button until there is.
-        RunButton(s != null, listen, "PLAY", "STOP")
+        LibraryLine(state.library)
+        Dial(s, boot, state.localTime, lagUncNs, openSatellites)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Top) {
+            PlayStopButton(s != null, listen)
+            SyncBadge(s, boot, lagUncNs, Modifier.weight(1f))
+        }
         EventRow(state.eventLog, SECOND_MS, openLog)
-        Budget(s, boot)
+        Budget(s, boot, lagUncNs)
         NudgeRow(state, openNudge, SECOND_MS)
         Row(Modifier.fillMaxWidth().height(IntrinsicTile), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             val gold = when (s?.gps?.gold) { true -> "Gold · "; false -> "Silver · "; null -> "" }
             Tile("SOURCE", FlowTime.chosen?.name?.takeIf { s != null } ?: "—", if (s == null) "" else if (s.gps.active) "$gold${s.gps.used} sats" else "Satellites off", Modifier.weight(1f))
             // Named for the output in use: this lag also applies to a phone's own speaker.
-            val out = actions.output()
             Tile(out.kind.label, "${s?.s?.lagMs ?: state.lag} ms", if (out.external) out.name else state.lagSource, Modifier.weight(1f))
             Tile("AHEAD", "—", "downloaded", Modifier.weight(1f))
         }
@@ -126,10 +132,47 @@ private val IntrinsicTile = 84.dp
 private fun KeptBadge() {
     val shape = RoundedCornerShape(Tokens.Radius.pill.dp)
     Row(
-        Modifier.height(Tokens.Space.touchTarget.dp).background(Ink.accent.copy(alpha = 0.12f), shape).border(Tokens.Stroke.card.dp, Ink.accent, shape).padding(horizontal = 14.dp)
+        Modifier.height(Tokens.Space.touchTarget.dp).border(Tokens.Stroke.card.dp, Ink.border, shape).padding(horizontal = 14.dp)
             .semantics { contentDescription = "Kept. Every set stays on this phone, and this can't be turned off in the beta." },
-        verticalAlignment = Alignment.CenterVertically,
-    ) { BasicText("■ Kept", style = Tokens.Text.body.style(Ink.accent)) }
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Canvas(Modifier.size(width = 10.dp, height = 14.dp)) {
+            val path = androidx.compose.ui.graphics.Path().apply {
+                moveTo(0f, 0f); lineTo(size.width, 0f); lineTo(size.width, size.height); lineTo(size.width / 2f, size.height * 0.72f); lineTo(0f, size.height); close()
+            }
+            drawPath(path, Ink.text)
+        }
+        BasicText("Kept", style = Tokens.Text.body.style(Ink.text))
+    }
+}
+
+/** The whole library's download state: a thin bar and "38 of 52 sets", or "52 sets · all here" when it is complete. */
+@Composable
+private fun LibraryLine(lib: org.beachsync.proto.LibraryStore?) {
+    val have = lib?.haveSets ?: 0
+    val total = lib?.totalSets ?: 0
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        BasicText("LIBRARY", style = Tokens.Text.cardLabel.style())
+        Box(Modifier.weight(1f).height(3.dp).background(Ink.track, CircleShape)) {
+            if (total > 0) Box(Modifier.fillMaxWidth((have.toFloat() / total).coerceIn(0f, 1f)).fillMaxHeight().background(Ink.muted, CircleShape))
+        }
+        BasicText(
+            when { total == 0 -> lib?.status ?: "Not downloaded yet"; have == total -> "$total sets · all here"; else -> "$have of $total sets" },
+            style = Tokens.Text.valueSmall.style(Ink.textSecondary), maxLines = 1,
+        )
+    }
+}
+
+/** A 52 px round button: Stop (a white square, outlined) while playing, Play (a dark triangle on accent) when stopped. */
+@Composable
+private fun PlayStopButton(playing: Boolean, onClick: () -> Unit) {
+    val mod = Modifier.size(52.dp).clickable(role = Role.Button, onClick = onClick).semantics { contentDescription = if (playing) "Stop" else "Play" }
+    Box(if (playing) mod.border(Tokens.Stroke.emphasis.dp, Ink.text, CircleShape) else mod.background(Ink.accent, CircleShape), Alignment.Center) {
+        Canvas(Modifier.size(16.dp)) {
+            if (playing) drawRoundRect(Ink.text, cornerRadius = CornerRadius(2.dp.toPx()))
+            else drawPath(androidx.compose.ui.graphics.Path().apply { moveTo(size.width * 0.12f, 0f); lineTo(size.width, size.height / 2); lineTo(size.width * 0.12f, size.height); close() }, Ink.onAccent)
+        }
+    }
 }
 
 /** Holding the station name opens the test bench: the developer way in, with nothing on screen for listeners to trip over. */
@@ -191,11 +234,11 @@ private fun IconBox(icon: HeaderIcon, onClick: (() -> Unit)?) {
 
 /** The Brocast clock. The design's sub-second dial is left out, because this screen updates once a second. */
 @Composable
-private fun Dial(s: Session?, boot: Long, showLocal: Boolean) {
+private fun Dial(s: Session?, boot: Long, showLocal: Boolean, lagUncNs: Double, openSatellites: () -> Unit) {
     val fit = FlowTime.fit()
     val utc = if (s != null && fit != null) fit.utcAt(boot) else null
     val now = utc?.let { Instant.ofEpochSecond(0, it) }
-    val err = s?.syncErrorNs(boot) ?: Double.NaN
+    val err = s?.syncErrorNs(boot, lagUncNs) ?: Double.NaN
     val flowErr = if (s != null && fit != null) fmtDuration(fit.errAt(boot)) else "—"
     val resources = LocalContext.current.resources
     val top = remember { Paint(Paint.ANTI_ALIAS_FLAG).apply { typeface = resources.getFont(R.font.space_grotesk); textAlign = Paint.Align.CENTER; letterSpacing = 0.18f } }
@@ -236,6 +279,7 @@ private fun Dial(s: Session?, boot: Long, showLocal: Boolean) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
             BasicText(now?.let { CLOCK_ZONE.format(it) } ?: " ", style = Tokens.Text.clockZone.style())
             BasicText(now?.let { CLOCK_DIGITS.format(it) } ?: "--:--:--", style = Tokens.Text.clock.style())
+            SourceGlyph(s, boot, openSatellites)
             val local = ZoneId.systemDefault()
             val different = showLocal && now != null && local.rules.getOffset(now) != UK.rules.getOffset(now)
             BasicText(if (different) shortZone(LOCAL_DIGITS.withZone(local).format(now)) + " · local" else " ", style = Tokens.Text.clockLocal.style().copy(fontSize = 10.sp), maxLines = 1)
@@ -246,9 +290,9 @@ private fun Dial(s: Session?, boot: Long, showLocal: Boolean) {
 private class Badge(val words: String, val mark: String, val tint: Color, val figure: String, val detail: String)
 
 /** The states with data today. REJOINING, CLOCK CHECK FAILED and SILENT · OVER LIMIT need detection the app doesn't do yet. */
-private fun badge(s: Session?, boot: Long): Badge {
+private fun badge(s: Session?, boot: Long, lagUncNs: Double): Badge {
     if (s == null) return Badge("STOPPED", "■", Ink.textSecondary, "", "")
-    val err = s.syncErrorNs(boot)
+    val err = s.syncErrorNs(boot, lagUncNs)
     val figure = if (err.isNaN()) "" else "±" + fmtDuration(err)
     val over = err.isNaN() || err > LIMIT_NS
     val grade = when (s.gps.gold) { true -> "GPS · Gold"; false -> "GPS · Silver"; null -> "GPS" }
@@ -263,10 +307,10 @@ private fun badge(s: Session?, boot: Long): Badge {
 }
 
 @Composable
-private fun SyncBadge(s: Session?, boot: Long) {
-    val b = badge(s, boot)
+private fun SyncBadge(s: Session?, boot: Long, lagUncNs: Double, modifier: Modifier = Modifier) {
+    val b = badge(s, boot, lagUncNs)
     val shape = RoundedCornerShape(Tokens.Radius.pill.dp)
-    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(
             Modifier.fillMaxWidth().height(52.dp).background(b.tint.copy(alpha = 0.08f), shape).border(Tokens.Stroke.emphasis.dp, b.tint, shape).padding(horizontal = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -283,32 +327,33 @@ private fun SyncBadge(s: Session?, boot: Long) {
     }
 }
 
-/** Headphone lag and screenlag have no uncertainty to show yet, so their bars are empty and the total is flowtime and any gap. */
+/** Flowtime, the output lag's uncertainty and any held gap, then the total (hand-off 12). Screenlag belongs with the light show, later. */
 @Composable
-private fun Budget(s: Session?, boot: Long) {
+private fun Budget(s: Session?, boot: Long, lagUncNs: Double) {
     val flow = if (s != null) FlowTime.fit()?.errAt(boot) ?: Double.NaN else Double.NaN
-    val total = s?.syncErrorNs(boot) ?: Double.NaN
+    val total = s?.syncErrorNs(boot, lagUncNs) ?: Double.NaN
+    val held = if (s != null) abs(s.nudge.gapAt(boot)).toDouble() else Double.NaN
     Card {
         Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween) {
             BasicText("SYNC ERROR BUDGET", style = Tokens.Text.cardLabel.style())
             BasicText(if (total.isNaN()) "—" else "±" + fmtDuration(total), style = Tokens.Text.valueSmall.style(Ink.accent))
         }
         BudgetRow("Flowtime", flow, Ink.accent, Ink.text)
-        BudgetRow("Output lag", Double.NaN, Ink.warn, Ink.text)
+        BudgetRow("Output lag", if (s != null) lagUncNs else Double.NaN, Ink.warn, Ink.text)
+        BudgetRow("Held gap", held, Ink.muted, Ink.textSecondary, plusMinus = false)
         BudgetRow("Total", total, Ink.text, Ink.text)
-        BudgetRow("Screenlag", Double.NaN, Ink.muted, Ink.muted)
     }
 }
 
 @Composable
-private fun BudgetRow(label: String, ns: Double, bar: Color, words: Color) {
+private fun BudgetRow(label: String, ns: Double, bar: Color, words: Color, plusMinus: Boolean = true) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         BasicText(label, Modifier.width(100.dp), Tokens.Text.body.style(words))
         Box(Modifier.weight(1f).height(6.dp).background(Ink.track, CircleShape)) {
             if (!ns.isNaN()) Box(Modifier.fillMaxWidth(logScale(ns).coerceAtLeast(0.02f)).fillMaxHeight().background(bar, CircleShape))
         }
         Spacer(Modifier.width(10.dp))
-        BasicText(if (ns.isNaN()) "—" else "±" + fmtDuration(ns), Modifier.width(66.dp), Tokens.Text.valueSmall.style(words))
+        BasicText(if (ns.isNaN()) "—" else (if (plusMinus) "±" else "") + fmtDuration(ns), Modifier.width(66.dp), Tokens.Text.valueSmall.style(words))
     }
 }
 
@@ -321,5 +366,65 @@ private fun Tile(label: String, value: String, detail: String, modifier: Modifie
         BasicText(label, style = Tokens.Text.cardLabel.style().copy(fontSize = min(Tokens.Text.cardLabel.size, 9.5f).sp, letterSpacing = 0.8.sp), maxLines = 1)
         BasicText(value, style = Tokens.Text.value.style(), maxLines = 1, overflow = TextOverflow.Ellipsis)
         BasicText(detail, style = Tokens.Text.small.style(), maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+
+/** The time source as a picture: a mini constellation for GPS, an hourglass for holdover, a cell tower for internet time. Tapping it opens Satellites. */
+@Composable
+private fun SourceGlyph(s: Session?, boot: Long, open: () -> Unit) {
+    val gps = s?.gps
+    val kind = when {
+        s == null || FlowTime.fit() == null -> "NONE"
+        gps != null && gps.active && s.sourceName(boot) == "GPS" -> "GPS"
+        gps != null && gps.active && s.sourceName(boot).startsWith("GPS") -> "HOLD"
+        else -> "NTP"
+    }
+    val sats = gps?.sats.orEmpty()
+    val words = when (kind) {
+        "GPS" -> "GPS · ${sats.count { it.used }} of ${sats.size}"
+        "HOLD" -> "HOLDING · ${((boot - gps!!.lastBoot) / 1_000_000_000L).coerceAtLeast(0)} s"
+        "NTP" -> "NTP"
+        else -> "NO TIME YET"
+    }
+    Column(Modifier.clickable(enabled = kind == "GPS" || kind == "HOLD", onClick = open).padding(vertical = 2.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Canvas(Modifier.size(width = 84.dp, height = 30.dp).semantics { contentDescription = words }) {
+            val c = center
+            val rx = size.width / 2f - 4.dp.toPx(); val ry = size.height / 2f - 3.dp.toPx()
+            when (kind) {
+                "GPS", "HOLD" -> {
+                    drawOval(Ink.faint, Offset(c.x - rx, c.y - ry), Size(rx * 2, ry * 2), style = Stroke(1.dp.toPx()))
+                    val dots = sats.map { sat ->
+                        val d = (90f - sat.elevationDeg.coerceIn(0f, 90f)) / 90f
+                        val a = Math.toRadians(sat.azimuthDeg.toDouble())
+                        Offset(c.x + rx * d * sin(a).toFloat(), c.y - ry * d * cos(a).toFloat())
+                    }
+                    val lit = if (kind == "GPS") sats.indices.filter { sats[it].used } else emptyList()
+                    for ((i, j) in mstEdges(lit.map { dots[it] })) drawLine(Ink.accent.copy(alpha = 0.35f), dots[lit[i]], dots[lit[j]], 1.dp.toPx())
+                    for (i in dots.indices) drawCircle(if (i in lit) Ink.accent else Ink.muted.copy(alpha = if (kind == "HOLD") 0.4f else 1f), if (i in lit) 2.2.dp.toPx() else 1.6.dp.toPx(), dots[i])
+                    if (kind == "HOLD") {
+                        val h = 7.dp.toPx(); val w = 5.dp.toPx()
+                        val top = androidx.compose.ui.graphics.Path().apply { moveTo(c.x - w, c.y - h); lineTo(c.x + w, c.y - h); lineTo(c.x, c.y); close() }
+                        val bottom = androidx.compose.ui.graphics.Path().apply { moveTo(c.x - w, c.y + h); lineTo(c.x + w, c.y + h); lineTo(c.x, c.y); close() }
+                        drawPath(top, Ink.accent); drawPath(bottom, Ink.accent)
+                    }
+                }
+                else -> {
+                    val tint = if (kind == "NTP") Ink.textSecondary else Ink.muted
+                    val h = size.height - 4.dp.toPx()
+                    drawLine(tint, Offset(c.x, c.y - h / 2), Offset(c.x - 5.dp.toPx(), c.y + h / 2), 1.5.dp.toPx())
+                    drawLine(tint, Offset(c.x, c.y - h / 2), Offset(c.x + 5.dp.toPx(), c.y + h / 2), 1.5.dp.toPx())
+                    if (kind == "NTP") for (k in 1..2) {
+                        val r = k * 5.dp.toPx()
+                        drawArc(tint, -50f, 100f, false, Offset(c.x - r, c.y - h / 2 - r + 3.dp.toPx()), Size(r * 2, r * 2), style = Stroke(1.dp.toPx()))
+                        drawArc(tint, 130f, 100f, false, Offset(c.x - r, c.y - h / 2 - r + 3.dp.toPx()), Size(r * 2, r * 2), style = Stroke(1.dp.toPx()))
+                    } else {
+                        drawLine(Ink.danger, Offset(c.x + 9.dp.toPx(), c.y - 5.dp.toPx()), Offset(c.x + 17.dp.toPx(), c.y + 3.dp.toPx()), 1.5.dp.toPx())
+                        drawLine(Ink.danger, Offset(c.x + 17.dp.toPx(), c.y - 5.dp.toPx()), Offset(c.x + 9.dp.toPx(), c.y + 3.dp.toPx()), 1.5.dp.toPx())
+                    }
+                }
+            }
+        }
+        BasicText(words, style = Tokens.Text.small.style(Ink.textSecondary).copy(fontSize = 10.sp), maxLines = 1)
     }
 }

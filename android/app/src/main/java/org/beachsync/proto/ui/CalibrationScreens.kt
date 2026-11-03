@@ -50,7 +50,7 @@ import kotlin.math.roundToInt
 
 private const val TICK_MS = 250L
 
-private fun msText(v: Double) = "%.1f ms".format(Locale.ROOT, v)
+private fun msText(v: Double) = org.beachsync.proto.fmtMillis(v)
 
 private fun sourceWord(s: CalSource) = when (s) {
     CalSource.TABLE -> "TABLE"; CalSource.EARCUP -> "EARCUP"; CalSource.HANDSHAKE -> "HANDSHAKE"; CalSource.TYPED -> "TYPED"; CalSource.NONE -> "NOT MEASURED"
@@ -155,21 +155,7 @@ fun EarcupPage(state: BenchState, actions: BenchActions, back: () -> Unit) {
                 BasicText(if (phase == EarcupRun.Phase.ANALYSING) "Working it out…" else "Keep still · %.0f s left".format(Locale.ROOT, (total - elapsed).coerceAtLeast(0.0)), style = Tokens.Text.small.style())
                 Pill("Cancel", false) { actions.cancelEarcup() }
             }
-            outcome is EarcupOutcome.Pass -> {
-                val value = actions.earcupValue(outcome)
-                val was = actions.savedCalibration(output) ?: actions.tableCalibration(output)
-                var done by remember(outcome) { mutableStateOf(false) }
-                Card {
-                    BasicText("3 · RESULT · ${output.name}", style = Tokens.Text.cardLabel.style())
-                    BasicText(msText(value.lagMs) + "  ±" + "%.1f".format(Locale.ROOT, value.plusMinusMs), style = Tokens.Text.value.style().copy(fontSize = Tokens.Text.clock.size.sp()))
-                    BasicText(msText(outcome.laterMs) + " later than this phone's speaker", style = Tokens.Text.body.style())
-                    if (was.source != CalSource.NONE) BasicText("was " + msText(was.lagMs) + ", " + sourceWord(was.source).lowercase(), style = Tokens.Text.small.style())
-                    MatchPeak(outcome.headphones.profile, outcome.headphones.peakMs)
-                    BasicText("Applies when playback next starts.", style = Tokens.Text.small.style(Ink.textSecondary))
-                    Pill(if (done) "Saved" else "Save", true, !done) { actions.saveCalibration(output, value); done = true }
-                    Pill("Try again", false) { actions.resetEarcup() }
-                }
-            }
+            outcome is EarcupOutcome.Pass -> EarcupResult(outcome, output, actions)
             outcome is EarcupOutcome.Fail -> Failure(
                 when (outcome.fault) { EarcupFault.TOO_QUIET -> "Too quiet"; EarcupFault.TOO_NOISY -> "Too noisy"; EarcupFault.DISAGREE -> "Readings disagree" },
                 when (outcome.fault) {
@@ -201,6 +187,113 @@ private fun Stage(label: String, now: Boolean, done: Boolean) {
     BasicText((if (done) "✓ " else if (now) "● " else "○ ") + label, style = Tokens.Text.body.style(if (now || done) Ink.text else Ink.muted).copy(color = if (now || done) Ink.text else tint))
 }
 
+private fun dirWord(v: Double, pos: String, neg: String) = if (v >= 0) pos else neg
+private fun wholeMs(v: Double) = org.beachsync.proto.fmtMillis(abs(v), 0)
+
+/** Another peak at least half as strong as the main one, well away from it, means the match isn't one clear click. */
+private fun severalPeaks(profile: FloatArray, peakMs: Double): Boolean {
+    val per = profile.size / (Earcup.BEFORE_MS + Earcup.AFTER_MS)
+    val top = profile.maxOrNull() ?: return false
+    val near = (20 * per).toInt()
+    val at = ((peakMs + Earcup.BEFORE_MS) * per).toInt()
+    for (i in 1 until profile.size - 1) {
+        if (abs(i - at) > near && profile[i] >= 0.5f * top && profile[i] >= profile[i - 1] && profile[i] >= profile[i + 1]) return true
+    }
+    return false
+}
+
+/** Hand-off 11. No signs anywhere: direction is always a word. Sharing isn't built yet, so there's no share switch. */
+@Composable
+private fun EarcupResult(outcome: EarcupOutcome.Pass, output: AudioOutput, actions: BenchActions) {
+    val value = actions.earcupValue(outcome)
+    val speakerLag = value.lagMs - outcome.laterMs
+    val speakerRow = org.beachsync.proto.LatencyTable.lookup(org.beachsync.proto.RouteKey(android.os.Build.MODEL, "speaker"))
+    var done by remember(outcome) { mutableStateOf(false) }
+    val unusual = outcome.laterMs < 0
+    val pm = value.plusMinusMs
+    val tryAgainOnly = pm > 15.0
+    val tint = if (unusual) Ink.warn else Ink.accent
+    val portable = output.kind == org.beachsync.proto.OutputKind.PORTABLE_SPEAKER
+    val who = if (portable) "speaker" else "headphones"
+    val mono = Tokens.Text.value.style().fontFamily
+    BasicText("${output.name.uppercase()} · ${output.route.uppercase()}", style = Tokens.Text.cardLabel.style())
+    val headline = androidx.compose.ui.text.buildAnnotatedString {
+        append(if (unusual) "Your $who played " else "Your $who plays ")
+        pushStyle(androidx.compose.ui.text.SpanStyle(color = tint, fontFamily = mono)); append(wholeMs(outcome.laterMs) + " " + dirWord(outcome.laterMs, "later", "earlier")); pop()
+        append(" than the phone's ${if (portable) "own " else ""}speaker.")
+    }
+    BasicText(headline, style = Tokens.Text.bodyStrong.style().copy(fontSize = Tokens.Text.clock.size.sp() * 0.7f))
+    val (mark, word, markColor) = when {
+        unusual -> Triple("▲", "UNUSUAL RESULT", Ink.warn)
+        pm > 15.0 -> Triple("✕", "TRY AGAIN", Ink.warn)
+        pm >= 5.0 -> Triple("▲", "UNSTEADY", Ink.warn)
+        else -> Triple("●", "GOOD", Ink.accent)
+    }
+    BasicText("$mark $word  ±" + org.beachsync.proto.fmtMillis(pm), style = Tokens.Text.bodyStrong.style(markColor))
+    GapTimeline(outcome.laterMs, tint)
+    if (unusual) BasicText("Bluetooth headphones are almost always later. Press the cup flat over the mic and try again.", style = Tokens.Text.body.style(Ink.warn))
+    Card {
+        BasicText(if (unusual) "WHAT SAVING WOULD DO" else "WHAT GETS SAVED", style = Tokens.Text.cardLabel.style())
+        SavedRow("Phone speaker's own delay", if (speakerRow.source == CalSource.TABLE) "from the shared table for ${android.os.Build.MODEL}" else "not in the shared table", msText(speakerLag), false)
+        SavedRow("${who.replaceFirstChar { it.uppercase() }} vs speaker", "measured just now by the mic", wholeMs(outcome.laterMs) + " " + dirWord(outcome.laterMs, "later", "earlier"), false)
+        SavedRow("Saved delay for this $who", "the value Brocast will use", wholeMs(value.lagMs), true)
+        val sentence = androidx.compose.ui.text.buildAnnotatedString {
+            append(if (unusual) "Brocast would send audio " else "Brocast will send audio ")
+            pushStyle(androidx.compose.ui.text.SpanStyle(color = tint, fontFamily = mono)); append(wholeMs(value.lagMs) + " " + dirWord(value.lagMs, "early", "late")); pop()
+            append(if (unusual) "." else ", so it reaches your ears on time.")
+        }
+        BasicText(sentence, style = Tokens.Text.body.style())
+    }
+    Card {
+        val several = severalPeaks(outcome.headphones.profile, outcome.headphones.peakMs)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            BasicText("MIC CHECK", Modifier.weight(1f), Tokens.Text.cardLabel.style())
+            BasicText(if (several) "▲ SEVERAL PEAKS" else "✓ ONE CLEAR PEAK", style = Tokens.Text.cardLabel.style(if (several) Ink.warn else Ink.accent))
+        }
+        BasicText("How long after each $who click left the phone the mic heard it. Good: one sharp peak. Several peaks or a flat line: try again.", style = Tokens.Text.small.style())
+        MatchPeak(outcome.headphones.profile, outcome.headphones.peakMs)
+    }
+    BasicText("Applies when playback next starts.", style = Tokens.Text.small.style(Ink.textSecondary))
+    if (tryAgainOnly) {
+        BasicText("Nothing was saved.", style = Tokens.Text.small.style())
+        Pill("Try again", true) { actions.resetEarcup() }
+    } else {
+        Pill("Try again", unusual) { actions.resetEarcup() }
+        Pill(if (done) "Saved" else "Save", !unusual, !done) { actions.saveCalibration(output, value); done = true }
+    }
+}
+
+@Composable
+private fun SavedRow(title: String, detail: String, value: String, strong: Boolean) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            BasicText(title, style = Tokens.Text.bodyStrong.style())
+            BasicText(detail, style = Tokens.Text.small.style())
+        }
+        BasicText(value, style = Tokens.Text.valueSmall.style(if (strong) Ink.accent else Ink.text))
+    }
+}
+
+/** Two clicks on a time line, speaker then headphones. Small gaps are drawn wider so the labels fit: it's a sketch. */
+@Composable
+private fun GapTimeline(laterMs: Double, tint: Color) {
+    val label = "Speaker click, then headphone click ${wholeMs(laterMs)} ${dirWord(laterMs, "later", "earlier")}"
+    Canvas(Modifier.fillMaxWidth().height(56.dp).semantics { contentDescription = label }) {
+        val w = size.width
+        val span = (abs(laterMs) / 300.0).coerceIn(0.25, 0.7).toFloat() * w
+        val speakerX = if (laterMs >= 0) w * 0.1f else w * 0.1f + span
+        val phonesX = if (laterMs >= 0) speakerX + span else w * 0.1f
+        drawLine(Ink.muted, Offset(0f, 38.dp.toPx()), Offset(w, 38.dp.toPx()), 1.dp.toPx())
+        drawLine(Ink.text, Offset(speakerX, 12.dp.toPx()), Offset(speakerX, 38.dp.toPx()), 3.dp.toPx())
+        drawLine(tint, Offset(phonesX, 12.dp.toPx()), Offset(phonesX, 38.dp.toPx()), 3.dp.toPx())
+        val y = 48.dp.toPx()
+        drawLine(tint, Offset(speakerX, y), Offset(phonesX, y), 1.5.dp.toPx())
+        val head = 4.dp.toPx() * (if (phonesX >= speakerX) 1f else -1f)
+        drawLine(tint, Offset(phonesX, y), Offset(phonesX - head, y - 3.dp.toPx()), 1.5.dp.toPx())
+        drawLine(tint, Offset(phonesX, y), Offset(phonesX - head, y + 3.dp.toPx()), 1.5.dp.toPx())
+    }
+}
+
 /** The match strength by delay from the output stamp, with its one peak: a second peak would mean an unreliable result. */
 @Composable
 private fun MatchPeak(profile: FloatArray, peakMs: Double) {
@@ -224,7 +317,7 @@ private fun MatchPeak(profile: FloatArray, peakMs: Double) {
             val peakX = size.width * ((peakMs + Earcup.BEFORE_MS) / (Earcup.BEFORE_MS + Earcup.AFTER_MS)).toFloat()
             drawLine(Ink.text, Offset(peakX, 0f), Offset(peakX, size.height), 1.dp.toPx())
         }
-        BasicText("%.0f ms from the output stamp".format(Locale.ROOT, peakMs), style = Tokens.Text.small.style())
+        BasicText(org.beachsync.proto.fmtMillis(peakMs, 0) + " after the click left the phone", style = Tokens.Text.small.style())
     }
 }
 

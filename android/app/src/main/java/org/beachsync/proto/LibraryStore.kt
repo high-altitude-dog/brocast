@@ -27,6 +27,8 @@ class LibraryStore private constructor(ctx: Context) : Thread("library") {
     @Volatile var dMs = 60000L
     @Volatile var url = ""
     @Volatile var status = "Library not downloaded yet"
+    @Volatile var haveSets = 0
+    @Volatile var totalSets = 0
     @Volatile private var going = true
 
     init { if (listFile.exists()) try { read(listFile.readText()) } catch (_: Exception) { } }
@@ -121,6 +123,7 @@ class LibraryStore private constructor(ctx: Context) : Thread("library") {
     private fun summarise(note: String?, edition: Edition? = editionAt(editions, System.currentTimeMillis() * 1_000_000L)) {
         val total = edition?.items?.size ?: 0
         val have = edition?.items?.count { file(it.id).exists() } ?: 0
+        haveSets = have; totalSets = total
         status = when {
             total == 0 -> note ?: "Library not downloaded yet"
             have == total -> "All $total on this phone"

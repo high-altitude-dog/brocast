@@ -38,5 +38,10 @@
             android:name=".TickWindowReceiver"
             android:exported="true"
             android:permission="android.permission.DUMP" />
+        <!-- Reads Android's output latency with a silent track, over adb. Same permission, so only adb can send it. -->
+        <receiver
+            android:name=".OutputLatencyReceiver"
+            android:exported="true"
+            android:permission="android.permission.DUMP" />
     </application>
 </manifest>

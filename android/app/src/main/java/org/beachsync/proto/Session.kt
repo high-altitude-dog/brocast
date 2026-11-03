@@ -157,10 +157,11 @@ class Session(ctx: Context, val s: Settings, private val satellitesOn: Boolean) 
         return if (src == Source.GPS && boot - gps.lastBoot > 3_000_000_000L) "GPS (holdover)" else src.name
     }
 
-    /** The sync error shown to the listener: flowtime's error plus any gap being held, which is real sync error. */
-    fun syncErrorNs(boot: Long): Double {
+    /** The sync error shown to the listener: flowtime and the output lag's uncertainty combined, plus any gap being held, which is real sync error. */
+    fun syncErrorNs(boot: Long, outputLagUncNs: Double = 0.0): Double {
         val fit = FlowTime.fit() ?: return Double.NaN
-        return fit.errAt(boot) + abs(nudge.gapAt(boot)).toDouble()
+        val flow = fit.errAt(boot)
+        return Math.sqrt(flow * flow + outputLagUncNs * outputLagUncNs) + abs(nudge.gapAt(boot)).toDouble()
     }
 
     /** The line beside the clock, such as "Gold · 14 of 16 sats · switches 1". */

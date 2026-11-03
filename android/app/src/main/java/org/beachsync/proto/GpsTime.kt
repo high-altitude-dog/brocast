@@ -45,6 +45,11 @@ class GpsTime(ctx: Context, private val log: CsvLog) {
     @Volatile var rejected = 0
     @Volatile var resets = 0
     @Volatile var deliveryMs = Double.NaN
+    /** What the chip says about itself, for the Satellites screen. Written on the gnss thread, read by the UI. */
+    @Volatile var erUncNs = Double.NaN        // the chip's declared uncertainty of its boot-clock stamp, 1 sigma
+    @Volatile var biasUncNs = Double.NaN      // how well the satellites agree on the clock bias
+    @Volatile var leapFromChip: Boolean? = null
+    @Volatile var sats: List<Sat> = emptyList()
 
     private val measurements = object : GnssMeasurementsEvent.Callback() {
         override fun onGnssMeasurementsReceived(event: GnssMeasurementsEvent) {
@@ -57,6 +62,11 @@ class GpsTime(ctx: Context, private val log: CsvLog) {
             var u = 0
             for (i in 0 until s.satelliteCount) if (s.usedInFix(i)) u++
             used = u; seen = s.satelliteCount
+            // Chips list a satellite once per signal (GPS L1 and L5, for example): one mark per satellite, the strongest signal, in use if any is.
+            sats = (0 until s.satelliteCount).groupBy { s.getConstellationType(it) * 1000 + s.getSvid(it) }.values.map { idx ->
+                val best = idx.maxByOrNull { s.getCn0DbHz(it) }!!
+                Sat(s.getSvid(best), s.getConstellationType(best), s.getAzimuthDegrees(best), s.getElevationDegrees(best), s.getCn0DbHz(best), idx.any { s.usedInFix(it) })
+            }
         }
     }
 
@@ -109,12 +119,14 @@ class GpsTime(ctx: Context, private val log: CsvLog) {
         if (!gpsDateValid(utc)) { status = "waiting for GPS date"; return }
         val isGold = c.hasElapsedRealtimeNanos()
         gold = isGold
+        leapFromChip = c.hasLeapSecond()
         val boot = if (isGold) c.elapsedRealtimeNanos else arrival
         val off = utc - boot
         val erUnc = if (isGold && c.hasElapsedRealtimeUncertaintyNanos()) c.elapsedRealtimeUncertaintyNanos else 0.0
         val before = FlowTime.gps
         val resid = if (before != null) (off - (before.utcAt(boot) - boot)).toDouble() else Double.NaN
         val link = if (isGold) 0.0 else GpsFitter.SILVER_LINK_NS
+        erUncNs = erUnc; biasUncNs = biasUnc
         val fit = fitter.add(boot, off, sqrt(biasUnc * biasUnc + erUnc * erUnc), before, link)
         if (fit != null) FlowTime.gps = fit
         val line = fitter.last
@@ -131,4 +143,11 @@ class GpsTime(ctx: Context, private val log: CsvLog) {
     companion object {
         const val GPS_EPOCH_UNIX_NS = 315_964_800_000_000_000L   // 6 Jan 1980, in Unix-epoch ns
     }
+}
+
+/** One satellite in view, as the chip reports it. [system] is a GnssStatus.CONSTELLATION_* value. */
+class Sat(val svid: Int, val system: Int, val azimuthDeg: Float, val elevationDeg: Float, val cn0DbHz: Float, val used: Boolean) {
+    val letter get() = when (system) { 1 -> 'G'; 2 -> 'S'; 3 -> 'R'; 4 -> 'J'; 5 -> 'C'; 6 -> 'E'; 7 -> 'I'; else -> '?' }
+    val label get() = "$letter%02d".format(svid)
+    val systemName get() = when (system) { 1 -> "GPS"; 2 -> "SBAS"; 3 -> "GLONASS"; 4 -> "QZSS"; 5 -> "BeiDou"; 6 -> "Galileo"; 7 -> "NavIC"; else -> "Other" }
 }
