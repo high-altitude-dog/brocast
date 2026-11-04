@@ -17,7 +17,7 @@ import org.beachsync.proto.Renderer
 
 /**
  * Stereo pair (hand-off 15): one phone plays Left and the other Right. Both phones already follow flowtime, so this only picks the channel.
- * Pairing, the partner card and the stereo-image bar need a link between the phones and aren't built yet (see design/feedback.md).
+ * No pairing (user, 4 Nov): each phone plays its own side against flowtime, so the partner card and stereo-image bar are not needed.
  */
 @Composable
 fun StereoScreen(state: BenchState, actions: BenchActions, back: () -> Unit) {
@@ -44,8 +44,8 @@ fun StereoScreen(state: BenchState, actions: BenchActions, back: () -> Unit) {
             )
         }
         Card {
-            BasicText("PARTNER", style = Tokens.Text.cardLabel.style())
-            BasicText("Pairing the two phones isn't built yet. Until then, set one phone to Left and the other to Right yourself; nothing checks the other phone or falls back to Both if it stops.", style = Tokens.Text.small.style(Ink.textSecondary))
+            BasicText("NO PAIRING NEEDED", style = Tokens.Text.cardLabel.style())
+            BasicText("Each phone plays its own side against flowtime, so the two stay together without a link between them. Set one phone to Left and the other to Right.", style = Tokens.Text.small.style(Ink.textSecondary))
         }
         Card {
             BasicText("SET UP", style = Tokens.Text.cardLabel.style())

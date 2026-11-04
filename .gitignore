@@ -6,3 +6,6 @@ measure/gain-music.txt
 measure/music-results.csv
 measure/earcup-results.csv
 measure/crossover-results.csv
+
+# Artist photos and names are held outside the repo (user, 4 Nov); copied to phones by hand
+artist-photos/
