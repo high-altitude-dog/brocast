@@ -90,7 +90,7 @@ private fun rememberSecondTick(): State<Long> = produceState(Session.nowBoot()) 
 private fun logScale(ns: Double) = if (ns.isNaN() || ns <= 0.0) 0f else ((log10(ns) - 3.0) / 4.0).coerceIn(0.0, 1.0).toFloat()
 
 @Composable
-fun NowPlaying(state: BenchState, actions: BenchActions, openLog: () -> Unit, openNudge: () -> Unit, openBench: () -> Unit, openSettings: () -> Unit, openSignals: () -> Unit, openCalibration: () -> Unit, openSatellites: () -> Unit, openStereo: () -> Unit, openArtist: () -> Unit) {
+fun NowPlaying(state: BenchState, actions: BenchActions, openLog: () -> Unit, openNudge: () -> Unit, openBench: () -> Unit, openSettings: () -> Unit, openSignals: () -> Unit, openCalibration: () -> Unit, openSatellites: () -> Unit, openStereo: () -> Unit, openArtist: () -> Unit, openSwarm: () -> Unit, openBuffer: () -> Unit) {
     val boot by rememberSecondTick()
     val s = state.session
     val listen = {
@@ -113,7 +113,7 @@ fun NowPlaying(state: BenchState, actions: BenchActions, openLog: () -> Unit, op
             .padding(top = Tokens.Space.screenPaddingTop.dp, start = Tokens.Space.screenPaddingSide.dp, end = Tokens.Space.screenPaddingSide.dp, bottom = Tokens.Space.screenPaddingBottom.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Masthead(s, openBench, openSettings, openSignals, openCalibration)
+        Masthead(s, openBench, openSwarm, openSettings, openSignals, openCalibration)
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             // The track and artist come from the library file the timeline has at the ear; the station name stands in before that.
             ArtistThumb(lib, playing?.first, openArtist)
@@ -140,7 +140,7 @@ fun NowPlaying(state: BenchState, actions: BenchActions, openLog: () -> Unit, op
             Tile("SOURCE", FlowTime.chosen?.name ?: "—", if (gpsNow != null && gpsNow.active) "$gold${gpsNow.used} sats" else "Satellites off", Modifier.weight(1f))
             // Named for the output in use: this lag also applies to a phone's own speaker.
             Tile(out.kind.label, "${s?.s?.lagMs ?: state.lag} ms", if (out.external) out.name else state.lagSource, Modifier.weight(1f))
-            Tile("AHEAD", aheadText(lib != null && playing != null, everythingHere, ahead), if (everythingHere) "all downloaded" else "downloaded", Modifier.weight(1f))
+            Tile("AHEAD", aheadText(lib != null && playing != null, everythingHere, ahead), if (everythingHere) "all downloaded" else "downloaded", Modifier.weight(1f).clickable(role = Role.Button, onClick = openBuffer))
         }
         Card { SatellitesRow(state.satellites, actions::setSatellites, "Position stays on this phone · off = Privacy mode") }
     }
@@ -199,14 +199,15 @@ private fun PlayStopButton(playing: Boolean, disabled: Boolean, onClick: () -> U
 
 /** Holding the station name opens the test bench: the developer way in, with nothing on screen for listeners to trip over. */
 @Composable
-private fun Masthead(s: Session?, openBench: () -> Unit, openSettings: () -> Unit, openSignals: () -> Unit, openCalibration: () -> Unit) {
+private fun Masthead(s: Session?, openBench: () -> Unit, openSwarm: () -> Unit, openSettings: () -> Unit, openSignals: () -> Unit, openCalibration: () -> Unit) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Column(
-            Modifier.weight(1f).pointerInput(Unit) { detectTapGestures(onLongPress = { openBench() }) }.semantics { contentDescription = "Beach Sync Radio. Hold to open the test bench." },
+            Modifier.weight(1f).pointerInput(Unit) { detectTapGestures(onLongPress = { openBench() }, onTap = { openSwarm() }) }.semantics { contentDescription = "${DemoMesh.NYM}, ${DemoMesh.LISTENERS} listeners linked, demo data. Tap for the swarm; hold to open the test bench." },
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             // The design wants your nym and "N listeners linked" here, opening Swarm. Neither exists yet (see design/feedback.md), so only the name stays. D lives on the Test bench.
-            BasicText("BEACH SYNC RADIO", style = Tokens.Text.eyebrow.style())
+            BasicText(DemoMesh.NYM, style = Tokens.Text.eyebrow.style())
+            BasicText("● ${DemoMesh.LISTENERS} listeners linked · demo", style = Tokens.Text.small.style(Ink.accent))
         }
         // Archive isn't built, so its button is dimmed and does nothing.
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {

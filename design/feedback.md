@@ -293,3 +293,10 @@ Constraints: a flash at 1 Hz at most; no strobing; the screen has to be readable
 - **Not built, waiting on a link between phones:** pairing, the Partner card, the Stereo image bar, falling back to Both, and the stereo states that depend on them. The Stereo picture is also left out.
 - **Not built, waiting on the artist registry:** artist photos, the photo viewer and the Artist names screen. Needs the registry, ingest matching and the user's names and photos, kept outside the repo.
 - **Not built, waiting on the mesh:** nym, `N listeners linked`, Swarm, and Buffer (needs per-block arrival data the app doesn't record).
+
+## 4 Nov: demo-data screens built (Swarm, Buffer, header nym)
+
+- **Header:** your nym (`AMBER FIG HERON`) and `● 12 listeners linked · demo`; tap opens Swarm, hold opens the Test bench. The AHEAD tile opens Buffer, whose FROM STATION tile opens Swarm.
+- **Demo data:** all values come from `DemoMesh` in `ui/DemoScreens.kt` and each screen says `DEMO DATA` on screen, so design can iterate before the Pears spike. Buffer's title and Up next use the real library; its download state, frontier and block flow are made up.
+- **Not built:** Buffer states other than Filling, set bands, track and beat lines, the Swarm states, the Reduced and Minimal levels, and the real waveform summary, BPM and beat grid.
+- **To judge in the design:** the Swarm lanes are busy with 12 peers; the Buffer axis labels get tight near `1 h` and `6 h`.
