@@ -109,7 +109,7 @@ internal fun Pill2(label: String, on: Boolean, onClick: () -> Unit) {
 internal fun Nudge(title: String, valueMs: Double, plusWord: String, minusWord: String, set: (Double) -> Unit) {
     Card {
         BasicText(title, style = Tokens.Text.cardLabel.style())
-        BasicText(if (valueMs == 0.0) "0 ms" else "%+.0f ms (%s)".format(Locale.ROOT, valueMs, if (valueMs > 0) plusWord else minusWord), style = Tokens.Text.value.style())
+        BasicText(if (valueMs == 0.0) "0 µs" else (if (valueMs > 0) "+" else "") + org.beachsync.proto.fmtMillis(valueMs, 0) + " (" + (if (valueMs > 0) plusWord else minusWord) + ")", style = Tokens.Text.value.style())
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             for ((label, step) in listOf("−10" to -10.0, "−1" to -1.0, "+1" to 1.0, "+10" to 10.0)) {
                 BasicText(label, Modifier.weight(1f).heightIn(min = 44.dp).border(1.dp, Ink.border, RoundedCornerShape(10.dp)).clickable(role = Role.Button) { set(valueMs + step) }.padding(vertical = 12.dp), Tokens.Text.bodyStrong.style().copy(textAlign = androidx.compose.ui.text.style.TextAlign.Center))

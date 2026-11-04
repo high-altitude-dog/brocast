@@ -13,6 +13,7 @@ import kotlin.math.abs
 fun fmtDuration(ns: Double): String {
     if (ns.isNaN() || ns.isInfinite()) return "—"
     val a = abs(ns)
+    if (a == 0.0) return "0 µs"   // zero is under 1 ms too
     if (a < 1e3) return "%.0f ns".format(Locale.ROOT, a)
     val (v, unit) = when {
         a < 1e6 -> a / 1e3 to "µs"
@@ -27,7 +28,7 @@ fun fmtDuration(ns: Double): String {
 fun fmtMillis(ms: Double, digits: Int = 1): String {
     if (ms.isNaN() || ms.isInfinite()) return "—"
     val a = abs(ms)
-    if (a != 0.0 && a < 1.0) return (if (ms < 0) "-" else "") + fmtDuration(a * 1e6)
+    if (a < 1.0) return (if (ms < 0) "-" else "") + fmtDuration(a * 1e6)
     return "%.${digits}f ms".format(Locale.ROOT, ms)
 }
 
@@ -179,7 +180,7 @@ class EventDetector {
             val lost = r.missingFrames - missingFrames
             if (!silent) {
                 silent = true; silentSince = r.boot; silentFrames = 0L; silentReadings = 0
-                add(Lane.AUDIO, "Audio ran dry for ${lost / FRAMES_PER_MS} ms: played silence and stayed in step")
+                add(Lane.AUDIO, "Audio ran dry for ${fmtDuration(lost * 1e9 / (FRAMES_PER_MS * 1000))}: played silence and stayed in step")
             }
             silentFrames += lost; silentReadings++; silentLast = r.boot
         } else if (silent && r.boot - silentLast >= SILENCE_OVER_NS) {

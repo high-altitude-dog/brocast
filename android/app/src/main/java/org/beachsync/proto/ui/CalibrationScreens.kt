@@ -161,7 +161,7 @@ fun EarcupPage(state: BenchState, actions: BenchActions, back: () -> Unit) {
                 when (outcome.fault) {
                     EarcupFault.TOO_QUIET -> "Press the cup closer to the mic and turn the volume up."
                     EarcupFault.TOO_NOISY -> "Find a quieter spot, then try again."
-                    EarcupFault.DISAGREE -> "Clicks gave %.0f–%.0f ms. Hold still and try again.".format(Locale.ROOT, outcome.lowMs, outcome.highMs)
+                    EarcupFault.DISAGREE -> "Clicks gave ${org.beachsync.proto.fmtMillis(outcome.lowMs, 0)} to ${org.beachsync.proto.fmtMillis(outcome.highMs, 0)}. Hold still and try again."
                 },
                 actions, back,
             )

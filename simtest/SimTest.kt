@@ -389,6 +389,20 @@ fun testChannelSwitch() {
     check((0 until 240).all { c[2 * it] == 0.25f && c[2 * it + 1] == 0.25f }, "the next chunk holds the new mapping")
 }
 
+fun testNotOnAir() {
+    println("Library: nothing on air yet, and zero in µs")
+    val a = LibraryItem("a", "Set A", "", 100, 1, ""); val b = LibraryItem("b", "Set B", "", 50, 1, "")
+    val ed = Edition(1_000_000_000_000L, listOf(a, b)); val d = 60_000L
+    fun utc(sec: Long) = ed.startNs + sec * 1_000_000_000L
+    check(silentForSeconds(listOf(ed), d, utc(-30)) == 90L, "before the edition starts, its first sound is the delay plus the wait away")
+    check(silentForSeconds(listOf(ed), d, utc(10)) == 50L, "after it starts, the playout delay is still silent")
+    check(silentForSeconds(listOf(ed), d, utc(60)) == 0L, "music is on air once the delay has passed")
+    check(shownAt(listOf(ed), d, utc(10))?.first === a, "while silent the first set is shown, not a made-up one")
+    check(shownAt(listOf(ed), d, utc(60 + 110))?.first === b, "once on air the set at the ear is shown")
+    check(fmtDuration(0.0) == "0 µs" && fmtMillis(0.0) == "0 µs", "zero reads in µs")
+    check(fmtMillis(0.4) == "400 µs" && fmtMillis(-0.4) == "-400 µs" && fmtMillis(3.0) == "3.0 ms", "under 1 ms in µs, 1 ms and up in ms")
+}
+
 fun testEvents() {
     println("Event log: one event per change, not one per second a state lasts")
     val s = 1_000_000_000L
@@ -427,7 +441,7 @@ fun testEvents() {
 
     println("Event log: a long silence is two lines, not one a second")
     val q = EventDetector()
-    check(q.update(reading(10, missing = 48000)).single().text.contains("1000 ms"), "the start of a silence is logged")
+    check(q.update(reading(10, missing = 48000)).single().text.contains("1.00 s"), "the start of a silence is logged")
     check((11L..59L).all { q.update(reading(it, missing = 48000 * (it - 9))).isEmpty() }, "the rest of it logs nothing")
     val r = EventDetector()
     r.update(reading(10, missing = 48000))
@@ -828,6 +842,6 @@ fun main() {
     testFetchPlan()
     testTickPattern()
     testSoloGate()
-    testNtp(); testGps(); testGpsWeighting(); testGpsEstimate(); testNtpFit(); testPlayout(); testTickTiming(); testChannel(); testChannelSwitch(); testEvents(); testClockCheck(); testLibraryNow(); testBeats(); testBeatGrid(); testNudge()
+    testNtp(); testGps(); testGpsWeighting(); testGpsEstimate(); testNtpFit(); testPlayout(); testTickTiming(); testChannel(); testChannelSwitch(); testEvents(); testClockCheck(); testLibraryNow(); testNotOnAir(); testBeats(); testBeatGrid(); testNudge()
     println(if (failures == 0) "ALL PASSED" else "$failures FAILED")
 }
