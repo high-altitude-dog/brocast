@@ -5,6 +5,7 @@
 //   java -cp /tmp/simtest:$J:<kotlinc folder>/lib/kotlin-stdlib.jar SimTestKt
 import org.beachsync.proto.*
 import kotlin.math.abs
+import kotlin.math.sin
 import kotlin.math.sqrt
 import kotlin.random.Random
 
@@ -621,6 +622,147 @@ fun testCalibration() {
     check(parseHandshakeCode("12a4") == null && parseHandshakeCode("123") == null, "a mistyped code is refused")
 }
 
+/** A made-up track: a quiet bed, a kick every beat, hi-hat ticks, and a snare (a 1 to 5 kHz noise burst) on every second beat. The snares are what should be found. */
+fun testBeats() {
+    println("Beat detector")
+    val rate = 48000
+    val secs = 24
+    val rnd = Random(7)
+    val pcm = FloatArray(rate * secs)
+    for (i in pcm.indices) pcm[i] = (rnd.nextFloat() - 0.5f) * 0.01f + 0.02f * sin(2 * Math.PI * 110.0 * i / rate).toFloat()
+    val beat = 0.46   // seconds per beat, about 130 BPM
+    val snares = ArrayList<Int>()
+    var t = 0.30
+    var k = 0
+    while (t < secs - 1.0) {
+        val at = (t * rate).toInt()
+        for (j in 0 until 6000) if (at + j < pcm.size) pcm[at + j] += (0.8f * sin(2 * Math.PI * 60.0 * j / rate) * Math.exp(-j / 1200.0)).toFloat()   // kick
+        val hat = at + rate / 4
+        for (j in 0 until 400) if (hat + j < pcm.size) pcm[hat + j] += (rnd.nextFloat() - 0.5f) * 0.25f * Math.exp(-j / 120.0).toFloat()                // hi-hat
+        if (k % 2 == 1) {
+            snares.add(at)
+            var lp = 0f; var lp2 = 0f
+            for (j in 0 until 6000) if (at + j < pcm.size) {
+                val x = rnd.nextFloat() - 0.5f
+                lp += 0.35f * (x - lp); lp2 += 0.35f * (lp - lp2)     // roughly the 1 to 5 kHz band
+                pcm[at + j] += (3.0f * (lp - lp2) * Math.exp(-j / 2000.0)).toFloat()
+            }
+        }
+        t += beat; k++
+    }
+    val det = BeatDetector(rate)
+    val found = ArrayList<Long>()
+    for (sec in 0 until secs) {
+        val block = ShortArray(rate * 2)
+        for (i in 0 until rate) { val v = (pcm[sec * rate + i].coerceIn(-1f, 1f) * 32767).toInt().toShort(); block[2 * i] = v; block[2 * i + 1] = v }
+        det.process(sec.toLong(), block, found)
+    }
+    val matched = snares.count { s -> found.any { abs(it - s) <= 144 } }          // within 3 ms
+    val extras = found.count { f -> snares.none { abs(f - it) <= 2400 } }
+    println("   ${snares.size} snares, ${found.size} beats found, $matched within 3 ms, $extras not on a snare")
+    check(matched >= snares.size - 1, "finds the snares, each within 3 ms")
+    check(extras <= 1, "does not fire on the kick or the hi-hat")
+    val again = BeatDetector(rate); val second = ArrayList<Long>()
+    for (sec in 0 until secs) {
+        val block = ShortArray(rate * 2)
+        for (i in 0 until rate) { val v = (pcm[sec * rate + i].coerceIn(-1f, 1f) * 32767).toInt().toShort(); block[2 * i] = v; block[2 * i + 1] = v }
+        again.process(sec.toLong(), block, second)
+    }
+    check(found == second, "the same blocks give the same beats, every time")
+    val gap = BeatDetector(rate); val skipped = ArrayList<Long>()
+    for (sec in listOf(0, 1, 2, 10, 11, 12, 13)) {
+        val block = ShortArray(rate * 2)
+        for (i in 0 until rate) { val v = (pcm[sec * rate + i].coerceIn(-1f, 1f) * 32767).toInt().toShort(); block[2 * i] = v; block[2 * i + 1] = v }
+        gap.process(sec.toLong(), block, skipped)
+    }
+    check(skipped.all { it >= 0 } && skipped.any { it >= 10L * rate }, "after a jump it starts afresh and finds beats in the new place")
+}
+
+/** A made-up track at a known tempo: kick on beats 1 and 3 (1 louder), snare on 2 and 4, hi-hats on the off-beats, a little timing jitter, and a bass line. */
+fun beatTrack(bpm: Double, secs: Int, seed: Int, firstBeatS: Double): Pair<FloatArray, DoubleArray> {
+    val rate = 48000
+    val rnd = Random(seed)
+    val pcm = FloatArray(rate * secs)
+    for (i in pcm.indices) pcm[i] = (rnd.nextFloat() - 0.5f) * 0.01f + 0.03f * sin(2 * Math.PI * 55.0 * i / rate).toFloat()
+    val period = 60.0 / bpm
+    val onsets = ArrayList<Double>()
+    var k = 0
+    while (firstBeatS + k * period < secs - 1.0) {
+        val t = firstBeatS + k * period
+        onsets.add(t)
+        val at = ((t + (rnd.nextFloat() - 0.5) * 0.003) * rate).toInt()
+        val bar = k % 4
+        if (bar == 0 || bar == 2) for (j in 0 until 7000) if (at + j < pcm.size) pcm[at + j] += ((if (bar == 0) 0.9f else 0.6f) * sin(2 * Math.PI * 60.0 * j / rate) * Math.exp(-j / 1500.0)).toFloat()
+        else {
+            var lp = 0f; var lp2 = 0f
+            for (j in 0 until 7000) if (at + j < pcm.size) {
+                val x = rnd.nextFloat() - 0.5f
+                lp += 0.35f * (x - lp); lp2 += 0.35f * (lp - lp2)
+                pcm[at + j] += (3.0f * (lp - lp2) * Math.exp(-j / 2200.0)).toFloat()
+            }
+        }
+        val hat = at + (period * rate / 2).toInt()
+        for (j in 0 until 500) if (hat + j < pcm.size) pcm[hat + j] += (rnd.nextFloat() - 0.5f) * 0.2f * Math.exp(-j / 150.0).toFloat()
+        k++
+    }
+    return pcm to onsets.toDoubleArray()
+}
+
+fun blocks(pcm: FloatArray, from: Int, count: Int): List<ShortArray> = (from until from + count).map { sec ->
+    val b = ShortArray(48000 * 2)
+    for (i in 0 until 48000) { val v = (pcm[sec * 48000 + i].coerceIn(-1f, 1f) * 32767).toInt().toShort(); b[2 * i] = v; b[2 * i + 1] = v }
+    b
+}
+
+fun testBeatGrid() {
+    println("Beat grid (tempo, where the beats fall, which starts the bar)")
+    val bpm = 126.0
+    val (pcm, onsets) = beatTrack(bpm, 48, 11, 0.37)
+    val grid = BeatGrid()
+    val period = 60.0 / bpm * 48000
+    var windows = 0; var good = 0; var worstPhaseMs = 0.0; var worstTempo = 0.0; var barOk = 0
+    val barStarts = ArrayList<Double>()
+    for (w in 0..2) {
+        val r = grid.analyse(8L * w, blocks(pcm, 8 * w, 16))
+        if (r == null) { println("   window $w: no grid (${grid.lastNote})"); continue }
+        windows++
+        // Where the true beats fall, relative to the grid's beat.
+        val offs = onsets.map { t -> val d = (t * 48000 - r.phaseSample) / r.periodSamples; (d - Math.round(d)) * r.periodSamples }
+        val tempoErr = abs(r.periodSamples - period) / period
+        val phaseMs = offs.sortedBy { abs(it) }.take(offs.size / 2).map { abs(it) }.average() * 1000 / 48000
+        worstPhaseMs = maxOf(worstPhaseMs, phaseMs); worstTempo = maxOf(worstTempo, tempoErr)
+        if (tempoErr < 0.003 && phaseMs < 5.0) good++
+        // The bar starts on the beats that carry the loud kick: onsets 0, 4, 8, ...
+        val k0 = Math.round((onsets[0] * 48000 - r.phaseSample) / r.periodSamples).toInt()
+        if (Math.floorMod(k0 - r.barOffset, 4) == 0) barOk++
+        val barStart = (r.phaseSample + r.barOffset * r.periodSamples) / 48000.0 % (4 * r.periodSamples / 48000.0)
+        barStarts.add(barStart)
+        println("   window $w: ${"%.2f".format(60 * 48000 / r.periodSamples)} per minute, beats within ${"%.1f".format(phaseMs)} ms, confidence ${"%.2f".format(r.confidence)}, bar start ${if (Math.floorMod(k0 - r.barOffset, 4) == 0) "on the loud kick" else "elsewhere"}")
+    }
+    check(windows == 3 && good == 3, "tempo within 0.3% and beats within 5 ms, in every window (worst ${"%.2f".format(worstTempo * 100)}%, ${"%.1f".format(worstPhaseMs)} ms)")
+    val barSpan = 4 * period / 48000.0
+    val spread = barStarts.maxOf { b -> barStarts.maxOf { c -> val d = Math.abs(b - c); minOf(d, barSpan - d) } }
+    check(barOk >= windows - 1, "the bar starts on the loud kick in all but at most one window ($barOk of $windows)")
+    check(spread < 0.01, "the windows agree on where bars start, to within 10 ms (spread ${"%.1f".format(spread * 1000)} ms)")
+    // The same blocks give the same grid however they are reached: no state is kept between calls.
+    val a = grid.analyse(8, blocks(pcm, 8, 16)); val b = BeatGrid().analyse(8, blocks(pcm, 8, 16))
+    check(a != null && b != null && a.periodSamples == b.periodSamples && a.phaseSample == b.phaseSample && a.barOffset == b.barOffset, "two analysers given the same blocks agree exactly")
+    // Resolving: a window without a beat borrows the next good grid; the bar start is a vote.
+    val g0 = grid.analyse(0, blocks(pcm, 0, 16)); val g1 = grid.analyse(8, blocks(pcm, 8, 16)); val g2 = grid.analyse(16, blocks(pcm, 16, 16))
+    val map = mapOf<Long, BeatGrid.Result?>(0L to g0, 1L to null, 2L to g2, 3L to g1, 4L to g1, 5L to g1)
+    val res = BeatGrid.resolve(1, map)
+    check(res != null && g2 != null && res.phaseSample == g2.phaseSample, "a window with no beat borrows the next good grid")
+    check(BeatGrid.resolve(0, mapOf(0L to g0)) == null, "nothing is resolved until the windows it needs are analysed")
+    // Noise alone has no beat.
+    val rnd = Random(3)
+    val noise = FloatArray(48000 * 18) { (rnd.nextFloat() - 0.5f) * 0.2f }
+    check(BeatGrid().analyse(0, blocks(noise, 0, 16)) == null, "steady noise has no clear beat")
+    // A different tempo is followed.
+    val (pcm2, _) = beatTrack(100.0, 20, 5, 0.2)
+    val r2 = BeatGrid().analyse(0, blocks(pcm2, 0, 16))
+    check(r2 != null && abs(60 * 48000 / r2.periodSamples - 100.0) < 0.5, "a track at 100 per minute is found at 100 per minute")
+}
+
 /** GPS against internet time: only a gap beyond internet time's own error counts, and only after 10 s. */
 fun testClockCheck() {
     println("Clock check (GPS against internet time)")
@@ -653,6 +795,6 @@ fun main() {
     testFetchPlan()
     testTickPattern()
     testSoloGate()
-    testNtp(); testGps(); testGpsWeighting(); testGpsEstimate(); testNtpFit(); testPlayout(); testTickTiming(); testChannel(); testEvents(); testClockCheck(); testNudge()
+    testNtp(); testGps(); testGpsWeighting(); testGpsEstimate(); testNtpFit(); testPlayout(); testTickTiming(); testChannel(); testEvents(); testClockCheck(); testBeats(); testBeatGrid(); testNudge()
     println(if (failures == 0) "ALL PASSED" else "$failures FAILED")
 }

@@ -51,7 +51,7 @@ fun SyncScope(state: BenchState, back: () -> Unit) {
     var flashOn by remember { androidx.compose.runtime.mutableStateOf(true) }
     val s = state.session
     val fit = FlowTime.fit()
-    val utc = if (s != null && fit != null) fit.utcAt(frame) + Math.round(screenMs * 1e6) else null
+    val utc = if (s != null && fit != null) fit.utcAt(frame) - Math.round(screenMs * 1e6) else null
     val refresh = view.display?.refreshRate ?: 60f
     Box(Modifier.fillMaxSize()) {
         Screen {
@@ -70,6 +70,7 @@ fun SyncScope(state: BenchState, back: () -> Unit) {
                     drawCircle(Color(0xFF3A3F47), d / 2f, center)
                     drawArc(Color.White, -90f, sweep * 360f, true, tl, Size(d, d))
                 }
+                ClockLine(s!!, frame)
                 BasicText("%03d.%02d ms into the second · screen refresh %.1f ms".format(Locale.ROOT, ofSecond / 1_000_000L, ofSecond / 10_000L % 100, 1000f / refresh), style = Tokens.Text.small.style(Ink.textSecondary))
                 Card {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -77,7 +78,7 @@ fun SyncScope(state: BenchState, back: () -> Unit) {
                         Pill2(if (flashOn) "ON" else "OFF", flashOn) { flashOn = !flashOn }
                     }
                 }
-                Nudge("SCREEN (shifts only the picture)", screenMs, "later", "earlier") { screenMs = it }
+                Nudge("SCREEN (shifts only the picture; + is later)", screenMs, "later", "earlier") { screenMs = it }
                 Nudge("AUDIO (changes what you hear; ends with the session)", s!!.diagnosticOffsetMs, "earlier", "later") { s.setDiagnosticOffsetMs(it) }
                 BasicText("Lay the phones side by side. The one that flashes first is ahead. Use the audio nudge to line up what you hear, then read the offset needed.", style = Tokens.Text.small.style(Ink.textSecondary))
             }
@@ -87,14 +88,25 @@ fun SyncScope(state: BenchState, back: () -> Unit) {
     }
 }
 
+/** The phone's own account of its clock, so a gap between phones can be weighed against what each claims. */
 @Composable
-private fun Pill2(label: String, on: Boolean, onClick: () -> Unit) {
+internal fun ClockLine(s: Session, boot: Long) {
+    val fit = FlowTime.fit()
+    val gold = when (s.gps.gold) { true -> " Gold"; false -> " Silver"; null -> "" }
+    BasicText(
+        if (fit == null) "Clock: none yet" else "Clock: ${s.sourceName(boot)}$gold · ±${org.beachsync.proto.fmtDuration(fit.errAt(boot))} · ${s.gps.used} satellites in use",
+        style = Tokens.Text.small.style(Ink.accent),
+    )
+}
+
+@Composable
+internal fun Pill2(label: String, on: Boolean, onClick: () -> Unit) {
     BasicText(label, Modifier.clickable(role = Role.Button, onClick = onClick).border(1.dp, if (on) Ink.accent else Ink.border, RoundedCornerShape(16.dp)).padding(horizontal = 14.dp, vertical = 8.dp), Tokens.Text.bodyStrong.style(if (on) Ink.accent else Ink.textSecondary))
 }
 
 /** Buttons in steps of 10 and 1 ms. [plusWord] and [minusWord] say what a positive and a negative value do. */
 @Composable
-private fun Nudge(title: String, valueMs: Double, plusWord: String, minusWord: String, set: (Double) -> Unit) {
+internal fun Nudge(title: String, valueMs: Double, plusWord: String, minusWord: String, set: (Double) -> Unit) {
     Card {
         BasicText(title, style = Tokens.Text.cardLabel.style())
         BasicText(if (valueMs == 0.0) "0 ms" else "%+.0f ms (%s)".format(Locale.ROOT, valueMs, if (valueMs > 0) plusWord else minusWord), style = Tokens.Text.value.style())

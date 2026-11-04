@@ -25,7 +25,7 @@ import androidx.compose.ui.unit.dp
 
 /** Only the LISTENING section for now: the design's other sections have nothing behind them yet. */
 @Composable
-fun SettingsPage(state: BenchState, actions: BenchActions, back: () -> Unit, openCalibration: () -> Unit, openSatellites: () -> Unit, openSync: () -> Unit) {
+fun SettingsPage(state: BenchState, actions: BenchActions, back: () -> Unit, openCalibration: () -> Unit, openSatellites: () -> Unit, openSync: () -> Unit, openBeat: () -> Unit) {
     rememberTick(SETTINGS_TICK_MS).value    // the output's name can change during a run
     val s = state.session
     Column(
@@ -44,6 +44,10 @@ fun SettingsPage(state: BenchState, actions: BenchActions, back: () -> Unit, ope
             Column(Modifier.fillMaxWidth().heightIn(min = Tokens.Space.touchTarget.dp).clickable(role = Role.Button, onClick = openSync), Arrangement.Center) {
                 BasicText("Sync view", style = Tokens.Text.bodyStrong.style())
                 BasicText("See whether phones agree, side by side", style = Tokens.Text.small.style(Ink.textSecondary))
+            }
+            Column(Modifier.fillMaxWidth().heightIn(min = Tokens.Space.touchTarget.dp).clickable(role = Role.Button, onClick = openBeat), Arrangement.Center) {
+                BasicText("Beat sync view", style = Tokens.Text.bodyStrong.style())
+                BasicText("The same, flashing on a snare in the music", style = Tokens.Text.small.style(Ink.textSecondary))
             }
             Column(Modifier.fillMaxWidth().heightIn(min = Tokens.Space.touchTarget.dp).clickable(role = Role.Button, onClick = openCalibration), Arrangement.Center) {
                 BasicText("Calibration", style = Tokens.Text.bodyStrong.style())
