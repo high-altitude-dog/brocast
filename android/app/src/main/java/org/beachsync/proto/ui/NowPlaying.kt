@@ -56,6 +56,8 @@ import org.beachsync.proto.FlowTime
 import org.beachsync.proto.aheadSeconds
 import org.beachsync.proto.editionAt
 import org.beachsync.proto.playingAt
+import org.beachsync.proto.shownAt
+import org.beachsync.proto.silentForSeconds
 import org.beachsync.proto.R
 import org.beachsync.proto.Session
 import org.beachsync.proto.Source
@@ -104,7 +106,8 @@ fun NowPlaying(state: BenchState, actions: BenchActions, openLog: () -> Unit, op
     // What the library has at the ear: the track, how far the downloads reach, and whether the set due now is still arriving.
     val lib = state.library
     val utcNow = FlowTime.fit()?.utcAt(boot) ?: (System.currentTimeMillis() * 1_000_000L)
-    val playing = lib?.let { playingAt(it.editions, it.dMs, utcNow) }
+    val silentS = lib?.let { silentForSeconds(it.editions, it.dMs, utcNow) } ?: 0L   // nothing is on air yet: the next set's sound is still on its way
+    val playing = lib?.let { shownAt(it.editions, it.dMs, utcNow) }
     val dueMissing = playing != null && !lib.file(playing.first.id).exists()
     val ahead = lib?.let { l -> editionAt(l.editions, utcNow)?.let { ed -> playing?.let { aheadSeconds(ed, it.first, it.second) { item -> l.file(item.id).exists() } } } }
     val everythingHere = lib != null && playing != null && !dueMissing && ahead == null
@@ -120,7 +123,8 @@ fun NowPlaying(state: BenchState, actions: BenchActions, openLog: () -> Unit, op
             Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
                 BasicText(playing?.first?.title?.ifEmpty { null } ?: s?.stream?.manifest?.source?.ifEmpty { null } ?: "Beach Sync Radio", style = Tokens.Text.screenTitle.style().copy(fontSize = 20.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                playing?.first?.artist?.ifEmpty { null }?.let { BasicText(it, style = Tokens.Text.small.style(Ink.textSecondary).copy(fontSize = 13.sp), maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                if (silentS > 0) BasicText("Starts in ${silentS / 60}:${"%02d".format(silentS % 60)}", style = Tokens.Text.small.style(Ink.accent).copy(fontSize = 13.sp), maxLines = 1)
+                else playing?.first?.artist?.ifEmpty { null }?.let { BasicText(it, style = Tokens.Text.small.style(Ink.textSecondary).copy(fontSize = 13.sp), maxLines = 1, overflow = TextOverflow.Ellipsis) }
             }
             StereoChip(state.channel, actions.output().kind == org.beachsync.proto.OutputKind.HEADPHONES, openStereo)
             KeptBadge()
@@ -139,7 +143,7 @@ fun NowPlaying(state: BenchState, actions: BenchActions, openLog: () -> Unit, op
             val gold = when (gpsNow?.gold) { true -> "Gold · "; false -> "Silver · "; null -> "" }
             Tile("SOURCE", FlowTime.chosen?.name ?: "—", if (gpsNow != null && gpsNow.active) "$gold${gpsNow.used} sats" else "Satellites off", Modifier.weight(1f))
             // Named for the output in use: this lag also applies to a phone's own speaker.
-            Tile(out.kind.label, "${s?.s?.lagMs ?: state.lag} ms", if (out.external) out.name else state.lagSource, Modifier.weight(1f))
+            Tile(out.kind.label, org.beachsync.proto.fmtMillis(s?.s?.lagMs ?: state.lag.toDoubleOrNull() ?: 0.0), if (out.external) out.name else state.lagSource, Modifier.weight(1f))
             Tile("AHEAD", aheadText(lib != null && playing != null, everythingHere, ahead), if (everythingHere) "all downloaded" else "downloaded", Modifier.weight(1f).clickable(role = Role.Button, onClick = openBuffer))
         }
         Card { SatellitesRow(state.satellites, actions::setSatellites, "Position stays on this phone · off = Privacy mode") }

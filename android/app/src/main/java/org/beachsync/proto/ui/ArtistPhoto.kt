@@ -39,14 +39,14 @@ import kotlinx.coroutines.withContext
 import org.beachsync.proto.FlowTime
 import org.beachsync.proto.LibraryItem
 import org.beachsync.proto.LibraryStore
-import org.beachsync.proto.playingAt
+import org.beachsync.proto.shownAt
 import java.io.File
 
 /** The library item the shared timeline has at the ear, from flowtime (or the wall clock before there is a fit). */
 internal fun nowPlayingItem(lib: LibraryStore?, boot: Long): LibraryItem? {
     lib ?: return null
     val utc = FlowTime.fit()?.utcAt(boot) ?: (System.currentTimeMillis() * 1_000_000L)
-    return playingAt(lib.editions, lib.dMs, utc)?.first
+    return shownAt(lib.editions, lib.dMs, utc)?.first
 }
 
 /** Decodes a photo off the main thread, scaled down so no more than about [maxPx] pixels wide are held in memory. Null when there is none. */

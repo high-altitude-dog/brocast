@@ -136,3 +136,20 @@ fun aheadSeconds(edition: Edition, item: LibraryItem, offsetS: Long, have: (Libr
     }
     return total
 }
+
+/**
+ * Seconds until the library has sound at the ear: 0 when music is on air. A new edition takes over at its start, but
+ * its first sound reaches the ear only after the playout delay, so there is a silent gap of that length (and the same
+ * before the very first edition).
+ */
+fun silentForSeconds(editions: List<Edition>, dMs: Long, utcNs: Long): Long {
+    val ed = editionAt(editions, utcNs) ?: return 0L
+    val n = Math.floorDiv(utcNs - dMs * 1_000_000L - ed.startNs, 1_000_000_000L)
+    return if (n < 0) -n else 0L
+}
+
+/** What to show: the item at the ear, or while the library is silent, the first item of the edition, which is what plays next. */
+fun shownAt(editions: List<Edition>, dMs: Long, utcNs: Long): Pair<LibraryItem, Long>? {
+    if (silentForSeconds(editions, dMs, utcNs) > 0) return editionAt(editions, utcNs)?.items?.firstOrNull()?.let { it to 0L }
+    return playingAt(editions, dMs, utcNs)
+}
