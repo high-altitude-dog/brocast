@@ -46,8 +46,10 @@ object LatencyTable {
     const val REFERENCE = "Pixel 10 Pro"
     private val rows = mapOf(
         RouteKey(REFERENCE, "speaker") to Calibration(0.0, 3.0, CalSource.TABLE),
-        // Tick tests on 2 Nov 2026 ranged from 18 to 22 ms. One phone of this model, so model variation is unknown.
-        RouteKey("SM-A166B", "speaker") to Calibration(20.0, 3.0, CalSource.TABLE),
+        // 4 Nov 2026: five runs of measure/quicktest.py, both phones on GPS at about ±0.2 ms, gave 14.3 to 14.9 ms (mean 14.7), and
+        // setting 14.7 ms brought the gap to -0.04 and -0.09 ms. Across pitches it ranges about ±2 ms, hence the ±2.0. The 2 Nov tick tests
+        // had given 18 to 22 ms; the difference is unexplained. One phone of this model, so model variation is unknown.
+        RouteKey("SM-A166B", "speaker") to Calibration(14.7, 2.0, CalSource.TABLE),
     )
 
     fun lookup(key: RouteKey): Calibration = rows[key] ?: Calibration(0.0, CalLimits.UNKNOWN_PLUS_MINUS_MS, CalSource.NONE)
