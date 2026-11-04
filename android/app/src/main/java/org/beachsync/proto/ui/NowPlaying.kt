@@ -56,6 +56,7 @@ import org.beachsync.proto.R
 import org.beachsync.proto.Session
 import org.beachsync.proto.Source
 import org.beachsync.proto.fmtDuration
+import org.beachsync.proto.fmtSigned
 import java.time.Instant
 import java.time.ZoneId
 import kotlin.math.abs
@@ -63,6 +64,7 @@ import kotlin.math.cos
 import kotlin.math.log10
 import kotlin.math.min
 import kotlin.math.sin
+import kotlin.math.sqrt
 
 private const val SECOND_MS = 1000L
 private const val SECOND_NS = 1_000_000_000L
@@ -112,7 +114,7 @@ fun NowPlaying(state: BenchState, actions: BenchActions, openLog: () -> Unit, op
             SyncBadge(s, boot, lagUncNs, Modifier.weight(1f))
         }
         EventRow(state.eventLog, SECOND_MS, openLog)
-        Budget(s, boot, lagUncNs)
+        SyncCard(s, boot, lagUncNs, out.kind.label.lowercase(), out.external, openSignals)
         NudgeRow(state, openNudge, SECOND_MS)
         Row(Modifier.fillMaxWidth().height(IntrinsicTile), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             val gold = when (s?.gps?.gold) { true -> "Gold · "; false -> "Silver · "; null -> "" }
@@ -183,9 +185,8 @@ private fun Masthead(s: Session?, openBench: () -> Unit, openSettings: () -> Uni
             Modifier.weight(1f).pointerInput(Unit) { detectTapGestures(onLongPress = { openBench() }) }.semantics { contentDescription = "Beach Sync Radio. Hold to open the test bench." },
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
+            // The design wants your nym and "N listeners linked" here, opening Swarm. Neither exists yet (see design/feedback.md), so only the name stays. D lives on the Test bench.
             BasicText("BEACH SYNC RADIO", style = Tokens.Text.eyebrow.style())
-            val d = s?.stream?.manifest?.dMs
-            BasicText(if (d != null) "Live · D ${d / 1000} s" else "Live · D —", style = Tokens.Text.bodyStrong.style())
         }
         // Archive isn't built, so its button is dimmed and does nothing.
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -291,7 +292,10 @@ private class Badge(val words: String, val mark: String, val tint: Color, val fi
 
 /** The states with data today. REJOINING, CLOCK CHECK FAILED and SILENT · OVER LIMIT need detection the app doesn't do yet. */
 private fun badge(s: Session?, boot: Long, lagUncNs: Double): Badge {
-    if (s == null) return Badge("STOPPED", "■", Ink.textSecondary, "", "")
+    if (s == null) {
+        val fit = FlowTime.fit()
+        return Badge("STOPPED", "■", Ink.textSecondary, if (fit != null) "±" + fmtDuration(fit.errAt(boot)) else "", if (fit != null) "clock ready" else "no clock yet")
+    }
     val err = s.syncErrorNs(boot, lagUncNs)
     val figure = if (err.isNaN()) "" else "±" + fmtDuration(err)
     val over = err.isNaN() || err > LIMIT_NS
@@ -328,33 +332,59 @@ private fun SyncBadge(s: Session?, boot: Long, lagUncNs: Double, modifier: Modif
     }
 }
 
-/** Flowtime, the output lag's uncertainty and any held gap, then the total (hand-off 12). Screenlag belongs with the light show, later. */
+/**
+ * The Sync card (hand-off 14): what the sync error means for this listener. The window shows where this phone's sound most likely is
+ * against the Brocast clock; the bar shows which part of the error is largest. Screenlag belongs with the light show, later.
+ */
 @Composable
-private fun Budget(s: Session?, boot: Long, lagUncNs: Double) {
+private fun SyncCard(s: Session?, boot: Long, lagUncNs: Double, outputWord: String, outputExternal: Boolean, open: () -> Unit) {
     val flow = if (s != null) FlowTime.fit()?.errAt(boot) ?: Double.NaN else Double.NaN
     val total = s?.syncErrorNs(boot, lagUncNs) ?: Double.NaN
-    val held = if (s != null) abs(s.nudge.gapAt(boot)).toDouble() else Double.NaN
-    Card {
-        Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween) {
-            BasicText("SYNC ERROR BUDGET", style = Tokens.Text.cardLabel.style())
-            BasicText(if (total.isNaN()) "—" else "±" + fmtDuration(total), style = Tokens.Text.valueSmall.style(Ink.accent))
+    val held = if (s != null) s.nudge.gapAt(boot).toDouble() else Double.NaN
+    val half = if (flow.isNaN()) Double.NaN else sqrt(flow * flow + lagUncNs * lagUncNs)
+    Card(Modifier.clickable(role = Role.Button, onClick = open)) {
+        BasicText("SYNC", style = Tokens.Text.cardLabel.style())
+        if (total.isNaN() || half.isNaN()) {
+            BasicText("Press Play to see how close you are to everyone's clock.", style = Tokens.Text.body.style(Ink.textSecondary))
+            return@Card
         }
-        BudgetRow("Flowtime", flow, Ink.accent, Ink.text)
-        BudgetRow("Output lag", if (s != null) lagUncNs else Double.NaN, Ink.warn, Ink.text)
-        BudgetRow("Held gap", held, Ink.muted, Ink.textSecondary, plusMinus = false)
-        BudgetRow("Total", total, Ink.text, Ink.text)
+        BasicText("You hear it within ±${fmtDuration(total)} of everyone's clock", style = Tokens.Text.bodyStrong.style(Ink.accent))
+        SyncWindow(held, half)
+        // One bar split by each part's share of the total, squared; then one sentence naming the largest part.
+        val lagShare = (lagUncNs * lagUncNs / (flow * flow + lagUncNs * lagUncNs)).toFloat().coerceIn(0f, 1f)
+        Row(Modifier.fillMaxWidth().height(6.dp).background(Ink.accent, CircleShape)) {
+            if (lagShare > 0f) Box(Modifier.weight(lagShare).fillMaxHeight().background(Ink.warn))
+            if (lagShare < 1f) Spacer(Modifier.weight(1f - lagShare))
+        }
+        val sentence = if (lagUncNs >= flow)
+            "Mostly your $outputWord's delay estimate (±${fmtDuration(lagUncNs)}). Clock ±${fmtDuration(flow)}." + if (outputExternal) " An earcup test can tighten it." else ""
+        else "Mostly the clock (±${fmtDuration(flow)}). Your $outputWord's delay estimate adds ±${fmtDuration(lagUncNs)}. More satellites can tighten it."
+        BasicText(sentence, style = Tokens.Text.small.style(Ink.textSecondary))
     }
 }
 
+/** A line from 10 ms earlier to 10 ms later (50 ms when the band wouldn't fit); the band is centred on the held gap. */
 @Composable
-private fun BudgetRow(label: String, ns: Double, bar: Color, words: Color, plusMinus: Boolean = true) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        BasicText(label, Modifier.width(100.dp), Tokens.Text.body.style(words))
-        Box(Modifier.weight(1f).height(6.dp).background(Ink.track, CircleShape)) {
-            if (!ns.isNaN()) Box(Modifier.fillMaxWidth(logScale(ns).coerceAtLeast(0.02f)).fillMaxHeight().background(bar, CircleShape))
+private fun SyncWindow(heldNs: Double, halfNs: Double) {
+    val centre = heldNs   // dragging (positive) is heard later
+    val span = if (abs(centre) + halfNs > 10e6) 50e6 else 10e6
+    val spanMs = (span / 1e6).toInt()
+    Canvas(Modifier.fillMaxWidth().height(44.dp).semantics { contentDescription = "Sync window: most likely between ${fmtSigned(centre - halfNs)} and ${fmtSigned(centre + halfNs)} from the Brocast clock" }) {
+        val w = size.width; val y = 14.dp.toPx()
+        fun x(ns: Double) = (w / 2f + (ns / span).toFloat().coerceIn(-1f, 1f) * (w / 2f))
+        drawLine(Ink.track, Offset(0f, y), Offset(w, y), 2.dp.toPx(), StrokeCap.Round)
+        val dash = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 4.dp.toPx()))
+        for (limit in listOf(-5e6, 5e6)) drawLine(Ink.muted, Offset(x(limit), y - 8.dp.toPx()), Offset(x(limit), y + 8.dp.toPx()), 1.dp.toPx(), pathEffect = dash)
+        drawLine(Ink.text, Offset(w / 2f, y - 10.dp.toPx()), Offset(w / 2f, y + 10.dp.toPx()), 2.dp.toPx())
+        val l = x(centre - halfNs); val r = x(centre + halfNs)
+        drawRoundRect(Ink.accent.copy(alpha = 0.45f), Offset(l, y - 5.dp.toPx()), Size(maxOf(r - l, 3.dp.toPx()), 10.dp.toPx()), CornerRadius(5.dp.toPx()))
+        drawCircle(Ink.accent, 3.5.dp.toPx(), Offset(x(centre), y))
+        drawIntoCanvas { c ->
+            val p = Paint(Paint.ANTI_ALIAS_FLAG).apply { textSize = 10.sp.toPx(); color = Ink.textSecondary.toArgb(); typeface = android.graphics.Typeface.MONOSPACE }
+            p.textAlign = Paint.Align.LEFT; c.nativeCanvas.drawText("EARLIER $spanMs ms", 0f, y + 28.dp.toPx(), p)
+            p.textAlign = Paint.Align.CENTER; c.nativeCanvas.drawText("BROCAST CLOCK", w / 2f, y + 28.dp.toPx(), p)
+            p.textAlign = Paint.Align.RIGHT; c.nativeCanvas.drawText("$spanMs ms LATER", w, y + 28.dp.toPx(), p)
         }
-        Spacer(Modifier.width(10.dp))
-        BasicText(if (ns.isNaN()) "—" else (if (plusMinus) "±" else "") + fmtDuration(ns), Modifier.width(66.dp), Tokens.Text.valueSmall.style(words))
     }
 }
 

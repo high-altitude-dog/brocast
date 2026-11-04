@@ -274,3 +274,10 @@ The user wants a screen to see, at a glance, whether two phones are in sync and 
 5. A way to say that a phone's display adds its own delay, so a visible gap is not always an audio gap.
 
 Constraints: a flash at 1 Hz at most; no strobing; the screen has to be readable in a dark room; sub-millisecond values are shown in µs.
+
+## 4 Nov: not built from hand-offs 12 to 14 (no data yet)
+
+- **Header nym and "N listeners linked", and Swarm:** need the listener keypair and the Pears mesh, neither built. The header now shows only `BEACH SYNC RADIO`; `Live · D` is gone (D stays on the Test bench).
+- **DOWNLOADING n% badge, AHEAD tile, Buffer:** the library store reports sets held, not the set due now or time ahead.
+- **Track and set names:** not in the stream or `library.json` yet.
+- **Sync card:** built. The window is centred on the held gap; the band's half-width is √(clock² + delay estimate²). It does not use the 95% wording, as asked.

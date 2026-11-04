@@ -248,9 +248,9 @@ fun testNudge() {
     check(a.state.closing && abs(a.state.heldAt(t0 + 2 * s) - 5_000_000) < 100, "Auto starts closing a 5 ms gap straight away")
     check(abs(a.state.heldAt(t0 + 32 * s) - 2_500_000) < 1000, "over the recommended 60 s: half gone after 30 s")
     a.tick(t0 + 63 * s, f5)
-    check(a.gapAt(t0 + 63 * s) == 0L && !a.state.closing && notes.last().startsWith("Back in step"), "it closes and says so")
+    check(a.gapAt(t0 + 63 * s) == 0L && !a.state.closing && notes.last().startsWith("Caught up after"), "it closes and says so")
     a.tick(t0 + 64 * s, fit(35_050_000))
-    check(a.gapAt(t0 + 64 * s) == 0L && notes.last().contains("jumping"), "Auto jumps across a 30 ms gap")
+    check(a.gapAt(t0 + 64 * s) == 0L && notes.last().contains("jumping straight"), "Auto jumps across a 30 ms gap")
 
     val fast = NudgeControl(NudgeMode.AUTO, 1.0)
     fast.tick(t0, fit(0)); fast.tick(t0 + s, fit(5_000_000))
@@ -383,30 +383,30 @@ fun testEvents() {
 
     check(d.update(reading(100)).isEmpty(), "a quiet start logs nothing")
     val first = d.update(reading(101, Source.NTP))
-    check(first.size == 1 && first[0].lane == Lane.CLOCK && first[0].text.startsWith("Time source: NTP"), "first time source is logged")
+    check(first.size == 1 && first[0].lane == Lane.CLOCK && first[0].text.startsWith("Time source is internet time"), "first time source is logged")
     check(d.update(reading(102, Source.NTP)).isEmpty(), "no change logs nothing")
-    check(d.update(reading(103, Source.NTP, gps = 103)).single().text == "First GPS time report", "first GPS report is logged")
+    check(d.update(reading(103, Source.NTP, gps = 103)).single().text.startsWith("First GPS time report"), "first GPS report is logged")
     check(d.update(reading(108, Source.NTP, gps = 103)).isEmpty(), "5 s without GPS isn't yet a loss")
     check(d.update(reading(109, Source.NTP, gps = 103)).single().text.startsWith("GPS lost"), "6 s without GPS is a loss")
     check(d.update(reading(110, Source.NTP, gps = 103)).isEmpty(), "a loss is logged once")
-    check(d.update(reading(130, Source.NTP, gps = 130)).single().text == "GPS back after 27 s", "GPS return gives the gap")
-    check(d.update(reading(131, Source.GPS, gps = 131)).single().text.startsWith("Time source changed from NTP to GPS"), "a source change is logged")
+    check(d.update(reading(130, Source.NTP, gps = 130)).single().text.startsWith("GPS back after 27 s"), "GPS return gives the gap")
+    check(d.update(reading(131, Source.GPS, gps = 131)).single().text.startsWith("Time source changed from internet time to GPS"), "a source change is logged")
 
     check(d.update(reading(132, Source.GPS, gps = 132, underruns = 3)).single().text.contains("×3"), "underruns are logged with their count")
     check(d.update(reading(133, Source.GPS, gps = 133, underruns = 3)).isEmpty(), "unchanged underruns log nothing")
-    check(d.update(reading(134, Source.GPS, gps = 134, underruns = 3, jumps = 1)).single().text.startsWith("Jump"), "a jump is logged")
+    check(d.update(reading(134, Source.GPS, gps = 134, underruns = 3, jumps = 1)).single().text.startsWith("Audio was more than 20 ms out"), "a jump is logged")
     check(d.update(reading(135, Source.GPS, gps = 135, underruns = 3, jumps = 1, missing = 4800)).single().text.contains("100 ms"), "missing audio is logged in ms")
 
     fun later(t: Long, fetch: String? = null, fetchErrors: Int = 0, ntp: String? = null, route: String? = null) =
         reading(t, Source.GPS, gps = t, underruns = 3, jumps = 1, missing = 4800, fetch = fetch, fetchErrors = fetchErrors, ntp = ntp, route = route)
-    check(d.update(later(140, fetch = "timeout", fetchErrors = 1)).single().text == "Stream fetch failing: timeout", "fetch failure is logged")
+    check(d.update(later(140, fetch = "timeout", fetchErrors = 1)).single().text.startsWith("Can't reach the station: timeout"), "fetch failure is logged")
     check(d.update(later(141, fetch = "timeout", fetchErrors = 2)).isEmpty(), "ongoing fetch failure is logged once")
-    check(d.update(later(150, fetchErrors = 5)).single().text == "Stream fetch working again after 10 s (5 errors)", "fetch recovery gives time and count")
+    check(d.update(later(150, fetchErrors = 5)).single().text == "Station reachable again after 10 s: 5 requests failed meanwhile", "fetch recovery gives time and count")
     check(d.update(later(151, ntp = "no reply")).single().lane == Lane.NET, "NTP failure is logged")
-    check(d.update(later(155)).single().text == "NTP working again after 4 s", "NTP recovery is logged")
-    check(d.update(later(156, route = "USB headset")).single().text == "Audio output: USB headset", "first output route is logged")
+    check(d.update(later(155)).single().text.startsWith("Internet time reachable again after 4 s"), "NTP recovery is logged")
+    check(d.update(later(156, route = "USB headset")).single().text.startsWith("Output is USB headset"), "first output route is logged")
     check(d.update(later(157)).isEmpty(), "losing the route reading logs nothing")
-    check(d.update(later(158, route = "speaker")).single().text == "Audio output changed to speaker", "route change is logged")
+    check(d.update(later(158, route = "speaker")).single().text.startsWith("Output changed to speaker"), "route change is logged")
 
     println("Event log: a long silence is two lines, not one a second")
     val q = EventDetector()
@@ -417,7 +417,7 @@ fun testEvents() {
     for (t in 11L..20L) r.update(reading(t, missing = 48000 * (t - 9)))
     check(r.update(reading(21, missing = 48000 * 11)).isEmpty(), "1 s without loss doesn't end a silence")
     check(r.update(reading(22, missing = 48000 * 12)).isEmpty(), "more loss carries the same silence on")
-    check(r.update(reading(25, missing = 48000 * 12)).single().text == "Audio back after 12 s (12.0 s missing)", "the end gives its length and the audio lost")
+    check(r.update(reading(25, missing = 48000 * 12)).single().text == "Audio back after 12 s: 12.0 s of sound was missing", "the end gives its length and the audio lost")
     check(r.update(reading(26, missing = 48000 * 12)).isEmpty(), "the end is logged once")
 
     println("Durations: adaptive units at three significant figures")
@@ -426,7 +426,7 @@ fun testEvents() {
     }
     check(fmtSigned(-1_200_000.0) == "−1.20 ms" && fmtSigned(3_000.0) == "+3.00 µs", "signed durations show their sign")
     val gpsErr = EventDetector().update(Reading(s, null, Source.GPS, 70.0, 0L, 0, 0, 0L, null, 0, null, null, null))
-    check(gpsErr.single().text == "Time source: GPS (±70 ns)", "a GPS error no longer reads as ±0.0 ms")
+    check(gpsErr.single().text == "Time source is GPS (±70 ns): this is what playback now follows", "a GPS error no longer reads as ±0.0 ms")
 
     println("GPS: a report with no real date is refused")
     check(!gpsDateValid(315_964_002_822_084_299L + 793_181_674_796L), "the Pixel's first report, which reads as 1980, is refused")
@@ -435,22 +435,22 @@ fun testEvents() {
     println("Event log: a failure logs each distinct message once")
     val fd = EventDetector()
     fun ntpFail(t: Long, error: String?) =
-        fd.update(Reading(t * s, null, null, Double.NaN, 0L, 0, 0, 0L, null, 0, error, null, null)).filter { it.text.startsWith("NTP") }.map { it.text }
-    check(ntpFail(1, "ntp1: timed out") == listOf("NTP failing: ntp1: timed out"), "the first error logs as failing")
-    check(ntpFail(17, "ntp2: timed out") == listOf("NTP still failing: ntp2: timed out"), "a new message logs as still failing")
+        fd.update(Reading(t * s, null, null, Double.NaN, 0L, 0, 0, 0L, null, 0, error, null, null)).filter { it.text.contains("internet time") }.map { it.text }
+    check(ntpFail(1, "ntp1: timed out") == listOf("Can't reach internet time: ntp1: timed out. Using satellites if they are on"), "the first error logs as failing")
+    check(ntpFail(17, "ntp2: timed out") == listOf("Still can't reach internet time: ntp2: timed out"), "a new message logs as still failing")
     check(ntpFail(33, "ntp1: timed out").isEmpty() && ntpFail(49, "ntp2: timed out").isEmpty(), "cycling back through the servers logs nothing")
     check((0 until 20).sumOf { ntpFail(65L + it, "varying $it").size } == 6, "messages that vary each time stop at the cap")
-    check(ntpFail(100, null).single().startsWith("NTP working again"), "recovery logs once")
-    check(ntpFail(101, "ntp2: timed out") == listOf("NTP failing: ntp2: timed out"), "a new failure starts afresh")
+    check(ntpFail(100, null).single().startsWith("Internet time reachable again"), "recovery logs once")
+    check(ntpFail(101, "ntp2: timed out") == listOf("Can't reach internet time: ntp2: timed out. Using satellites if they are on"), "a new failure starts afresh")
 
     println("Event log: tightening needs a real, lasting improvement")
     val td = EventDetector()
     fun tight(t: Long, err: Double, sats: Int = 9) =
-        td.update(Reading(t * s, null, Source.GPS, err, t * s, 0, 0, 0L, null, 0, null, null, null, sats)).filter { it.text.startsWith("Sync") }
+        td.update(Reading(t * s, null, Source.GPS, err, t * s, 0, 0, 0L, null, 0, null, null, null, sats)).filter { it.text.startsWith("Timing tightened") }
     check(tight(200, 3.2e6).isEmpty(), "the first estimate is only a baseline")
     check(tight(201, 0.8e6).isEmpty() && td.tighteningFromNs.isNaN(), "an improvement doesn't show while it's being confirmed")
     check(tight(205, 0.8e6).isEmpty(), "and isn't logged before 10 s")
-    check(tight(211, 0.8e6).single().text == "Sync tightened from ±3.20 ms to ±800 µs, 9 satellites", "after 10 s it's logged once, with the figures")
+    check(tight(211, 0.8e6).single().text == "Timing tightened from ±3.20 ms to ±800 µs, 9 satellites: keeping the better time", "after 10 s it's logged once, with the figures")
     check(td.tighteningFromNs == 3.2e6, "and the screens show it from then, with the figure it improved on")
     check(tight(212, 0.8e6).isEmpty() && td.tighteningFromNs == 3.2e6, "it isn't repeated, and still shows")
     check(tight(213, 0.75e6, sats = 14).isEmpty() && tight(230, 0.75e6, sats = 14).isEmpty(), "more satellites with little improvement log nothing")
@@ -458,7 +458,7 @@ fun testEvents() {
     check(tight(231, 5e6).isEmpty(), "getting worse logs nothing here")
     check(tight(232, 2e6).isEmpty() && tight(240, 5e6).isEmpty() && tight(251, 2e6).isEmpty(), "a brief improvement that doesn't last logs nothing")
     val quiet = EventDetector()
-    fun routine(t: Long, err: Double) = quiet.update(Reading(t * s, null, Source.GPS, err, t * s, 0, 0, 0L, null, 0, null, null, null, 9)).filter { it.text.startsWith("Sync") }
+    fun routine(t: Long, err: Double) = quiet.update(Reading(t * s, null, Source.GPS, err, t * s, 0, 0, 0L, null, 0, null, null, null, 9)).filter { it.text.startsWith("Timing tightened") }
     routine(300, 90_000.0)
     check(routine(301, 40_000.0).isEmpty() && routine(320, 40_000.0).isEmpty(), "changes below 0.1 ms are routine and log nothing")
 
@@ -770,14 +770,14 @@ fun testClockCheck() {
     fun reading(t: Long, diffMs: Double, ntpErrMs: Double) =
         Reading(t * s, null, Source.GPS, 2e5, t * s, 0, 0, 0L, null, 0, null, null, null, 0, diffMs * 1e6, ntpErrMs * 1e6)
     val a = EventDetector()
-    val noisy = (1..40L).flatMap { a.update(reading(it, if (it % 2 == 0L) 70.0 else -60.0, 150.0)) }.filter { it.text.startsWith("Clock check") }
+    val noisy = (1..40L).flatMap { a.update(reading(it, if (it % 2 == 0L) 70.0 else -60.0, 150.0)) }.filter { it.text.contains("clock check") }
     check(!a.clockCheckFailed && noisy.isEmpty(), "normal internet-time noise (±70 ms against ±150 ms) never fails the check")
     val b = EventDetector()
-    val early = (1..6L).flatMap { b.update(reading(it, 1000.0, 150.0)) }.filter { it.text.startsWith("Clock check") }
+    val early = (1..6L).flatMap { b.update(reading(it, 1000.0, 150.0)) }.filter { it.text.contains("clock check") }
     check(!b.clockCheckFailed && early.isEmpty(), "a 1 s gap isn't flagged until it has lasted 10 s")
-    val later = (7..20L).flatMap { b.update(reading(it, 1000.0, 150.0)) }.filter { it.text.startsWith("Clock check") }
+    val later = (7..20L).flatMap { b.update(reading(it, 1000.0, 150.0)) }.filter { it.text.contains("clock check") }
     check(b.clockCheckFailed && later.size == 1 && later[0].text.contains("1.00 s"), "a 1 s gap that lasts fails the check, with one event naming the size")
-    val back = (21..40L).flatMap { b.update(reading(it, -44.0, 260.0)) }.filter { it.text.startsWith("Clock check passed") }
+    val back = (21..40L).flatMap { b.update(reading(it, -44.0, 260.0)) }.filter { it.text.contains("clock check passed") }
     check(!b.clockCheckFailed && back.size == 1, "and passes again, once, when the clocks agree for 10 s")
     val c = EventDetector()
     (1..30L).forEach { c.update(reading(it, 120.0, 400.0)) }

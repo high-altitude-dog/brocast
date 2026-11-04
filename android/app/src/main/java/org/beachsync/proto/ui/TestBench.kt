@@ -283,9 +283,9 @@ internal fun shortZone(line: String): String {
 }
 
 @Composable
-fun Card(content: @Composable () -> Unit) {
+fun Card(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
     Column(
-        Modifier.fillMaxWidth().background(Ink.surface, RoundedCornerShape(Tokens.Radius.card.dp))
+        modifier.fillMaxWidth().background(Ink.surface, RoundedCornerShape(Tokens.Radius.card.dp))
             .border(Tokens.Stroke.card.dp, Ink.border, RoundedCornerShape(Tokens.Radius.card.dp))
             .padding(vertical = 10.dp, horizontal = Tokens.Space.cardPaddingHorizontal.dp),
         verticalArrangement = Arrangement.spacedBy(Tokens.Space.rowGap.dp),
