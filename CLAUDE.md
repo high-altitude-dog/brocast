@@ -101,7 +101,7 @@ To keep tokens low:
 | `measure/earcup_run.py` | Runs the earcup test over adb (10 s countdown, then about 15 s of clicks) and logs each result with the Bluetooth codec, adaptive-bitrate state and the headset's reported delay, to `measure/earcup-results.csv`, which git ignores. |
 | `android/.../TickWindowReceiver.kt` | Starts and stops the tick pattern's sound over adb, for `quicktest.py`. Only adb can send it. |
 | `simtest/SimTest.kt` | Desktop tests of the pure timing code. The commands are in its header. |
-| `README.md` | The human test guide, from build to results |
+| `docs/prototype-test-guide.md` | The human test guide, from build to results |
 
 ## Status
 
@@ -134,7 +134,7 @@ Don't change timing behaviour to make a build pass.
 - `~/Android` and `~/.android` exist, so the SDK is probably at `~/Android/Sdk`. Write `sdk.dir=<path>` into `android/local.properties`.
 - File copying may have dropped the executable bit, so run `chmod +x android/gradlew` first.
 - Build with `cd android && ./gradlew assembleDebug`. The APK lands at `app/build/outputs/apk/debug/app-debug.apk`.
-- For tests over mobile data, the server runs as the `brocast-test` and `brocast-admin` containers on a test VM (`http://<server-ip>:8765`). That VM also runs other services, so keep the limits in `README.md`, stop `brocast-test` between tests, never publish the upload page's port, and change nothing else there. This repo is public, so the server's address, login and key names stay out of it.
+- For tests over mobile data, the server runs as the `brocast-test` and `brocast-admin` containers on a test VM (`http://<server-ip>:8765`). That VM also runs other services, so keep the limits in `docs/prototype-test-guide.md`, stop `brocast-test` between tests, never publish the upload page's port, and change nothing else there. This repo is public, so the server's address, login and key names stay out of it.
 
 ## The test rig
 
@@ -152,7 +152,7 @@ Don't change timing behaviour to make a build pass.
 
 1. Build the app and fix any build errors.
 2. Help install it on both phones with `adb`.
-3. Walk through the tests in `README.md` §5, then run the measure script.
+3. Walk through the tests in `docs/prototype-test-guide.md` §5, then run the measure script.
 4. Read the phones' logs (`adb pull /sdcard/Android/data/org.beachsync.proto/files/`) with the measure output, and explain the gaps:
    - The mean is a steady offset.
    - The standard deviation is jitter.
