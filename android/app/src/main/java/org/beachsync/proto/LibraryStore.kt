@@ -31,7 +31,7 @@ class LibraryStore private constructor(ctx: Context) : Thread("library") {
     @Volatile var totalSets = 0
     @Volatile private var going = true
 
-    init { if (listFile.exists()) try { read(listFile.readText()) } catch (_: Exception) { } }
+    init { if (listFile.exists()) try { read(listFile.readText()); summarise(null) } catch (_: Exception) { } }   // what is already on the phone shows at once, with no network
 
     fun file(id: String) = File(dir, "$id.opus")
 
