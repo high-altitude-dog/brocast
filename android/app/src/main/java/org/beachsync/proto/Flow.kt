@@ -36,6 +36,9 @@ object FlowTime {
         private set
     private var challengerSince = 0L
 
+    /** A new run keeps the fits already running (from the idle clock), so flowtime never goes missing when Play is pressed. */
+    fun beginRun(p: Policy) { policy = p; switches = 0; challengerSince = 0 }
+
     fun reset(p: Policy) {
         gps = null; ntp = null; policy = p; chosen = null; switches = 0; challengerSince = 0
     }

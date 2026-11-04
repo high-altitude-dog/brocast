@@ -12,7 +12,7 @@ import kotlin.math.roundToLong
  * Asks NPL's stratum-1 servers for the time every 16 s (well inside the one-query-per-4-s rule),
  * feeds the samples to an NtpFitter, and compares each one with GPS flowtime.
  */
-class NtpClient(private val log: CsvLog) : Thread("ntp") {
+class NtpClient(private val log: CsvLog?) : Thread("ntp") {
     @Volatile var running = true
     @Volatile var host = HOSTS[0]
     @Volatile var stratum = 0
@@ -65,7 +65,7 @@ class NtpClient(private val log: CsvLog) : Thread("ntp") {
             minusGpsUs = if (g != null) (r.off - (g.utcAt(mid) - mid)) / 1e3 else Double.NaN
             host = h; stratum = r.stratum; refId = r.refId
             rttMs = r.rtt / 1e6; boundMs = r.bound / 1e6; samples++
-            log.row(mid, r.off, r.rtt, r.bound.roundToLong(), r.stratum, r.refId, h, minusGpsUs)
+            log?.row(mid, r.off, r.rtt, r.bound.roundToLong(), r.stratum, r.refId, h, minusGpsUs)
         }
     }
 

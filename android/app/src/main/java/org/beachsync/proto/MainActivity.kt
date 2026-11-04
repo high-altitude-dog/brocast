@@ -40,7 +40,9 @@ class MainActivity : ComponentActivity(), BenchActions {
 
     private val locationPermissions = arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
 
-    private val runStopped: () -> Unit = { state.session = null }
+    private val runStopped: () -> Unit = { state.session = null; runOnUiThread { startIdle() } }
+    private var idle: IdleClock? = null
+    private var visible = false
     private var listenLag: Double? = null
     private var listenFromLibrary = false
     private var earcupOutput: AudioOutput? = null
@@ -49,6 +51,23 @@ class MainActivity : ComponentActivity(), BenchActions {
     private var askedForHeadsetName = false
 
     /** Asked only once a Bluetooth headset is connected, because its name is the only reason the app wants this. */
+    /** The clock runs with no run going, so the screen always has a source and Play starts with a clock in hand. Only while on screen. */
+    private fun startIdle() {
+        if (!visible || idle != null || session != null) return
+        val c = IdleClock(applicationContext, state.policy)
+        c.start(state.satellites && hasLocation())
+        idle = c
+        state.idleGps = c.gps
+    }
+
+    private fun stopIdle() {
+        idle?.stop(); idle = null; state.idleGps = null
+    }
+
+    override fun onStart() { super.onStart(); visible = true; startIdle() }
+
+    override fun onStop() { visible = false; if (session == null) stopIdle(); super.onStop() }
+
     override fun onResume() {
         super.onResume()
         val bluetooth = getSystemService(AudioManager::class.java).getDevices(AudioManager.GET_DEVICES_OUTPUTS)
@@ -152,6 +171,7 @@ class MainActivity : ComponentActivity(), BenchActions {
             library = fromLibrary,
         )
         listenLag = null
+        stopIdle()   // the run brings its own time sources; the fits they inherit carry on
         SessionService.run(this, satellitesOn)
         val started = Session(applicationContext, settings, satellitesOn)
         started.start()
@@ -174,7 +194,7 @@ class MainActivity : ComponentActivity(), BenchActions {
     }
 
     private fun satellitesInRun(on: Boolean) {
-        val running = session ?: return
+        val running = session ?: run { idle?.setSatellites(on); return }
         SessionService.run(this, on)
         running.setSatellites(on)
     }

@@ -68,7 +68,7 @@ class Session(ctx: Context, val s: Settings, private val satellitesOn: Boolean) 
     }, "nudge")
 
     fun start() {
-        FlowTime.reset(s.policy)
+        FlowTime.beginRun(s.policy)   // fits already running stay, so Play never leaves flowtime without a source
         File(dir, "$name-info.txt").writeText(info())
         note(Lane.CLOCK, "Run started: time source setting ${s.policy}, satellites ${if (satellitesOn) "on" else "off"}")
         if (satellitesOn) gps.start()

@@ -20,7 +20,7 @@ import kotlin.math.sqrt
  * "Gold" phones also say which boot-clock instant that reading belongs to (elapsedRealtimeNanos).
  * "Silver" phones don't, so the sample is stamped when it arrives, which adds the delivery delay.
  */
-class GpsTime(ctx: Context, private val log: CsvLog) {
+class GpsTime(ctx: Context, private val log: CsvLog?) {
     private val lm = ctx.getSystemService(LocationManager::class.java)
     private val thread = HandlerThread("gnss").apply { start() }
     private val handler = Handler(thread.looper)
@@ -140,7 +140,7 @@ class GpsTime(ctx: Context, private val log: CsvLog) {
         lastBoot = boot
         deliveryMs = (arrival - boot) / 1e6
         status = if (FlowTime.gps == null) "collecting samples" else "tracking"
-        log.row(boot, off, isGold, biasUnc, erUnc, leap, c.hasLeapSecond(), resid,
+        log?.row(boot, off, isGold, biasUnc, erUnc, leap, c.hasLeapSecond(), resid,
             c.hardwareClockDiscontinuityCount, arrival - boot)
     }
 

@@ -82,6 +82,8 @@ class BenchState {
     var pitch by mutableStateOf("2000")
     var lag by mutableStateOf("0")
     var satellites by mutableStateOf(true)
+    /** The GPS engine of the idle clock, while no run is going; null otherwise. */
+    var idleGps by mutableStateOf<org.beachsync.proto.GpsTime?>(null)
     var localTime by mutableStateOf(true)
     var nudgeMode by mutableStateOf(NudgeMode.AUTO)
     var nudgePeriodS by mutableStateOf<Double?>(null)

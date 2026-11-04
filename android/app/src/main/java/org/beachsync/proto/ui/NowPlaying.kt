@@ -124,7 +124,7 @@ fun NowPlaying(state: BenchState, actions: BenchActions, openLog: () -> Unit, op
             KeptBadge()
         }
         LibraryLine(state.library)
-        Dial(s, boot, state.localTime, lagUncNs, openSatellites)
+        Dial(s, s?.gps ?: state.idleGps, boot, state.localTime, lagUncNs, openSatellites)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Top) {
             PlayStopButton(s != null, lockedByDownload, listen)
             SyncBadge(s, boot, lagUncNs, if (s != null && dueMissing) (lib?.partPct ?: -1).coerceAtLeast(0) else if (lockedByDownload) (lib?.partPct ?: -1).coerceAtLeast(0) else null, Modifier.weight(1f))
@@ -133,8 +133,9 @@ fun NowPlaying(state: BenchState, actions: BenchActions, openLog: () -> Unit, op
         SyncCard(s, boot, lagUncNs, out.kind.label.lowercase(), out.external, openSignals)
         NudgeRow(state, openNudge, SECOND_MS)
         Row(Modifier.fillMaxWidth().height(IntrinsicTile), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            val gold = when (s?.gps?.gold) { true -> "Gold · "; false -> "Silver · "; null -> "" }
-            Tile("SOURCE", FlowTime.chosen?.name?.takeIf { s != null } ?: "—", if (s == null) "" else if (s.gps.active) "$gold${s.gps.used} sats" else "Satellites off", Modifier.weight(1f))
+            val gpsNow = s?.gps ?: state.idleGps
+            val gold = when (gpsNow?.gold) { true -> "Gold · "; false -> "Silver · "; null -> "" }
+            Tile("SOURCE", FlowTime.chosen?.name ?: "—", if (gpsNow != null && gpsNow.active) "$gold${gpsNow.used} sats" else "Satellites off", Modifier.weight(1f))
             // Named for the output in use: this lag also applies to a phone's own speaker.
             Tile(out.kind.label, "${s?.s?.lagMs ?: state.lag} ms", if (out.external) out.name else state.lagSource, Modifier.weight(1f))
             Tile("AHEAD", aheadText(lib != null && playing != null, everythingHere, ahead), if (everythingHere) "all downloaded" else "downloaded", Modifier.weight(1f))
@@ -252,12 +253,12 @@ private fun IconBox(icon: HeaderIcon, onClick: (() -> Unit)?) {
 
 /** The Brocast clock. The design's sub-second dial is left out, because this screen updates once a second. */
 @Composable
-private fun Dial(s: Session?, boot: Long, showLocal: Boolean, lagUncNs: Double, openSatellites: () -> Unit) {
+private fun Dial(s: Session?, gps: org.beachsync.proto.GpsTime?, boot: Long, showLocal: Boolean, lagUncNs: Double, openSatellites: () -> Unit) {
     val fit = FlowTime.fit()
-    val utc = if (s != null && fit != null) fit.utcAt(boot) else null
+    val utc = if (fit != null) fit.utcAt(boot) else null
     val now = utc?.let { Instant.ofEpochSecond(0, it) }
-    val err = s?.syncErrorNs(boot, lagUncNs) ?: Double.NaN
-    val flowErr = if (s != null && fit != null) fmtDuration(fit.errAt(boot)) else "—"
+    val err = s?.syncErrorNs(boot, lagUncNs) ?: fit?.errAt(boot)?.let { sqrt(it * it + lagUncNs * lagUncNs) } ?: Double.NaN
+    val flowErr = if (fit != null) fmtDuration(fit.errAt(boot)) else "—"
     val resources = LocalContext.current.resources
     val top = remember { Paint(Paint.ANTI_ALIAS_FLAG).apply { typeface = resources.getFont(R.font.space_grotesk); textAlign = Paint.Align.CENTER; letterSpacing = 0.18f } }
     val bottom = remember { Paint(Paint.ANTI_ALIAS_FLAG).apply { typeface = resources.getFont(R.font.jetbrains_mono); textAlign = Paint.Align.CENTER; letterSpacing = 0.08f } }
@@ -297,7 +298,7 @@ private fun Dial(s: Session?, boot: Long, showLocal: Boolean, lagUncNs: Double, 
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
             BasicText(now?.let { CLOCK_ZONE.format(it) } ?: " ", style = Tokens.Text.clockZone.style())
             BasicText(now?.let { CLOCK_DIGITS.format(it) } ?: "--:--:--", style = Tokens.Text.clock.style())
-            SourceGlyph(s, boot, openSatellites)
+            SourceGlyph(gps, boot, openSatellites)
             val local = ZoneId.systemDefault()
             val different = showLocal && now != null && local.rules.getOffset(now) != UK.rules.getOffset(now)
             BasicText(if (different) shortZone(LOCAL_DIGITS.withZone(local).format(now)) + " · local" else " ", style = Tokens.Text.clockLocal.style().copy(fontSize = 10.sp), maxLines = 1)
@@ -312,7 +313,7 @@ private fun badge(s: Session?, boot: Long, lagUncNs: Double, downloadPct: Int?):
     if (downloadPct != null) return Badge("DOWNLOADING $downloadPct%", "↓", Ink.textSecondary, "", "set due now")
     if (s == null) {
         val fit = FlowTime.fit()
-        return Badge("STOPPED", "■", Ink.textSecondary, if (fit != null) "±" + fmtDuration(fit.errAt(boot)) else "", if (fit != null) "clock ready" else "no clock yet")
+        return Badge("STOPPED", "■", Ink.textSecondary, if (fit != null) "±" + fmtDuration(fit.errAt(boot)) else "", if (fit != null) "clock ready" else "getting time")
     }
     val err = s.syncErrorNs(boot, lagUncNs)
     val figure = if (err.isNaN()) "" else "±" + fmtDuration(err)
@@ -356,17 +357,17 @@ private fun SyncBadge(s: Session?, boot: Long, lagUncNs: Double, downloadPct: In
  */
 @Composable
 private fun SyncCard(s: Session?, boot: Long, lagUncNs: Double, outputWord: String, outputExternal: Boolean, open: () -> Unit) {
-    val flow = if (s != null) FlowTime.fit()?.errAt(boot) ?: Double.NaN else Double.NaN
-    val total = s?.syncErrorNs(boot, lagUncNs) ?: Double.NaN
-    val held = if (s != null) s.nudge.gapAt(boot).toDouble() else Double.NaN
+    val flow = FlowTime.fit()?.errAt(boot) ?: Double.NaN
     val half = if (flow.isNaN()) Double.NaN else sqrt(flow * flow + lagUncNs * lagUncNs)
+    val total = s?.syncErrorNs(boot, lagUncNs) ?: half
+    val held = if (s != null) s.nudge.gapAt(boot).toDouble() else 0.0
     Card(Modifier.clickable(role = Role.Button, onClick = open)) {
         BasicText("SYNC", style = Tokens.Text.cardLabel.style())
         if (total.isNaN() || half.isNaN()) {
-            BasicText("Press Play to see how close you are to everyone's clock.", style = Tokens.Text.body.style(Ink.textSecondary))
+            BasicText("Getting time from the satellites or the internet.", style = Tokens.Text.body.style(Ink.textSecondary))
             return@Card
         }
-        BasicText("You hear it within ±${fmtDuration(total)} of everyone's clock", style = Tokens.Text.bodyStrong.style(Ink.accent))
+        BasicText((if (s == null) "Playing now, you'd hear it within ±" else "You hear it within ±") + fmtDuration(total) + " of everyone's clock", style = Tokens.Text.bodyStrong.style(Ink.accent))
         SyncWindow(held, half)
         // One bar split by each part's share of the total, squared; then one sentence naming the largest part.
         val lagShare = (lagUncNs * lagUncNs / (flow * flow + lagUncNs * lagUncNs)).toFloat().coerceIn(0f, 1f)
@@ -427,12 +428,12 @@ private fun Tile(label: String, value: String, detail: String, modifier: Modifie
 
 /** The time source as a picture: a mini constellation for GPS, an hourglass for holdover, a cell tower for internet time. Tapping it opens Satellites. */
 @Composable
-private fun SourceGlyph(s: Session?, boot: Long, open: () -> Unit) {
-    val gps = s?.gps
+private fun SourceGlyph(gps: org.beachsync.proto.GpsTime?, boot: Long, open: () -> Unit) {
+    val onGps = FlowTime.chosen == Source.GPS && gps != null && gps.active
     val kind = when {
-        s == null || FlowTime.fit() == null -> "NONE"
-        gps != null && gps.active && s.sourceName(boot) == "GPS" -> "GPS"
-        gps != null && gps.active && s.sourceName(boot).startsWith("GPS") -> "HOLD"
+        FlowTime.fit() == null -> "WAIT"   // the first second or two after the app opens, before internet time answers
+        onGps && boot - gps!!.lastBoot <= 3_000_000_000L -> "GPS"
+        onGps -> "HOLD"
         else -> "NTP"
     }
     val sats = gps?.sats.orEmpty()
@@ -440,7 +441,7 @@ private fun SourceGlyph(s: Session?, boot: Long, open: () -> Unit) {
         "GPS" -> "GPS · ${sats.count { it.used }} of ${sats.size}"
         "HOLD" -> "HOLDING · ${((boot - gps!!.lastBoot) / 1_000_000_000L).coerceAtLeast(0)} s"
         "NTP" -> "NTP"
-        else -> "NO TIME YET"
+        else -> "NTP · getting time"
     }
     Column(Modifier.clickable(enabled = kind == "GPS" || kind == "HOLD", onClick = open).padding(vertical = 2.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Canvas(Modifier.size(width = 84.dp, height = 30.dp).semantics { contentDescription = words }) {
@@ -473,7 +474,7 @@ private fun SourceGlyph(s: Session?, boot: Long, open: () -> Unit) {
                         val r = k * 5.dp.toPx()
                         drawArc(tint, -50f, 100f, false, Offset(c.x - r, c.y - h / 2 - r + 3.dp.toPx()), Size(r * 2, r * 2), style = Stroke(1.dp.toPx()))
                         drawArc(tint, 130f, 100f, false, Offset(c.x - r, c.y - h / 2 - r + 3.dp.toPx()), Size(r * 2, r * 2), style = Stroke(1.dp.toPx()))
-                    } else {
+                    } else if (kind == "NONE") {
                         drawLine(Ink.danger, Offset(c.x + 9.dp.toPx(), c.y - 5.dp.toPx()), Offset(c.x + 17.dp.toPx(), c.y + 3.dp.toPx()), 1.5.dp.toPx())
                         drawLine(Ink.danger, Offset(c.x + 17.dp.toPx(), c.y - 5.dp.toPx()), Offset(c.x + 9.dp.toPx(), c.y + 3.dp.toPx()), 1.5.dp.toPx())
                     }
