@@ -97,6 +97,7 @@ class BenchState {
 interface BenchActions {
     fun startOrStop()
     fun setSatellites(on: Boolean)
+    fun setChannel(channel: Int)
     fun setLocalTime(on: Boolean)
     /** Like startOrStop, but playing with the value calibration chose for the output in use. */
     fun listen()

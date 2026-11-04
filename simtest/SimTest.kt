@@ -372,6 +372,23 @@ fun testChannel() {
     }
 }
 
+fun testChannelSwitch() {
+    println("Stream channel: switching while playing fades over one chunk, then holds")
+    val seg = ShortArray(96000) { if (it % 2 == 0) 8192 else -16384 }   // left 0.25, right -0.5
+    val start = 1_761_955_200_000_000_000L
+    val ear = start + 21_000_000_000L + 2_000_000_000L
+    val r = Renderer(2000.0, SegmentSource { seg }, Renderer.BOTH)
+    val a = FloatArray(480); r.stream(a, 240, ear, start, 21_000_000_000L)
+    check((0 until 240).all { a[2 * it] == 0.25f && a[2 * it + 1] == -0.5f }, "before the switch both channels play as sent")
+    r.channel = Renderer.LEFT
+    val b = FloatArray(480); r.stream(b, 240, ear + 5_000_000L, start, 21_000_000_000L)
+    check(abs(b[1] - -0.5f) < 0.01f && b[0] == 0.25f, "the first frame after a switch is still the old mapping")
+    check(b[479] == 0.25f, "the last frame of the switching chunk is the new mapping")
+    check((1 until 240).all { b[2 * it + 1] >= b[2 * (it - 1) + 1] }, "the right output rises smoothly, with no click")
+    val c = FloatArray(480); r.stream(c, 240, ear + 10_000_000L, start, 21_000_000_000L)
+    check((0 until 240).all { c[2 * it] == 0.25f && c[2 * it + 1] == 0.25f }, "the next chunk holds the new mapping")
+}
+
 fun testEvents() {
     println("Event log: one event per change, not one per second a state lasts")
     val s = 1_000_000_000L
@@ -811,6 +828,6 @@ fun main() {
     testFetchPlan()
     testTickPattern()
     testSoloGate()
-    testNtp(); testGps(); testGpsWeighting(); testGpsEstimate(); testNtpFit(); testPlayout(); testTickTiming(); testChannel(); testEvents(); testClockCheck(); testLibraryNow(); testBeats(); testBeatGrid(); testNudge()
+    testNtp(); testGps(); testGpsWeighting(); testGpsEstimate(); testNtpFit(); testPlayout(); testTickTiming(); testChannel(); testChannelSwitch(); testEvents(); testClockCheck(); testLibraryNow(); testBeats(); testBeatGrid(); testNudge()
     println(if (failures == 0) "ALL PASSED" else "$failures FAILED")
 }

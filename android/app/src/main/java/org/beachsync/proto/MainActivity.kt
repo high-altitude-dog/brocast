@@ -194,6 +194,13 @@ class MainActivity : ComponentActivity(), BenchActions {
         if (on && !hasLocation()) askForSwitch.launch(locationPermissions) else satellitesInRun(on)
     }
 
+    /** Left, Right or Both, also while playing. Headphones always get Both. */
+    override fun setChannel(channel: Int) {
+        state.channel = channel
+        save()
+        session?.setChannel(if (currentOutput(this).kind == OutputKind.HEADPHONES) Renderer.BOTH else channel)
+    }
+
     override fun setLocalTime(on: Boolean) {
         state.localTime = on
         prefs.edit().putBoolean(KEY_LOCAL_TIME, on).apply()

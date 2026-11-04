@@ -92,6 +92,9 @@ class Session(ctx: Context, val s: Settings, private val satellitesOn: Boolean) 
         statusLog.close(); gpsLog.close(); ntpLog.close(); eventCsv.close()
     }
 
+    /** The stereo side, changed while playing; the audio thread picks it up on its next chunk. */
+    fun setChannel(channel: Int) { renderer.channel = channel }
+
     /** "Use satellites" during a run. The audio keeps playing: flowtime carries on from the last fit, then picks the best source. */
     fun setSatellites(on: Boolean) {
         if (on == gps.active) return

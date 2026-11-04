@@ -20,11 +20,15 @@ fun interface SegmentSource {
 /**
  * [channel] picks what stream mode plays: [BOTH] as sent, or only [LEFT] or [RIGHT] on both outputs. The
  * acoustic test uses one each, so a single microphone can tell two phones apart by the pitch of each channel.
+ * It can change while playing (stereo pair): the audio thread reads it once a chunk and crossfades over that chunk,
+ * so a switch never clicks. It only picks which computed sample goes to which output, so it adds nothing to heard time.
  */
 class Renderer(
-    private val clickHz: Double, private val source: SegmentSource?, private val channel: Int = BOTH,
+    private val clickHz: Double, private val source: SegmentSource?, channel: Int = BOTH,
     private val tickPattern: Int = PATTERN_OFF, private val soloSlot: Int = 0, private val soloCount: Int = 0,
 ) {
+    @Volatile var channel: Int = channel
+    private var shown = channel   // the mapping the last chunk ended on; the audio thread only
     var pos = Double.NaN          // stream position (in samples) of the next frame to write
         private set
     var ratio = 1.0               // stream samples per output frame: 1 plus or minus the nudge
@@ -96,6 +100,9 @@ class Renderer(
         ratio = (1.0 - (KP * e + integral).coerceIn(-MAX_NUDGE, MAX_NUDGE) + gapRate).coerceIn(1.0 - MAX_NUDGE, 1.0 + MAX_NUDGE)
         posErrUs = e * 1e6 / RATE
         segN = Long.MIN_VALUE   // look segments up afresh each chunk: one may have just arrived
+        val side = channel            // one read a chunk
+        val from = shown
+        shown = side
         var p = pos
         for (i in 0 until frames) {
             val n0 = floor(p).toLong()
@@ -109,8 +116,16 @@ class Renderer(
             } else {
                 val l = l0 + (l1 - l0) * f
                 val r = r0 + (r1 - r0) * f
-                buf[2 * i] = if (channel == RIGHT) r else l
-                buf[2 * i + 1] = if (channel == LEFT) l else r
+                val newL = if (side == RIGHT) r else l
+                val newR = if (side == LEFT) l else r
+                if (side == from) { buf[2 * i] = newL; buf[2 * i + 1] = newR } else {
+                    // A switch: fade from the old mapping to the new one across this chunk.
+                    val w = (i + 1f) / frames
+                    val oldL = if (from == RIGHT) r else l
+                    val oldR = if (from == LEFT) l else r
+                    buf[2 * i] = oldL + (newL - oldL) * w
+                    buf[2 * i + 1] = oldR + (newR - oldR) * w
+                }
             }
             p += ratio
         }
