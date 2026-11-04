@@ -12,7 +12,7 @@ a{color:#C8FF4D}a:hover{color:#E2FF9E}
 </style>
 </head>
 <body>
-<div style="width: 390px; height: 844px; box-sizing: border-box; background: #0A0C0F; color: #ECEFF2; font-family: 'Space Grotesk', system-ui, sans-serif; padding: 14px 18px 18px; display: flex; flex-direction: column; gap: 10px; overflow: hidden">
+<div style="width: 390px; height: 1000px; box-sizing: border-box; background: #0A0C0F; color: #ECEFF2; font-family: 'Space Grotesk', system-ui, sans-serif; padding: 14px 18px 18px; display: flex; flex-direction: column; gap: 10px; overflow: hidden">
 
   <div style="display: flex; justify-content: space-between; align-items: center">
     <a href="now-playing.html" style="display: flex; align-items: center; gap: 6px; min-height: 44px; text-decoration: none; color: #ECEFF2; font-size: 18px; font-weight: 700">
@@ -24,7 +24,7 @@ a{color:#C8FF4D}a:hover{color:#E2FF9E}
     </button>
   </div>
 
-  <span style="font-size: 12px; color: #8B95A1">This run · 12 events · newest first · still readable after Stop</span>
+  <span style="font-size: 12px; color: #8B95A1">This run · 12 events · newest first · each says what happened, then what Brocast is doing</span>
 
   <div role="group" aria-label="Show events from" style="display: flex; gap: 6px; overflow-x: auto; margin-right: -18px; padding-right: 18px">
     <button aria-pressed="true" style="appearance: none; flex: none; min-height: 44px; padding: 0 14px; border-radius: 999px; border: 1.5px solid #ECEFF2; background: #ECEFF2; color: #0A0C0F; font-family: inherit; font-size: 13px; font-weight: 700; cursor: pointer">All</button>
@@ -40,7 +40,7 @@ a{color:#C8FF4D}a:hover{color:#E2FF9E}
       <span style="font-size: 10.5px; letter-spacing: 0.16em; color: #8B95A1">TIMELINE · 15 MIN</span>
       <span style="font-size: 11px; color: #8B95A1">tap a mark · pinch to zoom</span>
     </div>
-    <svg width="100%" height="150" viewBox="0 0 326 150" role="img" aria-label="Timeline of the last 15 minutes: five lanes of events over the sync error trace. Selected: 22:43:29, GPS back.">
+    <svg width="100%" height="150" viewBox="0 0 326 150" role="img" aria-label="Timeline of the last 15 minutes: five lanes of events over the sync error trace. Selected: 22:43:35, this device is rushing 18.2 milliseconds.">
     <line x1="56" y1="14" x2="322" y2="14" stroke="#1A1F26"></line>
     <text x="0" y="17" font-size="9" letter-spacing="0.6" fill="#C8FF4D" font-family="JetBrains Mono, monospace">CLOCK</text>
     <line x1="56" y1="30" x2="322" y2="30" stroke="#1A1F26"></line>
@@ -69,7 +69,7 @@ a{color:#C8FF4D}a:hover{color:#E2FF9E}
     <path d="M75.8 130 L75.8,91.6 L121.3,91.6 L123.5,105.3 L153.9,105.3 L155.5,96.7 L275.9,96.7 L287,95.6 L288.5,96.7 L322,96.7 L322 130 Z" fill="#C8FF4D" fill-opacity="0.08"></path>
     <polyline points="75.8,91.6 121.3,91.6 123.5,105.3 153.9,105.3 155.5,96.7 275.9,96.7 287,95.6 288.5,96.7 322,96.7" fill="none" stroke="#C8FF4D" stroke-width="1.6" stroke-linejoin="round"></polyline>
     <line x1="56" y1="130" x2="322" y2="130" stroke="#2A323C"></line>
-    <line x1="295.1" y1="4" x2="295.1" y2="132" stroke="#ECEFF2" stroke-width="1"></line>
+    <rect x="295.6" y="27" width="6" height="6" fill="#FFB547"></rect><line x1="298.6" y1="4" x2="298.6" y2="132" stroke="#ECEFF2" stroke-width="1"></line>
     <text x="56" y="145" font-size="9.5" fill="#8B95A1" text-anchor="start" font-family="JetBrains Mono, monospace">22:30</text>
     <text x="144.7" y="145" font-size="9.5" fill="#8B95A1" text-anchor="middle" font-family="JetBrains Mono, monospace">22:35</text>
     <text x="233.3" y="145" font-size="9.5" fill="#8B95A1" text-anchor="middle" font-family="JetBrains Mono, monospace">22:40</text>
@@ -78,45 +78,45 @@ a{color:#C8FF4D}a:hover{color:#E2FF9E}
   </div>
 
   <div style="background: #12161B; border: 1px solid #222932; border-radius: 14px; padding: 2px 6px; display: flex; flex-direction: column">
-    <div style="display: grid; grid-template-columns: 62px 64px minmax(0, 1fr); gap: 8px; align-items: baseline; padding: 9px 8px; background: #1A1F26; border-radius: 10px; font-size: 12.5px">
+    <div style="display: grid; grid-template-columns: 62px 64px minmax(0, 1fr); gap: 8px; align-items: baseline; padding: 9px 8px; background: #1A1F26; border-radius: 10px; font-size: 12.5px; line-height: 1.35">
+      <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px; color: #8B95A1">22:43:35</span>
+      <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 10px; letter-spacing: 0.1em; color: #FFB547">■ AUDIO</span>
+      <span>This device is rushing <span style="font-family: 'JetBrains Mono', ui-monospace, monospace">18.2 ms</span>: slowing-down playback over <span style="font-family: 'JetBrains Mono', ui-monospace, monospace">60 s</span></span>
+    </div>
+    <div style="display: grid; grid-template-columns: 62px 64px minmax(0, 1fr); gap: 8px; align-items: baseline; padding: 9px 8px; border-bottom: 1px solid #1A1F26; font-size: 12.5px; line-height: 1.35">
       <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px; color: #8B95A1">22:43:29</span>
       <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 10px; letter-spacing: 0.1em; color: #C8FF4D">● CLOCK</span>
-      <span>GPS back after 41 s</span>
+      <span>GPS back after <span style="font-family: 'JetBrains Mono', ui-monospace, monospace">41 s</span>: timing tightened from <span style="font-family: 'JetBrains Mono', ui-monospace, monospace">±11.4 ms</span> to <span style="font-family: 'JetBrains Mono', ui-monospace, monospace">±400 µs</span></span>
     </div>
-    <div style="display: grid; grid-template-columns: 62px 64px minmax(0, 1fr); gap: 8px; align-items: baseline; padding: 9px 8px; border-bottom: 1px solid #1A1F26; font-size: 12.5px">
+    <div style="display: grid; grid-template-columns: 62px 64px minmax(0, 1fr); gap: 8px; align-items: baseline; padding: 9px 8px; border-bottom: 1px solid #1A1F26; font-size: 12.5px; line-height: 1.35">
       <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px; color: #8B95A1">22:42:48</span>
       <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 10px; letter-spacing: 0.1em; color: #C8FF4D">● CLOCK</span>
-      <span>GPS lost: no report for 5 s, carrying on from the last fit</span>
+      <span>GPS lost: holding time from the last fix, <span style="font-family: 'JetBrains Mono', ui-monospace, monospace">±600 µs</span> and growing</span>
     </div>
-    <div style="display: grid; grid-template-columns: 62px 64px minmax(0, 1fr); gap: 8px; align-items: baseline; padding: 9px 8px; border-bottom: 1px solid #1A1F26; font-size: 12.5px">
+    <div style="display: grid; grid-template-columns: 62px 64px minmax(0, 1fr); gap: 8px; align-items: baseline; padding: 9px 8px; border-bottom: 1px solid #1A1F26; font-size: 12.5px; line-height: 1.35">
       <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px; color: #8B95A1">22:40:12</span>
       <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 10px; letter-spacing: 0.1em; color: #FF8FB1">◆ SCREEN</span>
-      <span>Screen level Reduced: phone warm, 39 °C</span>
+      <span>Screen dimmed to Reduced: phone warm, 39 °C. The music is unaffected</span>
     </div>
-    <div style="display: grid; grid-template-columns: 62px 64px minmax(0, 1fr); gap: 8px; align-items: baseline; padding: 9px 8px; border-bottom: 1px solid #1A1F26; font-size: 12.5px">
+    <div style="display: grid; grid-template-columns: 62px 64px minmax(0, 1fr); gap: 8px; align-items: baseline; padding: 9px 8px; border-bottom: 1px solid #1A1F26; font-size: 12.5px; line-height: 1.35">
       <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px; color: #8B95A1">22:39:05</span>
       <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 10px; letter-spacing: 0.1em; color: #5CE1FF">▲ NET</span>
-      <span>Stream fetch working again after 3 s (3 errors)</span>
+      <span>Station reachable again after <span style="font-family: 'JetBrains Mono', ui-monospace, monospace">3 s</span>: nothing was missed</span>
     </div>
-    <div style="display: grid; grid-template-columns: 62px 64px minmax(0, 1fr); gap: 8px; align-items: baseline; padding: 9px 8px; border-bottom: 1px solid #1A1F26; font-size: 12.5px">
+    <div style="display: grid; grid-template-columns: 62px 64px minmax(0, 1fr); gap: 8px; align-items: baseline; padding: 9px 8px; border-bottom: 1px solid #1A1F26; font-size: 12.5px; line-height: 1.35">
       <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px; color: #8B95A1">22:39:02</span>
       <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 10px; letter-spacing: 0.1em; color: #5CE1FF">▲ NET</span>
-      <span>Stream fetch failing: connection timed out</span>
+      <span>Can’t reach the station: connection timed out. Playing from downloads</span>
     </div>
-    <div style="display: grid; grid-template-columns: 62px 64px minmax(0, 1fr); gap: 8px; align-items: baseline; padding: 9px 8px; border-bottom: 1px solid #1A1F26; font-size: 12.5px">
+    <div style="display: grid; grid-template-columns: 62px 64px minmax(0, 1fr); gap: 8px; align-items: baseline; padding: 9px 8px; border-bottom: 1px solid #1A1F26; font-size: 12.5px; line-height: 1.35">
       <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px; color: #8B95A1">22:36:02</span>
       <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 10px; letter-spacing: 0.1em; color: #B79CFF">○ OUTPUT</span>
-      <span>Audio output changed to Bluetooth “Earbuds”</span>
+      <span>Output changed to Bluetooth “Earbuds”: audio now sent <span style="font-family: 'JetBrains Mono', ui-monospace, monospace">182 ms</span> early</span>
     </div>
-    <div style="display: grid; grid-template-columns: 62px 64px minmax(0, 1fr); gap: 8px; align-items: baseline; padding: 9px 8px; border-bottom: 1px solid #1A1F26; font-size: 12.5px">
+    <div style="display: grid; grid-template-columns: 62px 64px minmax(0, 1fr); gap: 8px; align-items: baseline; padding: 9px 8px; font-size: 12.5px; line-height: 1.35">
       <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px; color: #8B95A1">22:35:40</span>
       <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 10px; letter-spacing: 0.1em; color: #FFB547">■ AUDIO</span>
-      <span>Underrun: the audio output ran dry (×1)</span>
-    </div>
-    <div style="display: grid; grid-template-columns: 62px 64px minmax(0, 1fr); gap: 8px; align-items: baseline; padding: 9px 8px;  font-size: 12.5px">
-      <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px; color: #8B95A1">22:33:41</span>
-      <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 10px; letter-spacing: 0.1em; color: #C8FF4D">● CLOCK</span>
-      <span>Time source changed from NTP to GPS <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; color: #C8FF4D">±0.4 ms</span></span>
+      <span>Audio ran dry for <span style="font-family: 'JetBrains Mono', ui-monospace, monospace">20 ms</span>: played silence and stayed in step</span>
     </div>
   </div>
 

@@ -9,7 +9,7 @@ Field names come from Claude Code's "Fields that exist today" table in `feedback
 
 **Rules for every screen:**
 
-- **Units:** every duration uses adaptive units, like `Session.fmtNs` (ns, µs, ms), at three significant figures. Every live number is in JetBrains Mono.
+- **Units:** below 1 ms, show µs (ns below 1 µs); from 1 ms up, ms (the user's decision, 2 Nov): `±400 µs`, never `±0.4 ms`. Every duration uses adaptive units, like `Session.fmtNs` (ns, µs, ms), at three significant figures. Every live number is in JetBrains Mono.
 - **Sync error** (the user agreed, 2 Nov): the figure shown to the listener is √(flowtime error² + output lag uncertainty²) plus the absolute held gap. Flowtime error is `errAt(boot)`; output lag uncertainty is the ± of the saved value in use (Calibration); the held gap is `NudgeControl.gapAt`, added in full because it is known, not uncertain. Example: √(0.4² + 2.8²) + 0.20 = ±3.0 ms. Every term must be the same kind of range (95% is the aim) before the budget may say `95%`; until confirmed it says no percentage. Every ± in a badge is this number.
 - **Flowtime error and stream gap are separate.** Never add them together on screen, except in the badge figure above.
 - **Times** come from flowtime, never the system clock. Show `--:--:--` before there is a time source. The main clock and the event log show UK time (`Europe/London`, GMT or BST), branded **Teddington · Greenwich**. Local time sits beneath, using only the phone's time-zone setting, never its clock. Hide it when its offset equals UK time's. CSV logs stay in UTC ns.
@@ -29,7 +29,7 @@ Field names come from Claude Code's "Fields that exist today" table in `feedback
 
 | Element | Shows | Source | States and taps | Status |
 |---|---|---|---|---|
-| Header | Station or event name (eyebrow), `Live · D 60 s` | `StreamClient.manifest.dMs`; the name is **later** | Icon buttons (44 × 44) for Time signals, Calibration, Archive and Settings | now |
+| Header | Left (user's request, 3 Nov: the station name and `Live · D 60 s` added nothing): your colour-fruit-animal name as the eyebrow (`AMBER FIG HERON`), then `● 12 listeners linked` (accent dot; the count of connected listeners). Inside an event, the event name replaces your name. The whole block opens Swarm. D stays on the Test bench only. Right: icon buttons (44 × 44) for Time signals, Calibration, Archive and Settings | Listener key nym; swarm connection count | Taps open Swarm | later |
 | Now playing | Track title (20 px, bold, one line), `artist · set` (13 px, `textSecondary`), a **Kept** marker, then the **library line**: `LIBRARY`, a thin bar and `38 of 52 sets` | File record and cue list; library download state | Kept is locked on for the beta (the user's decision): a bookmark and `Kept`, not a button, no tap. The library line shows download progress of the whole library; when it is complete it reads `52 sets · all here`. | partly |
 | Brocast clock | A dial. Along the top of the bezel, curved: `TEDDINGTON · GREENWICH`, with an accent meridian tick at 12 o'clock between the two names. Inside: the zone (GMT or BST), HH:MM:SS large, the **time-source pictogram**, then local time. Updates once a second; no sub-second dial and no ns digits. | Flowtime | See the Times rule | now |
 | Seconds sweep | The outer accent arc fills once per flowtime **minute**, like a second hand | Seconds of the current minute | Steps once a second at Reduced level | now |
@@ -37,7 +37,7 @@ Field names come from Claude Code's "Fields that exist today" table in `feedback
 | Precision ring | A glow whose width shows the sync error on the budget's log scale; its figure is on the bottom bezel | Sync error | | now |
 | Play control and sync badge | A 52 px round button left of the badge: **Stop** (a white square, outlined) while playing; **Play** (an accent-filled circle with a dark triangle) when stopped; dashed and disabled while the set due now is downloading. The badge shows words, the ± figure and the source. | See Badge states | Play starts in sync at once. Tapping the badge opens the error budget detail. | now |
 | Latest event | Time, lane mark and name, and the event text, **directly under the badge**. The text wraps onto as many lines as it needs, with no ellipsis, and the row grows (the user's decision, 2 Nov). | `EventLog.latest()` | Tapping opens the Event log. A banner elsewhere links to its own event. | now |
-| Sync error budget | Bars on a log scale from 1 µs to 10 ms: flowtime, output lag, held gap, then Total (the Sync error rule). Screenlag left this card: it affects only the light show and belongs with it. | `errAt` now; headphone-lag uncertainty and screenlag **later** | | partly |
+| Sync card (replaces the error budget, user's request 3 Nov) | **Headline:** `You hear it within ±3.0 ms of everyone's clock` (the badge figure, accent). **Window:** a linear line from 10 ms earlier to 10 ms later around the Brocast clock (a white tick, `BROCAST CLOCK`); an accent band shows where this phone's sound most likely is (centred on the held gap, here 200 µs later, half-width √(clock² + delay estimate²)); a dot marks the centre; dashed lines at ±5 ms mark a typical event limit, labelled `EARLIER` and `LATER`. The scale widens to ±50 ms when the band would not fit. **What makes up the ±:** one bar split by each part's share of the total (squared), output delay estimate in amber, clock in accent, then one sentence naming the largest part and what would tighten it (`Mostly your headphones' delay estimate (±2.8 ms). Clock ±400 µs. An earcup test can tighten it.`). The output word follows the output in use. | Badge figure; `errAt`; Calibration ±; `NudgeControl.gapAt` | The whole card opens Time signals for the detail. | partly |
 | Gap row | The rate nudge row: mode chip, the gap value, then two small lines (`Dragging · Catching-up, 1.40 s` and `pitch +0.014%`; Rushing with Slowing-down shows `pitch −0.014%`) | `NudgeControl.gapAt`, `mode`, `secondsLeft`, `state.rate` | Opens Nudge control. The 60 s gap trace has left this screen to make room for the track; history belongs on Nudge control, **later**. | now |
 | Tiles | SOURCE, the output tile (`HEADPHONES`, `SPEAKER`, `PORTABLE SPEAKER` or `CAR AUDIO` by the output in use, with lag and the device's reported name), AHEAD (how much is downloaded ahead, in hours and minutes) | `FlowTime.chosen`, `GpsTime`, `Settings.lagMs`, download state (**later**) | SOURCE opens Time signals; HEADPHONES opens Calibration; AHEAD opens Buffer | partly |
 | Use satellites | A full-width row with a switch, never locked, one tap from the main screen. Shows `Position stays on this phone · off = Privacy mode`. | `GpsTime.active` | Off: the badge becomes Privacy mode. On: asks for location permission if needed; if refused, it returns to off. | now |
@@ -240,7 +240,7 @@ The user wants this to be a showcase for peer delivery (2 Nov), so the swarm get
 | State | Verdict |
 |---|---|
 | Chip is the limit | See Satellites (the Moto G32 case: ±10 ms with 9 to 15 satellites) |
-| Signal is the limit | `Timing is limited by the satellite signal: about ±0.4 ms.` More satellites or a clearer sky will help |
+| Signal is the limit | `Timing is limited by the satellite signal: about ±400 µs.` More satellites or a clearer sky will help |
 | Silver link | `Your phone links GPS time to its clock less directly: about ±2 ms.` More satellites won't change it |
 | No raw clock reports | `This phone's GPS chip doesn't share its clock.` Brocast uses internet time instead; the sky still shows, but Use satellites can't improve timing on this phone |
 
@@ -288,6 +288,23 @@ The user wants this to be a showcase for peer delivery (2 Nov), so the swarm get
 | List | Time, lane tag, plain text; newest first; the selected row highlighted | `Event.utc`, `lane`, `text` | Text wraps; `--:--:--` with no time source | now |
 
 Lane marks: clock ● accent, audio ■ #FFB547, net ▲ #5CE1FF, output ○ #B79CFF, screen ◆ #FF8FB1.
+
+**Event wording** (the user's request, 3 Nov). Every event is one sentence in two parts: **what happened, with its size**, then a colon, then **what Brocast is doing about it** (or its result). Use the required terms, "This device" for the phone, the µs rule, and no internal names (no "underrun", "fit", "fetch", "NTP" in listener text; "internet time" instead). The same text shows in the latest-event row on Now playing, where it wraps.
+
+| Lane | Example |
+|---|---|
+| Audio | `This device is rushing 18.2 ms: slowing-down playback over 60 s` |
+| Audio | `This device is dragging 5.0 ms: catching-up playback over 20 s`, then `Caught up after 20 s: in step` |
+| Audio | `Audio ran dry for 20 ms: played silence and stayed in step` |
+| Clock | `GPS back after 41 s: timing tightened from ±11.4 ms to ±400 µs` |
+| Clock | `GPS lost: holding time from the last fix, ±600 µs and growing` |
+| Clock | `Time source changed from internet time to GPS: now ±400 µs` |
+| Net | `Can't reach the station: connection timed out. Playing from downloads` |
+| Net | `Station reachable again after 3 s: nothing was missed` |
+| Output | `Output changed to Bluetooth "Earbuds": audio now sent 182 ms early` |
+| Screen | `Screen dimmed to Reduced: phone warm, 39 °C. The music is unaffected` |
+
+A repeated event within 10 s gets a count (`×3`) instead of new rows. The Copy action for support may add the internal detail (codes, field names) after each sentence.
 
 ## Time signals
 

@@ -15,10 +15,10 @@ a{color:#C8FF4D}a:hover{color:#E2FF9E}
 <div style="width: 390px; height: 844px; box-sizing: border-box; background: #0A0C0F; color: #ECEFF2; font-family: 'Space Grotesk', system-ui, sans-serif; padding: 10px 18px 10px; display: flex; flex-direction: column; gap: 8px; overflow: hidden">
 
   <div style="display: flex; justify-content: space-between; align-items: center">
-    <div style="display: flex; flex-direction: column; gap: 2px">
-      <span style="font-size: 11px; letter-spacing: 0.16em; color: #8B95A1; font-weight: 500">BEACH SYNC RADIO</span>
-      <span style="font-size: 14px; font-weight: 500">Live · D 60 s</span>
-    </div>
+    <a href="swarm.html" aria-label="You are Amber Fig Heron, linked to 12 listeners. Open Swarm" style="text-decoration: none; color: #ECEFF2; min-height: 44px; display: flex; flex-direction: column; justify-content: center; gap: 2px; min-width: 0">
+      <span style="font-size: 11px; letter-spacing: 0.16em; color: #8B95A1; font-weight: 500; white-space: nowrap">AMBER FIG HERON</span>
+      <span style="font-size: 14px; font-weight: 500; display: flex; align-items: center; gap: 6px; white-space: nowrap"><span style="width: 7px; height: 7px; border-radius: 50%; background: #C8FF4D; flex: none"></span>12 listeners linked</span>
+    </a>
     <div style="display: flex; gap: 8px">
       <a href="time-signals.html" aria-label="Time signals" style="width: 44px; height: 44px; border-radius: 12px; border: 1px solid #222932; display: flex; align-items: center; justify-content: center; color: #ECEFF2">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg>
@@ -51,7 +51,7 @@ a{color:#C8FF4D}a:hover{color:#E2FF9E}
   </div>
 
   <div style="position: relative; width: 206px; height: 206px; flex: none; align-self: center">
-    <svg width="206" height="206" viewBox="0 0 252 252" role="img" aria-label="Brocast clock: Teddington and Greenwich time on the bezel, a seconds sweep, the time source, and a precision ring of plus or minus 0.4 milliseconds" style="position: absolute; left: 0; top: 0">
+    <svg width="206" height="206" viewBox="0 0 252 252" role="img" aria-label="Brocast clock: Teddington and Greenwich time on the bezel, a seconds sweep, the time source, and a precision ring of plus or minus 400 microseconds" style="position: absolute; left: 0; top: 0">
       <defs>
         <path id="bezel-top" d="M 13 126 A 113 113 0 0 1 239 126"></path>
         <path id="bezel-bottom" d="M 7 126 A 119 119 0 0 0 245 126"></path>
@@ -63,7 +63,7 @@ a{color:#C8FF4D}a:hover{color:#E2FF9E}
       <circle cx="126" cy="126" r="80" fill="none" stroke="#C8FF4D" stroke-opacity="0.35" stroke-width="1"></circle>
       <circle cx="126" cy="126" r="80" fill="none" stroke="#C8FF4D" stroke-opacity="0.12" stroke-width="7"></circle>
       <text font-family="Space Grotesk, system-ui, sans-serif" font-size="10" font-weight="500" letter-spacing="2.4" fill="#C4CBD2"><textPath href="#bezel-top" startOffset="50%" text-anchor="middle">TEDDINGTON · GREENWICH</textPath></text>
-      <text font-family="JetBrains Mono, monospace" font-size="10" letter-spacing="1.2" fill="#C8FF4D"><textPath href="#bezel-bottom" startOffset="50%" text-anchor="middle">FLOWTIME ±0.4 ms</textPath></text>
+      <text font-family="JetBrains Mono, monospace" font-size="10" letter-spacing="1.2" fill="#C8FF4D"><textPath href="#bezel-bottom" startOffset="50%" text-anchor="middle">FLOWTIME ±400 µs</textPath></text>
     </svg>
     <div style="position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px">
       <span style="font-size: 10.5px; letter-spacing: 0.2em; color: #8B95A1">GMT</span>
@@ -85,40 +85,26 @@ a{color:#C8FF4D}a:hover{color:#E2FF9E}
   </button>
   </div>
 
-  <a href="event-log.html" aria-label="Latest event: 22:43:29, GPS back after 41 seconds. Open the event log" style="text-decoration: none; color: #ECEFF2; min-height: 44px; display: grid; grid-template-columns: 62px 64px minmax(0, 1fr) 16px; gap: 8px; align-items: start; background: #12161B; border: 1px solid #222932; border-radius: 12px; padding: 13px 12px 11px; font-size: 12.5px; line-height: 1.3">
+  <a href="event-log.html" aria-label="Latest event: 22:43:29, GPS back after 41 seconds, timing now plus or minus 400 microseconds. Open the event log" style="text-decoration: none; color: #ECEFF2; min-height: 44px; display: grid; grid-template-columns: 62px 64px minmax(0, 1fr) 16px; gap: 8px; align-items: start; background: #12161B; border: 1px solid #222932; border-radius: 12px; padding: 13px 12px 11px; font-size: 12.5px; line-height: 1.3">
     <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px; color: #8B95A1">22:43:29</span>
     <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 10px; letter-spacing: 0.1em; color: #C8FF4D">● CLOCK</span>
-    <span>GPS back after 41 s</span>
+    <span>GPS back after <span style="font-family: 'JetBrains Mono', ui-monospace, monospace">41 s</span>: now <span style="font-family: 'JetBrains Mono', ui-monospace, monospace">±400 µs</span></span>
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 5l7 7-7 7"></path></svg>
   </a>
 
-  <div style="background: #12161B; border: 1px solid #222932; border-radius: 14px; padding: 10px 14px; display: flex; flex-direction: column; gap: 6px">
+  <a href="time-signals.html" aria-label="Sync detail" style="text-decoration: none; color: #ECEFF2; background: #12161B; border: 1px solid #222932; border-radius: 14px; padding: 10px 14px; display: flex; flex-direction: column; gap: 6px">
     <div style="display: flex; justify-content: space-between; align-items: baseline">
-      <span style="font-size: 10.5px; letter-spacing: 0.16em; color: #8B95A1">SYNC ERROR BUDGET</span>
-      <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 13px; color: #C8FF4D">±3.0 ms</span>
+      <span style="font-size: 13px">You hear it within <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; color: #C8FF4D">±3.0 ms</span> of everyone’s clock</span>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8B95A1" stroke-width="2" aria-hidden="true"><path d="M9 5l7 7-7 7"></path></svg>
     </div>
-    <div style="display: grid; grid-template-columns: 92px minmax(0, 1fr) 58px; gap: 6px 10px; align-items: center; font-size: 12px">
-      <span style="color: #C4CBD2">Flowtime</span>
-      <div style="height: 8px; border-radius: 4px; background: #1A1F26"><div style="width: 52%; height: 8px; border-radius: 4px; background: #C8FF4D"></div></div>
-      <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; text-align: right">±0.4 ms</span>
-      <span style="color: #C4CBD2">Output lag</span>
-      <div style="height: 8px; border-radius: 4px; background: #1A1F26"><div style="width: 69%; height: 8px; border-radius: 4px; background: #FFB547"></div></div>
-      <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; text-align: right">±2.8 ms</span>
-      <span style="color: #8B95A1">Held gap</span>
-      <div style="height: 8px; border-radius: 4px; background: #1A1F26"><div style="width: 50%; height: 8px; border-radius: 4px; background: #4A5562"></div></div>
-      <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; text-align: right; color: #8B95A1">0.20 ms</span>
-      <span style="color: #ECEFF2; font-weight: 700">Total</span>
-      <div style="height: 8px; border-radius: 4px; background: #1A1F26"><div style="width: 70%; height: 8px; border-radius: 4px; background: #ECEFF2"></div></div>
-      <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; text-align: right; font-weight: 600">±3.0 ms</span>
-    </div>
-    <div style="display: flex; justify-content: space-between; margin-left: 102px; margin-right: 68px; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 10.5px; color: #8B95A1">
-      <span>1µs</span><span>100µs</span><span>10ms</span>
-    </div>
-  </div>
+    <svg width="100%" height="44" viewBox="0 0 326 44" role="img" aria-label="You hear the music within about 3 milliseconds of the Brocast clock, most likely 200 microseconds late. The dashed lines mark a 5 millisecond event limit." style="display: block"><line x1="4" y1="24" x2="322" y2="24" stroke="#2A323C"></line><line x1="13.0" y1="21" x2="13.0" y2="27" stroke="#4A5562"></line><text x="4.0" y="39" font-size="8.5" text-anchor="start" fill="#8B95A1" font-family="JetBrains Mono, monospace">10 ms</text><line x1="88.0" y1="21" x2="88.0" y2="27" stroke="#4A5562"></line><text x="88.0" y="39" font-size="8.5" text-anchor="middle" fill="#8B95A1" font-family="JetBrains Mono, monospace">5</text><line x1="238.0" y1="21" x2="238.0" y2="27" stroke="#4A5562"></line><text x="238.0" y="39" font-size="8.5" text-anchor="middle" fill="#8B95A1" font-family="JetBrains Mono, monospace">5</text><line x1="313.0" y1="21" x2="313.0" y2="27" stroke="#4A5562"></line><text x="322.0" y="39" font-size="8.5" text-anchor="end" fill="#8B95A1" font-family="JetBrains Mono, monospace">10 ms</text><line x1="88.0" y1="6" x2="88.0" y2="27" stroke="#4A5562" stroke-dasharray="2 2"></line><line x1="238.0" y1="6" x2="238.0" y2="27" stroke="#4A5562" stroke-dasharray="2 2"></line><rect x="123.6" y="16" width="84.9" height="16" rx="8" fill="#C8FF4D" opacity="0.22"></rect><rect x="123.6" y="16" width="84.9" height="16" rx="8" fill="none" stroke="#C8FF4D" stroke-width="1"></rect><line x1="163" y1="4" x2="163" y2="32" stroke="#ECEFF2" stroke-width="1.5"></line><text x="163" y="39" font-size="8.5" text-anchor="middle" fill="#ECEFF2" font-family="Space Grotesk, sans-serif" font-weight="700">BROCAST CLOCK</text><circle cx="166.0" cy="24" r="4" fill="#C8FF4D" stroke="#0A0C0F" stroke-width="1.5"></circle><text x="84.0" y="9" font-size="8" text-anchor="end" fill="#8B95A1" font-family="Space Grotesk, sans-serif" letter-spacing="0.6">EARLIER</text><text x="242.0" y="9" font-size="8" text-anchor="start" fill="#8B95A1" font-family="Space Grotesk, sans-serif" letter-spacing="0.6">LATER</text></svg>
+    <div style="display: flex; height: 6px; border-radius: 3px; overflow: hidden; background: #1A1F26" aria-hidden="true"><span style="width: 98%; background: #FFB547"></span><span style="width: 2%; background: #C8FF4D"></span></div>
+    <span style="font-size: 11px; color: #8B95A1; line-height: 1.35"><span style="color: #FFB547">■</span> Mostly your headphones’ delay estimate (<span style="font-family: 'JetBrains Mono', ui-monospace, monospace">±2.8 ms</span>). <span style="color: #C8FF4D">■</span> Clock <span style="font-family: 'JetBrains Mono', ui-monospace, monospace">±400 µs</span>. An earcup test can tighten it.</span>
+  </a>
 
-  <a href="nudge-control.html" aria-label="Dragging 0.20 milliseconds, catching up on Auto in 1.40 seconds. Open nudge control" style="text-decoration: none; color: #ECEFF2; min-height: 48px; display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto; gap: 10px; align-items: center; background: #12161B; border: 1px solid #222932; border-radius: 12px; padding: 0 12px;">
+  <a href="nudge-control.html" aria-label="Dragging 200 microseconds, catching up on Auto in 1.40 seconds. Open nudge control" style="text-decoration: none; color: #ECEFF2; min-height: 48px; display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto; gap: 10px; align-items: center; background: #12161B; border: 1px solid #222932; border-radius: 12px; padding: 0 12px;">
       <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.12em; padding: 3px 8px; border-radius: 6px; border: 1px solid #4A5562">AUTO</span>
-      <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 14px; font-weight: 600">0.20 ms</span>
+      <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 14px; font-weight: 600">200 µs</span>
       <span style="display: flex; flex-direction: column; gap: 1px; min-width: 0; font-size: 11px; color: #8B95A1"><span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Dragging · Catching-up, 1.40 s</span><span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis">pitch +0.014%</span></span>
       <span style="display: flex; align-items: center; color: #8B95A1"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 5l7 7-7 7"></path></svg></span>
     </a>
