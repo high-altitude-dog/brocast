@@ -25,7 +25,7 @@ import androidx.compose.ui.unit.dp
 
 /** Only the LISTENING section for now: the design's other sections have nothing behind them yet. */
 @Composable
-fun SettingsPage(state: BenchState, actions: BenchActions, back: () -> Unit, openCalibration: () -> Unit, openSatellites: () -> Unit, openSync: () -> Unit, openBeat: () -> Unit) {
+fun SettingsPage(state: BenchState, actions: BenchActions, back: () -> Unit, openCalibration: () -> Unit, openSatellites: () -> Unit, openSync: () -> Unit, openBeat: () -> Unit, openStereo: () -> Unit) {
     rememberTick(SETTINGS_TICK_MS).value    // the output's name can change during a run
     val s = state.session
     Column(
@@ -48,6 +48,10 @@ fun SettingsPage(state: BenchState, actions: BenchActions, back: () -> Unit, ope
             Column(Modifier.fillMaxWidth().heightIn(min = Tokens.Space.touchTarget.dp).clickable(role = Role.Button, onClick = openBeat), Arrangement.Center) {
                 BasicText("Beat sync view", style = Tokens.Text.bodyStrong.style())
                 BasicText("The same, flashing on a snare in the music", style = Tokens.Text.small.style(Ink.textSecondary))
+            }
+            Column(Modifier.fillMaxWidth().heightIn(min = Tokens.Space.touchTarget.dp).clickable(role = Role.Button, onClick = openStereo), Arrangement.Center) {
+                BasicText("Stereo pair", style = Tokens.Text.bodyStrong.style())
+                BasicText(when (state.channel) { org.beachsync.proto.Renderer.LEFT -> "This phone plays Left"; org.beachsync.proto.Renderer.RIGHT -> "This phone plays Right"; else -> "This phone plays Both" }, style = Tokens.Text.small.style(Ink.textSecondary))
             }
             Column(Modifier.fillMaxWidth().heightIn(min = Tokens.Space.touchTarget.dp).clickable(role = Role.Button, onClick = openCalibration), Arrangement.Center) {
                 BasicText("Calibration", style = Tokens.Text.bodyStrong.style())

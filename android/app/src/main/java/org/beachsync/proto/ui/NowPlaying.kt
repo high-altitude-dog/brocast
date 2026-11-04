@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -52,6 +53,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import org.beachsync.proto.FlowTime
+import org.beachsync.proto.aheadSeconds
+import org.beachsync.proto.editionAt
+import org.beachsync.proto.playingAt
 import org.beachsync.proto.R
 import org.beachsync.proto.Session
 import org.beachsync.proto.Source
@@ -86,16 +90,24 @@ private fun rememberSecondTick(): State<Long> = produceState(Session.nowBoot()) 
 private fun logScale(ns: Double) = if (ns.isNaN() || ns <= 0.0) 0f else ((log10(ns) - 3.0) / 4.0).coerceIn(0.0, 1.0).toFloat()
 
 @Composable
-fun NowPlaying(state: BenchState, actions: BenchActions, openLog: () -> Unit, openNudge: () -> Unit, openBench: () -> Unit, openSettings: () -> Unit, openSignals: () -> Unit, openCalibration: () -> Unit, openSatellites: () -> Unit) {
+fun NowPlaying(state: BenchState, actions: BenchActions, openLog: () -> Unit, openNudge: () -> Unit, openBench: () -> Unit, openSettings: () -> Unit, openSignals: () -> Unit, openCalibration: () -> Unit, openSatellites: () -> Unit, openStereo: () -> Unit) {
     val boot by rememberSecondTick()
     val s = state.session
     val listen = {
         if (s == null) { state.stream = true; actions.listen() } else actions.startOrStop()
     }
+    val lockedByDownload = s == null && (state.library?.let { l -> playingAt(l.editions, l.dMs, System.currentTimeMillis() * 1_000_000L)?.let { !l.file(it.first.id).exists() } } ?: false)
     // The output lag's uncertainty is part of the sync error (hand-off 12): from this output's saved test, else the shared table.
     val out = actions.output()
     val cal = actions.savedCalibration(out) ?: actions.tableCalibration(out)
     val lagUncNs = cal.plusMinusMs * 1e6
+    // What the library has at the ear: the track, how far the downloads reach, and whether the set due now is still arriving.
+    val lib = state.library
+    val utcNow = FlowTime.fit()?.utcAt(boot) ?: (System.currentTimeMillis() * 1_000_000L)
+    val playing = lib?.let { playingAt(it.editions, it.dMs, utcNow) }
+    val dueMissing = playing != null && !lib.file(playing.first.id).exists()
+    val ahead = lib?.let { l -> editionAt(l.editions, utcNow)?.let { ed -> playing?.let { aheadSeconds(ed, it.first, it.second) { item -> l.file(item.id).exists() } } } }
+    val everythingHere = lib != null && playing != null && !dueMissing && ahead == null
     Column(
         Modifier.fillMaxSize().background(Ink.bg).safeDrawingPadding().verticalScroll(rememberScrollState())
             .padding(top = Tokens.Space.screenPaddingTop.dp, start = Tokens.Space.screenPaddingSide.dp, end = Tokens.Space.screenPaddingSide.dp, bottom = Tokens.Space.screenPaddingBottom.dp),
@@ -103,15 +115,19 @@ fun NowPlaying(state: BenchState, actions: BenchActions, openLog: () -> Unit, op
     ) {
         Masthead(s, openBench, openSettings, openSignals, openCalibration)
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            // Track and set names aren't in the stream yet, so the station name stands in for the title.
-            BasicText(s?.stream?.manifest?.source?.ifEmpty { null } ?: "Beach Sync Radio", Modifier.weight(1f), Tokens.Text.screenTitle.style().copy(fontSize = 20.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            // The track and artist come from the library file the timeline has at the ear; the station name stands in before that.
+            Column(Modifier.weight(1f)) {
+                BasicText(playing?.first?.title?.ifEmpty { null } ?: s?.stream?.manifest?.source?.ifEmpty { null } ?: "Beach Sync Radio", style = Tokens.Text.screenTitle.style().copy(fontSize = 20.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                playing?.first?.artist?.ifEmpty { null }?.let { BasicText(it, style = Tokens.Text.small.style(Ink.textSecondary).copy(fontSize = 13.sp), maxLines = 1, overflow = TextOverflow.Ellipsis) }
+            }
+            StereoChip(state.channel, actions.output().kind == org.beachsync.proto.OutputKind.HEADPHONES, openStereo)
             KeptBadge()
         }
         LibraryLine(state.library)
         Dial(s, boot, state.localTime, lagUncNs, openSatellites)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Top) {
-            PlayStopButton(s != null, listen)
-            SyncBadge(s, boot, lagUncNs, Modifier.weight(1f))
+            PlayStopButton(s != null, lockedByDownload, listen)
+            SyncBadge(s, boot, lagUncNs, if (s != null && dueMissing) (lib?.partPct ?: -1).coerceAtLeast(0) else if (lockedByDownload) (lib?.partPct ?: -1).coerceAtLeast(0) else null, Modifier.weight(1f))
         }
         EventRow(state.eventLog, SECOND_MS, openLog)
         SyncCard(s, boot, lagUncNs, out.kind.label.lowercase(), out.external, openSignals)
@@ -121,7 +137,7 @@ fun NowPlaying(state: BenchState, actions: BenchActions, openLog: () -> Unit, op
             Tile("SOURCE", FlowTime.chosen?.name?.takeIf { s != null } ?: "—", if (s == null) "" else if (s.gps.active) "$gold${s.gps.used} sats" else "Satellites off", Modifier.weight(1f))
             // Named for the output in use: this lag also applies to a phone's own speaker.
             Tile(out.kind.label, "${s?.s?.lagMs ?: state.lag} ms", if (out.external) out.name else state.lagSource, Modifier.weight(1f))
-            Tile("AHEAD", "—", "downloaded", Modifier.weight(1f))
+            Tile("AHEAD", aheadText(lib != null && playing != null, everythingHere, ahead), if (everythingHere) "all downloaded" else "downloaded", Modifier.weight(1f))
         }
         Card { SatellitesRow(state.satellites, actions::setSatellites, "Position stays on this phone · off = Privacy mode") }
     }
@@ -167,9 +183,10 @@ private fun LibraryLine(lib: org.beachsync.proto.LibraryStore?) {
 
 /** A 52 px round button: Stop (a white square, outlined) while playing, Play (a dark triangle on accent) when stopped. */
 @Composable
-private fun PlayStopButton(playing: Boolean, onClick: () -> Unit) {
-    val mod = Modifier.size(52.dp).clickable(role = Role.Button, onClick = onClick).semantics { contentDescription = if (playing) "Stop" else "Play" }
-    Box(if (playing) mod.border(Tokens.Stroke.emphasis.dp, Ink.text, CircleShape) else mod.background(Ink.accent, CircleShape), Alignment.Center) {
+private fun PlayStopButton(playing: Boolean, disabled: Boolean, onClick: () -> Unit) {
+    // While the set due now is still downloading, Play is dimmed and does nothing.
+    val mod = Modifier.size(52.dp).alpha(if (disabled) 0.45f else 1f).then(if (disabled) Modifier else Modifier.clickable(role = Role.Button, onClick = onClick)).semantics { contentDescription = if (playing) "Stop" else if (disabled) "Play, not yet: the set due now is downloading" else "Play" }
+    Box(if (playing) mod.border(Tokens.Stroke.emphasis.dp, Ink.text, CircleShape) else if (disabled) mod.border(Tokens.Stroke.emphasis.dp, Ink.muted, CircleShape) else mod.background(Ink.accent, CircleShape), Alignment.Center) {
         Canvas(Modifier.size(16.dp)) {
             if (playing) drawRoundRect(Ink.text, cornerRadius = CornerRadius(2.dp.toPx()))
             else drawPath(androidx.compose.ui.graphics.Path().apply { moveTo(size.width * 0.12f, 0f); lineTo(size.width, size.height / 2); lineTo(size.width * 0.12f, size.height); close() }, Ink.onAccent)
@@ -291,7 +308,8 @@ private fun Dial(s: Session?, boot: Long, showLocal: Boolean, lagUncNs: Double, 
 private class Badge(val words: String, val mark: String, val tint: Color, val figure: String, val detail: String)
 
 /** The states with data today. REJOINING, CLOCK CHECK FAILED and SILENT · OVER LIMIT need detection the app doesn't do yet. */
-private fun badge(s: Session?, boot: Long, lagUncNs: Double): Badge {
+private fun badge(s: Session?, boot: Long, lagUncNs: Double, downloadPct: Int?): Badge {
+    if (downloadPct != null) return Badge("DOWNLOADING $downloadPct%", "↓", Ink.textSecondary, "", "set due now")
     if (s == null) {
         val fit = FlowTime.fit()
         return Badge("STOPPED", "■", Ink.textSecondary, if (fit != null) "±" + fmtDuration(fit.errAt(boot)) else "", if (fit != null) "clock ready" else "no clock yet")
@@ -312,8 +330,8 @@ private fun badge(s: Session?, boot: Long, lagUncNs: Double): Badge {
 }
 
 @Composable
-private fun SyncBadge(s: Session?, boot: Long, lagUncNs: Double, modifier: Modifier = Modifier) {
-    val b = badge(s, boot, lagUncNs)
+private fun SyncBadge(s: Session?, boot: Long, lagUncNs: Double, downloadPct: Int?, modifier: Modifier = Modifier) {
+    val b = badge(s, boot, lagUncNs, downloadPct)
     val shape = RoundedCornerShape(Tokens.Radius.pill.dp)
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(
@@ -464,4 +482,22 @@ private fun SourceGlyph(s: Session?, boot: Long, open: () -> Unit) {
         }
         BasicText(words, style = Tokens.Text.small.style(Ink.textSecondary).copy(fontSize = 10.sp), maxLines = 1)
     }
+}
+
+/** AHEAD: hours and minutes already on the phone beyond the playhead, or "All" when the whole library is here. */
+private fun aheadText(known: Boolean, all: Boolean, seconds: Long?): String = when {
+    !known -> "—"
+    all -> "All"
+    seconds == null -> "—"
+    seconds >= 3600 -> "${seconds / 3600} h ${seconds % 3600 / 60} min"
+    else -> "${seconds / 60} min"
+}
+
+/** `L LEFT` or `R RIGHT` beside Kept, only while this phone plays one side; it opens Stereo pair. */
+@Composable
+private fun StereoChip(channel: Int, headphones: Boolean, open: () -> Unit) {
+    if (channel == org.beachsync.proto.Renderer.BOTH || headphones) return
+    val word = if (channel == org.beachsync.proto.Renderer.LEFT) "L LEFT" else "R RIGHT"
+    val shape = RoundedCornerShape(Tokens.Radius.pill.dp)
+    BasicText(word, Modifier.padding(end = 8.dp).height(Tokens.Space.touchTarget.dp).border(Tokens.Stroke.card.dp, Ink.accent, shape).clickable(role = Role.Button, onClick = open).padding(horizontal = 12.dp).wrapContentHeight(Alignment.CenterVertically), Tokens.Text.bodyStrong.style(Ink.accent))
 }

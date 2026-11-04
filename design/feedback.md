@@ -286,3 +286,10 @@ Constraints: a flash at 1 Hz at most; no strobing; the screen has to be readable
 
 - **Log scales (user's decision):** the Sync card window is now a signed log scale from 1 s earlier to 1 s later, with marks at 1, 10 and 100 ms each side (the knee is 100 µs, so the marks are evenly spaced). Please design any other scale that can span orders of magnitude the same way, and label the marks.
 - **No "NO TIME YET" (user's decision):** the app always shows the source presently in use. The clock must therefore start when the app opens, not on Play; that engineering change is waiting on the user. Please drop the NONE state from the time-source pictogram and the "no clock yet" Stopped badge text, and say what to show in the second or two before the first fit.
+
+## 4 Nov: built from hand-offs 15 and 16, and what is left
+
+- **Built:** track title and artist on Now playing, from the library file at the ear (the library has `title` and `artist` only, so `artist · set` shows the artist alone, and nothing when it is empty); AHEAD tile (`All` when every file is here, else hours and minutes); DOWNLOADING n% badge with Play dimmed while the set due now arrives; Stereo pair screen with the channel choice (locked to Both on headphones, applies from the next Play), a Settings row, and the `L LEFT` / `R RIGHT` chip.
+- **Not built, waiting on a link between phones:** pairing, the Partner card, the Stereo image bar, falling back to Both, and the stereo states that depend on them. The Stereo picture is also left out.
+- **Not built, waiting on the artist registry:** artist photos, the photo viewer and the Artist names screen. Needs the registry, ingest matching and the user's names and photos, kept outside the repo.
+- **Not built, waiting on the mesh:** nym, `N listeners linked`, Swarm, and Buffer (needs per-block arrival data the app doesn't record).

@@ -28,6 +28,7 @@ import org.beachsync.proto.ui.BeatSyncScope
 import org.beachsync.proto.ui.NowPlaying
 import org.beachsync.proto.ui.EventLogScreen
 import org.beachsync.proto.ui.StreamGapScreen
+import org.beachsync.proto.ui.StereoScreen
 import org.beachsync.proto.ui.TimeSignalsScreen
 import org.beachsync.proto.ui.SettingsPage
 import org.beachsync.proto.ui.TestBench
@@ -94,14 +95,15 @@ class MainActivity : ComponentActivity(), BenchActions {
                 page = when (page) { Page.LOG, Page.NUDGE -> from; Page.EARCUP -> Page.CALIBRATION; else -> home }
             }
             when (page) {
-                Page.NOW -> NowPlaying(state, this, { logLane = null; from = Page.NOW; page = Page.LOG }, { from = Page.NOW; page = Page.NUDGE }, { page = Page.BENCH }, { page = Page.SETTINGS }, { page = Page.SIGNALS }, { page = Page.CALIBRATION }, { page = Page.SATELLITES })
+                Page.NOW -> NowPlaying(state, this, { logLane = null; from = Page.NOW; page = Page.LOG }, { from = Page.NOW; page = Page.NUDGE }, { page = Page.BENCH }, { page = Page.SETTINGS }, { page = Page.SIGNALS }, { page = Page.CALIBRATION }, { page = Page.SATELLITES }, { page = Page.STEREO })
                 Page.CALIBRATION -> CalibrationPage(state, this, { page = home }, { resetEarcup(); page = Page.EARCUP })
                 Page.EARCUP -> EarcupPage(state, this) { page = Page.CALIBRATION }
                 Page.SIGNALS -> TimeSignalsScreen(state, this, { page = Page.SATELLITES }) { page = home }
                 Page.SYNC -> SyncScope(state) { page = Page.SETTINGS }
                 Page.BEAT -> BeatSyncScope(state) { page = Page.SETTINGS }
+                Page.STEREO -> StereoScreen(state, this) { page = home }
                 Page.SATELLITES -> SatellitesScreen(state, this, { page = home }, { page = Page.SIGNALS })
-                Page.SETTINGS -> SettingsPage(state, this, { page = home }, { page = Page.CALIBRATION }, { page = Page.SATELLITES }, { page = Page.SYNC }, { page = Page.BEAT })
+                Page.SETTINGS -> SettingsPage(state, this, { page = home }, { page = Page.CALIBRATION }, { page = Page.SATELLITES }, { page = Page.SYNC }, { page = Page.BEAT }, { page = Page.STEREO })
                 Page.BENCH -> TestBench(state, this, { logLane = it; from = Page.BENCH; page = Page.LOG }, { from = Page.BENCH; page = Page.NUDGE })
                 Page.LOG -> EventLogScreen(state, logLane) { page = from }
                 Page.NUDGE -> StreamGapScreen(state, this) { page = from }
@@ -139,7 +141,7 @@ class MainActivity : ComponentActivity(), BenchActions {
             policy = state.policy,
             pitchHz = state.pitch.toDoubleOrNull() ?: 2000.0,
             lagMs = listenLag ?: state.lag.toDoubleOrNull() ?: 0.0,
-            channel = state.channel,
+            channel = if (currentOutput(this).kind == OutputKind.HEADPHONES) Renderer.BOTH else state.channel,   // headphones give each ear its own side
             nudgeMode = state.nudgeMode,
             nudgePeriodS = state.nudgePeriodS,
             // Only measure/quicktest.py sets this, for the launch it starts. It isn't saved, so a run from the screen never gets it.
@@ -266,7 +268,7 @@ class MainActivity : ComponentActivity(), BenchActions {
             .apply()
     }
 
-    private enum class Page { NOW, BENCH, LOG, NUDGE, SETTINGS, SIGNALS, CALIBRATION, EARCUP, SATELLITES, SYNC, BEAT }
+    private enum class Page { NOW, BENCH, LOG, NUDGE, SETTINGS, SIGNALS, CALIBRATION, EARCUP, SATELLITES, SYNC, BEAT, STEREO }
 
     companion object {
         /** Kept outside the activity, so a test run survives the screen being rebuilt. */

@@ -114,3 +114,25 @@ class OpusFile(file: File) : AutoCloseable {
         val SILENCE = byteArrayOf(0xF8.toByte(), 0xFF.toByte(), 0xFE.toByte())
     }
 }
+
+/** What the shared timeline has at the ear at flowtime [utcNs]: the item and how far into it, or null when there's no edition. */
+fun playingAt(editions: List<Edition>, dMs: Long, utcNs: Long): Pair<LibraryItem, Long>? {
+    val edition = editionAt(editions, utcNs) ?: return null
+    return edition.at(Math.floorDiv(utcNs - dMs * 1_000_000L - edition.startNs, 1_000_000_000L))
+}
+
+/**
+ * Seconds of music already on the phone from the playhead on, counting whole files in play order until one is missing.
+ * Null when every file is here: the library loops, so the music never runs out.
+ */
+fun aheadSeconds(edition: Edition, item: LibraryItem, offsetS: Long, have: (LibraryItem) -> Boolean): Long? {
+    if (edition.items.all(have)) return null
+    if (!have(item)) return 0L
+    var total = item.seconds - offsetS
+    val i = edition.items.indexOf(item)
+    for (next in edition.items.drop(i + 1) + edition.items.take(i)) {
+        if (!have(next)) break
+        total += next.seconds
+    }
+    return total
+}

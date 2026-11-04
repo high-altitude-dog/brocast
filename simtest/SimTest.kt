@@ -787,6 +787,22 @@ fun testClockCheck() {
     check(!d.clockCheckFailed, "with no internet-time reading there is nothing to check against")
 }
 
+fun testLibraryNow() {
+    println("Library: what's playing, and how far the downloads reach")
+    val a = LibraryItem("a", "Set A", "Artist A", 100, 1, ""); val b = LibraryItem("b", "Set B", "", 50, 1, ""); val c = LibraryItem("c", "Set C", "", 30, 1, "")
+    val ed = Edition(1_000_000_000_000L, listOf(a, b, c))
+    val d = 60_000L
+    fun utc(sec: Long) = ed.startNs + (sec * 1_000_000_000L) + d * 1_000_000L
+    check(playingAt(listOf(ed), d, utc(10))?.let { it.first === a && it.second == 10L } == true, "10 s in plays the first set at 10 s")
+    check(playingAt(listOf(ed), d, utc(100))?.first === b, "after the first set's length the second is playing")
+    check(playingAt(listOf(ed), d, utc(180))?.first === a, "the library loops back to the first set")
+    check(playingAt(emptyList(), d, utc(0)) == null, "no edition, nothing playing")
+    check(aheadSeconds(ed, a, 10) { true } == null, "with every file here the music never runs out")
+    check(aheadSeconds(ed, a, 10) { it !== c } == 140L, "ahead counts whole files in play order up to the first missing one")
+    check(aheadSeconds(ed, a, 10) { it === a } == 90L, "only the current file is here")
+    check(aheadSeconds(ed, a, 10) { it !== a } == 0L, "the file due now is missing")
+}
+
 fun main() {
     testLibrary()
     testOpusBlock()
@@ -795,6 +811,6 @@ fun main() {
     testFetchPlan()
     testTickPattern()
     testSoloGate()
-    testNtp(); testGps(); testGpsWeighting(); testGpsEstimate(); testNtpFit(); testPlayout(); testTickTiming(); testChannel(); testEvents(); testClockCheck(); testBeats(); testBeatGrid(); testNudge()
+    testNtp(); testGps(); testGpsWeighting(); testGpsEstimate(); testNtpFit(); testPlayout(); testTickTiming(); testChannel(); testEvents(); testClockCheck(); testLibraryNow(); testBeats(); testBeatGrid(); testNudge()
     println(if (failures == 0) "ALL PASSED" else "$failures FAILED")
 }

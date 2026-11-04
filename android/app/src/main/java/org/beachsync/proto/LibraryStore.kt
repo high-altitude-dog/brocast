@@ -29,6 +29,8 @@ class LibraryStore private constructor(ctx: Context) : Thread("library") {
     @Volatile var status = "Library not downloaded yet"
     @Volatile var haveSets = 0
     @Volatile var totalSets = 0
+    /** How much of the file being downloaded has arrived, 0 to 100; -1 when nothing is downloading. */
+    @Volatile var partPct = -1
     @Volatile private var going = true
 
     init { if (listFile.exists()) try { read(listFile.readText()); summarise(null) } catch (_: Exception) { } }   // what is already on the phone shows at once, with no network
@@ -106,12 +108,13 @@ class LibraryStore private constructor(ctx: Context) : Thread("library") {
                         if (t - last > 500) {
                             last = t
                             val have = edition.items.count { file(it.id).exists() }
-                            status = "Downloading ${have + 1} of ${edition.items.size} · ${(part.length() * 100 / maxOf(1, item.bytes)).coerceAtMost(100)}%"
+                            partPct = (part.length() * 100 / maxOf(1, item.bytes)).toInt().coerceAtMost(100)
+                            status = "Downloading ${have + 1} of ${edition.items.size} · $partPct%"
                         }
                     }
                 }
             }
-        } finally { c.disconnect() }
+        } finally { c.disconnect(); partPct = -1 }
         if (!going) return
         if (sha256(part) != item.sha256) {
             part.delete()
