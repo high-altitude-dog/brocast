@@ -29,6 +29,7 @@ import org.beachsync.proto.ui.NowPlaying
 import org.beachsync.proto.ui.EventLogScreen
 import org.beachsync.proto.ui.StreamGapScreen
 import org.beachsync.proto.ui.StereoScreen
+import org.beachsync.proto.ui.ArtistPhotoScreen
 import org.beachsync.proto.ui.TimeSignalsScreen
 import org.beachsync.proto.ui.SettingsPage
 import org.beachsync.proto.ui.TestBench
@@ -114,13 +115,14 @@ class MainActivity : ComponentActivity(), BenchActions {
                 page = when (page) { Page.LOG, Page.NUDGE -> from; Page.EARCUP -> Page.CALIBRATION; else -> home }
             }
             when (page) {
-                Page.NOW -> NowPlaying(state, this, { logLane = null; from = Page.NOW; page = Page.LOG }, { from = Page.NOW; page = Page.NUDGE }, { page = Page.BENCH }, { page = Page.SETTINGS }, { page = Page.SIGNALS }, { page = Page.CALIBRATION }, { page = Page.SATELLITES }, { page = Page.STEREO })
+                Page.NOW -> NowPlaying(state, this, { logLane = null; from = Page.NOW; page = Page.LOG }, { from = Page.NOW; page = Page.NUDGE }, { page = Page.BENCH }, { page = Page.SETTINGS }, { page = Page.SIGNALS }, { page = Page.CALIBRATION }, { page = Page.SATELLITES }, { page = Page.STEREO }, { page = Page.ARTIST })
                 Page.CALIBRATION -> CalibrationPage(state, this, { page = home }, { resetEarcup(); page = Page.EARCUP })
                 Page.EARCUP -> EarcupPage(state, this) { page = Page.CALIBRATION }
                 Page.SIGNALS -> TimeSignalsScreen(state, this, { page = Page.SATELLITES }) { page = home }
                 Page.SYNC -> SyncScope(state) { page = Page.SETTINGS }
                 Page.BEAT -> BeatSyncScope(state) { page = Page.SETTINGS }
                 Page.STEREO -> StereoScreen(state, this) { page = home }
+                Page.ARTIST -> ArtistPhotoScreen(state) { page = home }
                 Page.SATELLITES -> SatellitesScreen(state, this, { page = home }, { page = Page.SIGNALS })
                 Page.SETTINGS -> SettingsPage(state, this, { page = home }, { page = Page.CALIBRATION }, { page = Page.SATELLITES }, { page = Page.SYNC }, { page = Page.BEAT }, { page = Page.STEREO })
                 Page.BENCH -> TestBench(state, this, { logLane = it; from = Page.BENCH; page = Page.LOG }, { from = Page.BENCH; page = Page.NUDGE })
@@ -288,7 +290,7 @@ class MainActivity : ComponentActivity(), BenchActions {
             .apply()
     }
 
-    private enum class Page { NOW, BENCH, LOG, NUDGE, SETTINGS, SIGNALS, CALIBRATION, EARCUP, SATELLITES, SYNC, BEAT, STEREO }
+    private enum class Page { NOW, BENCH, LOG, NUDGE, SETTINGS, SIGNALS, CALIBRATION, EARCUP, SATELLITES, SYNC, BEAT, STEREO, ARTIST }
 
     companion object {
         /** Kept outside the activity, so a test run survives the screen being rebuilt. */

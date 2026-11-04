@@ -37,6 +37,9 @@ class LibraryStore private constructor(ctx: Context) : Thread("library") {
 
     fun file(id: String) = File(dir, "$id.opus")
 
+    /** The artist photo for a track, copied here by hand for now (the photos stay out of the repo). It may not exist. */
+    fun photo(id: String) = File(dir, "$id.jpg")
+
     private fun read(text: String) {
         val j = JSONObject(text)
         dMs = j.optLong("D_ms", 60000L)
