@@ -1,4 +1,4 @@
-# UI spec (hand-off 13)
+# UI spec (hand-off 16)
 
 Field names come from Claude Code's "Fields that exist today" table in `feedback.md`, as of 1 Nov 2026. If one has been renamed since, use the new name.
 
@@ -30,7 +30,7 @@ Field names come from Claude Code's "Fields that exist today" table in `feedback
 | Element | Shows | Source | States and taps | Status |
 |---|---|---|---|---|
 | Header | Left (user's request, 3 Nov: the station name and `Live · D 60 s` added nothing): your colour-fruit-animal name as the eyebrow (`AMBER FIG HERON`), then `● 12 listeners linked` (accent dot; the count of connected listeners). Inside an event, the event name replaces your name. The whole block opens Swarm. D stays on the Test bench only. Right: icon buttons (44 × 44) for Time signals, Calibration, Archive and Settings | Listener key nym; swarm connection count | Taps open Swarm | later |
-| Now playing | Track title (20 px, bold, one line), `artist · set` (13 px, `textSecondary`), a **Kept** marker, then the **library line**: `LIBRARY`, a thin bar and `38 of 52 sets` | File record and cue list; library download state | Kept is locked on for the beta (the user's decision): a bookmark and `Kept`, not a button, no tap. The library line shows download progress of the whole library; when it is complete it reads `52 sets · all here`. | partly |
+| Now playing | The **artist photo** (52 px square, rounded 12, cropped at the photo's focus point), then track title (20 px, bold, one line) and `artist · set` (13 px, `textSecondary`), a **Kept** marker, then the **library line**: `LIBRARY`, a thin bar and `38 of 52 sets` | Artist entry (canonical name, photo, focus point, credit); file record and cue list; library download state | The photo opens Artist photo, full screen. It and the names switch when the new track reaches the ear. With no photo: the artist's initials in accent on a dark tile, not tappable. Kept is locked on for the beta: not a button. | later |
 | Brocast clock | A dial. Along the top of the bezel, curved: `TEDDINGTON · GREENWICH`, with an accent meridian tick at 12 o'clock between the two names. Inside: the zone (GMT or BST), HH:MM:SS large, the **time-source pictogram**, then local time. Updates once a second; no sub-second dial and no ns digits. | Flowtime | See the Times rule | now |
 | Seconds sweep | The outer accent arc fills once per flowtime **minute**, like a second hand | Seconds of the current minute | Steps once a second at Reduced level | now |
 | Time-source pictogram | **Satellites:** a mini constellation: the sky squashed into a small ellipse, one dot per satellite in view, lit in accent for each one in use, the ones in use joined by faint lines (the same shortest-path pattern as the Satellites screen), no labels; then `GPS · 10 of 14`. Tapping it opens Satellites. **Hold:** an accent hourglass beside the same sky gone dark, `HOLDING · 41 s`. **NTP:** a cell tower with radio waves, `NTP · stratum 1` (Privacy mode shows this one). **None yet:** a grey tower with a red ✕, `NO TIME YET`. | `FlowTime.chosen`, `GpsTime.used`, `seen`, `lastBoot`, `NtpClient.stratum`; per-satellite positions **later** (until then, place dots evenly) | Updates once a second | partly |
@@ -50,6 +50,7 @@ Field names come from Claude Code's "Fields that exist today" table in `feedback
 |---|---|---|---|---|
 | LISTENING · Use satellites | The same switch as Now playing | `GpsTime.active` | Never locked | now |
 | LISTENING · Calibration | `Calibration`, then route · lag ± · source (`Bluetooth · 182 ms ±2.8 · Earcup`), as a link | `Playout.track.routedDevice`, `Settings.lagMs`; ± and source **later** | Opens Calibration | partly |
+| LISTENING · Stereo pair | `Stereo pair`, then `Off · this phone plays both channels`, or `Left · paired with Teal Plum Otter` | Channel setting; pairing | Opens Stereo pair | later |
 | LISTENING · Local time under the clock | A switch, on by default | A new setting | Off hides the local line on every clock | now |
 | SCREEN · No flashing | A switch, off by default | Not built (light show) | Always respected; screen levels never override it | later |
 | SCREEN · Screen level | The current automatic level | Not built | Read-only | later |
@@ -225,7 +226,7 @@ The user wants this to be a showcase for peer delivery (2 Nov), so the swarm get
 
 | Element | Shows | Source | Status |
 |---|---|---|---|
-| Verdict | One plain sentence naming the largest limit and its size (`Your phone's GPS chip limits timing to about ±10 ms.`), then the reason in words. A neutral info mark, not a fault: amber outline for a hardware limit, accent tick when the signal is the limit. | Largest of the What limits it rows | now |
+| Verdict | Under 1 ms total: the Very accurate wording (Satellites states), with no LIMIT tag anywhere. Otherwise one plain sentence naming the largest limit and its size (`Your phone's GPS chip limits timing to about ±10 ms.`), then the reason in words. A neutral info mark, not a fault: amber outline for a hardware limit, accent tick when the signal is the limit. | Largest of the What limits it rows | now |
 | Your sky | Sky view: horizon circle, 30° and 60° rings, N E S W. One mark per satellite in view, shaped by system (GPS circle, Galileo diamond, GLONASS triangle, BeiDou square), filled accent when in use, outlined grey when not, each labelled (`G12`, `E05`, `R07`, `C21`). The satellites in use are joined into a **constellation**: faint accent lines along the shortest tree that links them. `10 in use of 14` top right. | Per-satellite azimuth, elevation, system, used-in-fix | later |
 | Tap a satellite | A 44 px target round each mark. The tapped one gets a white ring, and a card below shows label, system, in use or not, height (elevation), direction (azimuth and compass word), signal (dB-Hz) with a bar, and one line in words. Close with ×. | Per-satellite C/N0 | later |
 | What limits it | Three rows, each with figure and bar, the largest tagged `LIMIT` in amber: **Chip time stamp** (the chip's declared uncertainty, `erUnc`), **Satellite signal** (how well the satellites agree), **Link to the Brocast clock** (Gold or Silver). A note says which figures are 95% ranges and which one standard deviation. | `erUnc`, `biasUnc`, `gold`, the fit | now |
@@ -239,10 +240,61 @@ The user wants this to be a showcase for peer delivery (2 Nov), so the swarm get
 
 | State | Verdict |
 |---|---|
+| Very accurate (total under 1 ms) | `Your phone's GPS clock is accurate to about ±200 µs. Nothing is holding it back.` Accent tick, not amber; **no row is tagged LIMIT** and the bars are neutral grey. Asked for by Claude Code (Galaxy A16, 2 Nov). |
 | Chip is the limit | See Satellites (the Moto G32 case: ±10 ms with 9 to 15 satellites) |
 | Signal is the limit | `Timing is limited by the satellite signal: about ±400 µs.` More satellites or a clearer sky will help |
 | Silver link | `Your phone links GPS time to its clock less directly: about ±2 ms.` More satellites won't change it |
 | No raw clock reports | `This phone's GPS chip doesn't share its clock.` Brocast uses internet time instead; the sky still shows, but Use satellites can't improve timing on this phone |
+
+## Stereo pair
+
+![](screens/stereo-pair.png)
+
+The user's request (4 Nov): two phones make stereo, one playing Left and one Right. Every phone already plays on the same flowtime, so the timing needs nothing new; this screen picks the channel, pairs the two phones, and says whether they are close enough for a steady stereo image. Reached from Settings › Listening and from the Now playing channel chip. The Test bench's `Stream channel` (Both, Left, Right) is the engineering version of the same choice.
+
+| Element | Shows | Source | Status |
+|---|---|---|---|
+| Intro | One sentence: two phones, one each side, already on the same clock | | |
+| Picture | Two phones on a line, `L` and `R`, this phone in accent with sound arcs; the listener in front, `1–2 m APART` and `1–2 m BACK` | | |
+| This phone plays | Segmented: Left, Both, Right; Both by default. With headphones as the output, locked to Both, with a line saying why | Channel setting (exists on the Test bench) | now |
+| Partner | Once paired: the partner's name (nym), the side it plays, its output and model, its own ± and `● LINKED`. Swap sides, Unpair. Paired phones take opposite sides automatically, share their ±, and fall back to Both if the other stops. | Pairing link (same six-digit or QR code as the two-phone test) | later |
+| Stereo image | A bar from 0 to 10 ms with a marker at the pair's combined error, √(this phone² + partner²), and a word: `● STEADY` under 1 ms, `▲ LOOSE` 1–5 ms (the sound may pull toward one phone), `✕ TOO LOOSE` over 5 ms (offers Play both). One sentence with the figures. | Both phones' badge figures | later (needs the partner's ±) |
+| Set up | Same height, facing you, 1–2 m apart; the same model matches best, otherwise run the earcup test on each phone's speaker first; stereo is for speakers | | |
+
+Thresholds (1 and 5 ms) are starting values: about 1 ms between speakers starts to shift where the sound seems to come from.
+
+## Stereo states
+
+![](screens/stereo-states.png)
+
+| State | Shows | Taps |
+|---|---|---|
+| Now playing chip | `L LEFT` or `R RIGHT`, accent outline, next to Kept, only while this phone plays one side | Opens Stereo pair |
+| Not paired | The side chosen; works without pairing, but nothing checks the other phone or falls back | Pair with the other phone |
+| Both on one side | ▲ amber `BOTH PHONES PLAY LEFT`: the right channel is missing (paired only) | Play Right, Keep |
+| Partner stopped | The partner drawn dashed; ○ `PLAYING BOTH CHANNELS`; event `Partner Teal Plum Otter stopped: playing both channels so nothing is missing`. Back to one side when it returns. | |
+| Too loose | The image bar in amber; why (for example the partner is on internet time) and what would tighten it | Play both instead |
+| Mono music | ○ `THIS SET IS MONO`: both play the same; nothing to do | |
+
+## Artist photo
+
+![](screens/artist-photo.png)
+
+The user's request (4 Nov): a photo of the artist shows while their music plays, tap to enlarge to full screen. Exported screens in this repo show a placeholder instead of the real photos; the real ones are on the design canvas.
+
+| Element | Shows | Taps |
+|---|---|---|
+| Photo | Fills the screen (cover), on black, centred on the focus point | Tap anywhere or swipe down to close |
+| Close | A 44 px round × top right, on a translucent dark disc | Closes |
+| Caption | Over a dark gradient at the bottom: `NOW PLAYING`, the artist name (30 px bold), `track · set`, the photo credit, and dots when the artist has more than one photo | Swipe sideways for the next photo |
+
+It follows the track: if the artist changes while open, the viewer cross-fades to the new artist. Screen levels: Full and Reduced show it; Minimal and Off don't. The lock screen and notification keep the sync picture as their artwork; the artist name is in their text.
+
+## Artist names
+
+![](screens/artist-names.png)
+
+Every track or set points to **one artist entry**: a canonical name, its photos with focus points and credits, and the tags that map to it. Uploads spell names differently, so ingest matches tags case-insensitively, ignoring extra spaces and accents, and treating `&`, `and`, `x` and `feat.` alike. Anything still unsure (for example a number spelled as a digit) is held for a person to confirm at upload, never guessed on a phone. Artists so far: three. Their names and photos are kept out of this repo (the user's decision, 4 Nov); the user holds them.
 
 ## Badge states
 
