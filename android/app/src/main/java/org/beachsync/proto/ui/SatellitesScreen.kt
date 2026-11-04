@@ -73,14 +73,15 @@ private fun compass(az: Float): String {
 @Composable
 fun SatellitesScreen(state: BenchState, actions: BenchActions, back: () -> Unit, openSignals: () -> Unit) {
     val boot = rememberTick(1000L).value
-    val gps = state.session?.gps
+    // The satellites run from app open (the idle clock) as well as during a run, and only while the switch is on.
+    val gps = (state.session?.gps ?: state.idleGps)?.takeIf { it.active }
     var picked by remember { mutableStateOf<String?>(null) }
     Screen {
         ScreenHeader("Satellites", back)
         if (gps == null) {
             Card {
                 BasicText("Satellites aren't running.", style = Tokens.Text.bodyStrong.style())
-                BasicText("Press Play on Now playing to start the satellites. This screen then shows your chip and your sky.", style = Tokens.Text.body.style())
+                BasicText("Turn on Use satellites to start them. This screen then shows your chip and your sky.", style = Tokens.Text.body.style())
             }
         } else {
             val stamp = gps.erUncNs.takeIf { !it.isNaN() }?.div(1e6) ?: 0.0
@@ -95,7 +96,9 @@ fun SatellitesScreen(state: BenchState, actions: BenchActions, back: () -> Unit,
                 else -> Limit.LINK
             }
             val total = FlowTime.gps?.errAt(boot)?.div(1e6)?.takeIf { it.isFinite() } ?: (2 * max(stamp, max(signal, link)))
-            Verdict(largest, total, stamp)
+            // Under 1 ms in total: nothing is holding it back, so no row is tagged LIMIT (hand-off 13, "Very accurate").
+            val accurate = !noRaw && total < 1.0
+            Verdict(largest, total, stamp, accurate)
             val sats = gps.sats
             Sky(sats, picked, { picked = it })
             picked?.let { label -> sats.firstOrNull { it.label == label }?.let { SatCard(it) { picked = null } } }
@@ -104,18 +107,18 @@ fun SatellitesScreen(state: BenchState, actions: BenchActions, back: () -> Unit,
                 BasicText("WHAT LIMITS IT", Modifier.padding(top = 4.dp), Tokens.Text.cardLabel.style())
                 Card {
                     val top = max(stamp, max(signal, link)).coerceAtLeast(1e-6)
-                    LimitRow("Chip time stamp", "the chip's own declared uncertainty", stamp, top, largest == Limit.CHIP)
-                    LimitRow("Satellite signal", "how well the satellites agree", signal, top, largest == Limit.SIGNAL)
+                    LimitRow("Chip time stamp", "the chip's own declared uncertainty", stamp, top, !accurate && largest == Limit.CHIP)
+                    LimitRow("Satellite signal", "how well the satellites agree", signal, top, !accurate && largest == Limit.SIGNAL)
                     LimitRow(
                         "Link to the Brocast clock", if (gold == false) "Silver: stamped when the report arrives" else "Gold: stamped with the boot clock",
-                        link, top, largest == Limit.LINK,
+                        link, top, !accurate && largest == Limit.LINK,
                     )
                     BasicText("The total, about ±${fmtMillis(total)}, is a 95% range; the chip stamp's ±${fmtMillis(stamp)} is one standard deviation.", style = Tokens.Text.small.style())
                 }
                 Card {
                     BasicText("Will more satellites help?", style = Tokens.Text.bodyStrong.style())
                     BasicText(
-                        when (largest) {
+                        if (accurate) "Not needed. Timing is already under 1 ms, and nothing is holding it back." else when (largest) {
                             Limit.SIGNAL -> "Yes. The signal is the limit, so more satellites or a clearer sky will help. Open sky is best."
                             Limit.CHIP -> "No, not on this phone. The limit is inside the chip. With 9 satellites or 15, it stays at about ±${fmtMillis(total)}. Open sky helps only when the signal is the limit."
                             else -> "No, not on this phone. The link between the chip and the clock is the limit, and more satellites won't change it."
@@ -147,15 +150,15 @@ fun SatellitesScreen(state: BenchState, actions: BenchActions, back: () -> Unit,
 }
 
 @Composable
-private fun Verdict(limit: Limit, total: Double, stamp: Double) {
-    val signal = limit == Limit.SIGNAL
-    val title = when (limit) {
+private fun Verdict(limit: Limit, total: Double, stamp: Double, accurate: Boolean) {
+    val signal = accurate || limit == Limit.SIGNAL
+    val title = if (accurate) "Your phone's GPS clock is accurate to about ±${fmtMillis(total)}." else when (limit) {
         Limit.CHIP -> "Your phone's GPS chip limits timing to about ±${fmtMillis(total)}."
         Limit.SIGNAL -> "Timing is limited by the satellite signal: about ±${fmtMillis(total)}."
         Limit.LINK -> "Your phone links GPS time to its clock less directly: about ±${fmtMillis(total)}."
         Limit.NO_RAW -> "This phone's GPS chip doesn't share its clock."
     }
-    val reason = when (limit) {
+    val reason = if (accurate) "Nothing is holding it back." else when (limit) {
         Limit.CHIP -> "The chip says each time stamp it gives the Brocast clock may be off by up to ${fmtMillis(stamp)}. Brocast can't do better than that, however many satellites it sees."
         Limit.SIGNAL -> "More satellites or a clearer sky will help."
         Limit.LINK -> "More satellites won't change it."
