@@ -1,7 +1,7 @@
 // Desktop tests of the app's pure timing code: NTP parsing, the GPS and NTP fits, and the playout loop.
 // Needs the Kotlin compiler (kotlinc) and the Android SDK's android.jar. From the beachsync-prototype folder:
 //   P=android/app/src/main/java/org/beachsync/proto; J=$ANDROID_HOME/platforms/android-35/android.jar
-//   kotlinc -cp $J -d /tmp/simtest simtest/SimTest.kt $P/Flow.kt $P/Renderer.kt $P/NtpClient.kt $P/CsvLog.kt $P/Events.kt $P/Nudge.kt $P/FetchPlan.kt $P/Calibration.kt $P/OpusBlock.kt $P/LibraryPlan.kt
+//   kotlinc -cp $J -d /tmp/simtest simtest/SimTest.kt $P/Flow.kt $P/Renderer.kt $P/NtpClient.kt $P/CsvLog.kt $P/Events.kt $P/Nudge.kt $P/FetchPlan.kt $P/Calibration.kt $P/OpusBlock.kt $P/LibraryPlan.kt $P/BeatDetector.kt $P/BeatGrid.kt
 //   java -cp /tmp/simtest:$J:<kotlinc folder>/lib/kotlin-stdlib.jar SimTestKt
 import org.beachsync.proto.*
 import kotlin.math.abs
@@ -435,7 +435,7 @@ fun testEvents() {
     println("Event log: a failure logs each distinct message once")
     val fd = EventDetector()
     fun ntpFail(t: Long, error: String?) =
-        fd.update(Reading(t * s, null, null, Double.NaN, 0L, 0, 0, 0L, null, 0, error, null, null)).filter { it.text.contains("internet time") }.map { it.text }
+        fd.update(Reading(t * s, null, null, Double.NaN, 0L, 0, 0, 0L, null, 0, error, null, null)).filter { it.text.contains("internet time", ignoreCase = true) }.map { it.text }
     check(ntpFail(1, "ntp1: timed out") == listOf("Can't reach internet time: ntp1: timed out. Using satellites if they are on"), "the first error logs as failing")
     check(ntpFail(17, "ntp2: timed out") == listOf("Still can't reach internet time: ntp2: timed out"), "a new message logs as still failing")
     check(ntpFail(33, "ntp1: timed out").isEmpty() && ntpFail(49, "ntp2: timed out").isEmpty(), "cycling back through the servers logs nothing")

@@ -116,7 +116,7 @@ What's been verified, which happened before this repo reached this machine:
 
 Since then, on this machine, on the `prototype-queue` branch:
 
-- `./gradlew assembleDebug` builds, and `simtest` passes 99 checks. `simtest` needs `Events.kt` and `Nudge.kt` too; screens need Gradle, because of the Compose plugin.
+- `./gradlew assembleDebug` builds, and `simtest` passes 203 checks (4 Nov 2026; kotlinc 2.0.21 is unpacked at `~/kotlinc-extract/kotlinc`). `simtest` needs the files in its header, including `Events.kt`, `Nudge.kt`, `LibraryPlan.kt` and the Beat files, but not `BeatTrack.kt`; screens need Gradle, because of the Compose plugin.
 - `simtest` now settles at about 2.5 µs with a 3 s tracking period, and about 7 µs rms with ±200 µs of stamp jitter.
 - Real music ran from the test server to the Pixel for 36 minutes on 2 Nov 2026, before the foreground service existed. Leaving the app froze it, and walking out of Wi-Fi range caused two silences of about 2 minutes.
 
