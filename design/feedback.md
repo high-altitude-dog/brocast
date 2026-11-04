@@ -281,3 +281,8 @@ Constraints: a flash at 1 Hz at most; no strobing; the screen has to be readable
 - **DOWNLOADING n% badge, AHEAD tile, Buffer:** the library store reports sets held, not the set due now or time ahead.
 - **Track and set names:** not in the stream or `library.json` yet.
 - **Sync card:** built. The window is centred on the held gap; the band's half-width is √(clock² + delay estimate²). It does not use the 95% wording, as asked.
+
+## 4 Nov: Log scales and no NO TIME YET
+
+- **Log scales (user's decision):** the Sync card window is now a signed log scale from 1 s earlier to 1 s later, with marks at 1, 10 and 100 ms each side (the knee is 100 µs, so the marks are evenly spaced). Please design any other scale that can span orders of magnitude the same way, and label the marks.
+- **No "NO TIME YET" (user's decision):** the app always shows the source presently in use. The clock must therefore start when the app opens, not on Play; that engineering change is waiting on the user. Please drop the NONE state from the time-source pictogram and the "no clock yet" Stopped badge text, and say what to show in the second or two before the first fit.

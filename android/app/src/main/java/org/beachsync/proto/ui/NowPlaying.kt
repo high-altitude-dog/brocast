@@ -363,27 +363,33 @@ private fun SyncCard(s: Session?, boot: Long, lagUncNs: Double, outputWord: Stri
     }
 }
 
-/** A line from 10 ms earlier to 10 ms later (50 ms when the band wouldn't fit); the band is centred on the held gap. */
+/**
+ * The window on a logarithmic scale (the user's decision, 4 Nov): from 1 s earlier to 1 s later, with marks at 1 ms, 10 ms and 100 ms each side.
+ * It stays readable whether the error is microseconds or hundreds of milliseconds. The band is centred on the held gap.
+ */
 @Composable
 private fun SyncWindow(heldNs: Double, halfNs: Double) {
     val centre = heldNs   // dragging (positive) is heard later
-    val span = if (abs(centre) + halfNs > 10e6) 50e6 else 10e6
-    val spanMs = (span / 1e6).toInt()
-    Canvas(Modifier.fillMaxWidth().height(44.dp).semantics { contentDescription = "Sync window: most likely between ${fmtSigned(centre - halfNs)} and ${fmtSigned(centre + halfNs)} from the Brocast clock" }) {
+    // Signed log: 0 at the clock, ±1 at ±1 s, with 1 ms, 10 ms and 100 ms evenly between (the knee is 100 µs).
+    fun pos(ns: Double): Float = (Math.signum(ns) * log10(1.0 + abs(ns) / 1e5) / 4.0).toFloat().coerceIn(-1f, 1f)
+    Canvas(Modifier.fillMaxWidth().height(56.dp).semantics { contentDescription = "Sync window, logarithmic: most likely between ${fmtSigned(centre - halfNs)} and ${fmtSigned(centre + halfNs)} from the Brocast clock" }) {
         val w = size.width; val y = 14.dp.toPx()
-        fun x(ns: Double) = (w / 2f + (ns / span).toFloat().coerceIn(-1f, 1f) * (w / 2f))
+        fun x(ns: Double) = w / 2f + pos(ns) * (w / 2f)
         drawLine(Ink.track, Offset(0f, y), Offset(w, y), 2.dp.toPx(), StrokeCap.Round)
         val dash = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 4.dp.toPx()))
         for (limit in listOf(-5e6, 5e6)) drawLine(Ink.muted, Offset(x(limit), y - 8.dp.toPx()), Offset(x(limit), y + 8.dp.toPx()), 1.dp.toPx(), pathEffect = dash)
+        for (m in listOf(1e6, 1e7, 1e8)) for (sign in listOf(-1.0, 1.0)) drawLine(Ink.faint, Offset(x(sign * m), y - 4.dp.toPx()), Offset(x(sign * m), y + 4.dp.toPx()), 1.dp.toPx())
         drawLine(Ink.text, Offset(w / 2f, y - 10.dp.toPx()), Offset(w / 2f, y + 10.dp.toPx()), 2.dp.toPx())
         val l = x(centre - halfNs); val r = x(centre + halfNs)
         drawRoundRect(Ink.accent.copy(alpha = 0.45f), Offset(l, y - 5.dp.toPx()), Size(maxOf(r - l, 3.dp.toPx()), 10.dp.toPx()), CornerRadius(5.dp.toPx()))
         drawCircle(Ink.accent, 3.5.dp.toPx(), Offset(x(centre), y))
         drawIntoCanvas { c ->
-            val p = Paint(Paint.ANTI_ALIAS_FLAG).apply { textSize = 10.sp.toPx(); color = Ink.textSecondary.toArgb(); typeface = android.graphics.Typeface.MONOSPACE }
-            p.textAlign = Paint.Align.LEFT; c.nativeCanvas.drawText("EARLIER $spanMs ms", 0f, y + 28.dp.toPx(), p)
-            p.textAlign = Paint.Align.CENTER; c.nativeCanvas.drawText("BROCAST CLOCK", w / 2f, y + 28.dp.toPx(), p)
-            p.textAlign = Paint.Align.RIGHT; c.nativeCanvas.drawText("$spanMs ms LATER", w, y + 28.dp.toPx(), p)
+            val p = Paint(Paint.ANTI_ALIAS_FLAG).apply { textSize = 9.sp.toPx(); color = Ink.textSecondary.toArgb(); typeface = android.graphics.Typeface.MONOSPACE; textAlign = Paint.Align.CENTER }
+            val ly = y + 26.dp.toPx()
+            for ((m, label) in listOf(1e6 to "1 ms", 1e7 to "10 ms", 1e8 to "100 ms")) for (sign in listOf(-1.0, 1.0)) c.nativeCanvas.drawText(label, x(sign * m), ly, p)
+            p.color = Ink.text.toArgb(); c.nativeCanvas.drawText("CLOCK", w / 2f, ly, p)
+            p.color = Ink.textSecondary.toArgb(); p.textAlign = Paint.Align.LEFT; c.nativeCanvas.drawText("EARLIER", 0f, y + 40.dp.toPx(), p)
+            p.textAlign = Paint.Align.RIGHT; c.nativeCanvas.drawText("LATER", w, y + 40.dp.toPx(), p)
         }
     }
 }
