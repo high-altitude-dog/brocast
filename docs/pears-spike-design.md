@@ -110,7 +110,7 @@ The listener chooses how much data, battery, memory and storage the mesh may use
 Other Pears apps' users don't hold our audio, so they can't carry its bandwidth unless they choose to. They can help with everything else:
 
 1. **The public HyperDHT** is run by every Pears app's long-lived nodes. It already finds our peers and coordinates hole punching. Phones stay ephemeral; desktop seeders run as full DHT nodes, so Brocast gives back.
-2. **DHT records:** the station signs a small mutable record holding the newest catalog length and the seed keys, stored on the DHT. Phones then learn about new editions even with the station offline, which is the unplug demo. To confirm: whether a third party can re-put a station-signed record when it expires.
+2. **DHT records:** the station signs a small mutable record holding the newest catalog length and the seed keys, stored on the DHT. Phones then learn about new editions even with the station offline, which is the unplug demo. **Proven on the laptop, 7 Nov:** HyperDHT's `mutableGet` has a `refresh` option that re-puts the record it reads, signature included, so every reader keeps it alive without the station's key. Mutable records live 48 h. The app ships only the station's public key and finds the catalog through this record.
 3. **Blind relays:** when hole punching fails (carrier-grade NAT on both phones), traffic goes through a blind relay, which can't read it. Holepunch runs relays for its own apps, and using them needs their OK. Any Brocast desktop seeder can also act as a relay.
 4. **Blind peers** (`blind-peering`): always-on nodes that keep cores available, as Keet uses. This is the most direct way existing Pears infrastructure could carry our library. Ask whether a pool exists for showcase apps.
 5. **A desktop seeder for any Pears user:** `pear run pear://<key>`, one command, the same engine and resource profile, seeding the library from a home computer. This is how Pears users who aren't phone listeners can carry the bandwidth.
@@ -129,7 +129,7 @@ Pears modules change often, and peers on different versions can fail to talk, as
 - **Storage is never migrated in place:** the identity seed belongs to the host, not the engine, and finished music is plain files. Each storage format gets its own store (`store-v<N>/`). An engine with a new format starts a fresh store and re-fetches what it needs. The old store stays until the new one has been healthy for 24 h, so a rollback is instant.
 - **Mixed versions on the wire:** the swarm topic includes the wire protocol's major version (see §12). An engine that speaks two versions joins both topics during a transition, and seed servers run one process per supported major version. Peers swap engine versions in a hello message, so the Swarm screen can show the mix of versions.
 - **Staged rollout:** a phone takes a release only if `hash(its key)` falls under the rollout percentage.
-- **Store policy risk (needs your decision):** Google Play forbids downloading executable code from outside Play, except code run in a VM or interpreter with only indirect access to Android APIs. JS in Bare with no new native code is close to that exception, but Bare's add-ons reach native code, so whether it qualifies is unclear. For the alpha and beta, distributing the APK directly sidesteps the question.
+- **Distribution (user, 7 Nov):** the app won't ship through Google Play, so Play's rule against downloaded code doesn't apply. Engine bundles update over the mesh as above. A native change ships as a new APK, which can itself come over the mesh, signed by the release key.
 
 ## 12. Topic sharding: finding peers at millions of listeners (user, 7 Nov)
 
@@ -168,9 +168,10 @@ Background is in `kademlia-research.md` §1. One topic is stored on the ~20 DHT 
 
 - The Light, Balanced and Generous presets, with Balanced as the default, plus Auto mode (approved for now).
 - Partly built sets live in `music/.building/` and move to `music/` only when whole.
-- Topic sharding goes in the design (§12). Not built yet.
+- Topic sharding goes in the design (§12). Not built yet; topics already carry the wire version and shard, with one shard.
+- No Google Play: engine updates go over the mesh (§11).
+- Phone testing (step 1) is on the backburner, because testing uses tokens too fast. The focus is design work.
 
 **Still open:**
 
 1. **Where the code lives:** the code is in `pears/` in this worktree, as the brief said. The user didn't answer.
-2. Over-the-air engine updates versus store policy (§11).

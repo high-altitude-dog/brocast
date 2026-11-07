@@ -9,6 +9,7 @@ import crypto from 'hypercore-crypto'
 import { Mesh, hex } from '../engine/mesh.js'
 import { profile, sharing } from '../engine/policy.js'
 import { SetBuilder, serialOf } from '../engine/builder.js'
+import { topic, decodeRecord } from '../engine/index.js'
 
 const arg = (k, d) => { const i = process.argv.indexOf('--' + k); return i > 0 ? process.argv[i + 1] : d }
 const mode = arg('mode', 'share')
@@ -38,14 +39,27 @@ const mesh = new Mesh({
 const me = hex(mesh.keyPair.publicKey).slice(0, 8)
 log({ ev: 'start', me, mode, profile: p.name, share, speed, wmScale })
 
-const catalog = mesh.store.get({ key: b4a.from(arg('catalog'), 'hex') })
+// The station's pointer record. Reading it with refresh re-puts it, signature and all, on the nodes closest to it:
+// every reader keeps it alive, and none needs the station's secret key.
+async function readRecord () {
+  const r = await mesh.swarm.dht.mutableGet(stationKey, { refresh: () => true })
+  if (r) log({ ev: 'record', seq: r.seq })
+  return r
+}
+let catalogHex = arg('catalog')
+if (mode !== 'privacy') {
+  const r = await readRecord()
+  if (!catalogHex) catalogHex = decodeRecord(r.value).catalog // found by station key alone
+}
+const refresher = mode === 'share' ? setInterval(() => readRecord().catch(() => log({ ev: 'record', err: true })), 10000) : null
+const catalog = mesh.store.get({ key: b4a.from(catalogHex, 'hex') })
 await catalog.ready()
 const found = mesh.store.findingPeers()
 if (mode === 'privacy') {
   mesh.allow = (k) => b4a.equals(k, stationKey)
   mesh.swarm.joinPeer(stationKey)
 } else {
-  mesh.swarm.join(catalog.discoveryKey, { server: share && p.announce, client: true })
+  mesh.swarm.join(topic(catalog.key), { server: share && p.announce, client: true })
 }
 mesh.swarm.flush().then(found)
 await catalog.update({ wait: true })
@@ -152,6 +166,7 @@ async function finish (why) {
   done = true
   clearInterval(tick)
   clearInterval(clearer)
+  if (refresher) clearInterval(refresher)
   clearInterval(gossip)
   for (const s of sets) { while (s.builder.busy) await new Promise((r) => setTimeout(r, 20)); await build(s, true) }
   const cpu = process.cpuUsage(cpu0)

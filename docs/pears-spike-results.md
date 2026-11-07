@@ -12,6 +12,10 @@
 - **Listener estimate:** the gossiped sketch read exactly 4 with 4 listeners, and 3 when the Privacy-mode node was the fourth.
 - **Watermark bursts:** at 20× speed with watermarks at a tenth, Light refilled in 12 or 13 bursts and Balanced in 2. Balanced and Generous had no late blocks after the first.
 
+## Unplug demo (laptop, 4 s blocks)
+
+Two listeners fetched the library and kept the station's DHT record alive with `mutableGet` refresh (8 refreshes each). The station was killed at 25 s. At 35 s a new listener started, knowing only the station's public key. It read the record, found the catalog and the listeners, and took 100% of its blocks from them. It built and verified all three sets in 18.4 s, the first block arriving after 9 s. Caveat: the station's own record would have lasted 48 h anyway, so this shows the refresh works, not that it was needed.
+
 ## Block length (your question)
 
 | Transport block | Requests | Wire overhead | Listener CPU | Duplicates in a swarm |
@@ -52,6 +56,5 @@ Made by me, not yet approved: code in `pears/` in this worktree; one core per se
 
 ## Questions for the user
 
-1. OK to start step 1 (phones on the same Wi-Fi)?
-2. Over-the-air engine updates versus Google Play's code policy: distribute the APK directly for the alpha, or ship engine updates only through the store?
+1. Step 1 (phones) is on the backburner, by the user's choice (7 Nov).
 3. You are now in touch with the Pears developers. Could you raise these with them: a public `setUploading(false)`, blind-peer and relay use, and the duplicate-block behaviour?

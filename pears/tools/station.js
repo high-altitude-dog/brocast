@@ -7,12 +7,13 @@ import crypto from 'hypercore-crypto'
 import { Mesh, hex } from '../engine/mesh.js'
 import { blocks, FORMAT } from '../engine/blocks.js'
 import { buildOgg, serialOf, sha256 } from '../engine/builder.js'
+import { topic, encodeRecord } from '../engine/index.js'
 
 const arg = (k, d) => { const i = process.argv.indexOf('--' + k); return i > 0 ? process.argv[i + 1] : d }
 const dir = arg('dir')
 const seedFile = arg('seed-file')
 const library = arg('library')
-const blockSeconds = Number(arg('block-seconds', 1))
+const blockSeconds = Number(arg('block-seconds', 4)) // 4 s is the step 0 recommendation
 const bootstrap = process.env.BOOTSTRAP ? JSON.parse(process.env.BOOTSTRAP) : undefined
 
 if (!fs.existsSync(seedFile)) fs.writeFileSync(seedFile, crypto.randomBytes(32), { mode: 0o600, flag: 'wx' })
@@ -50,8 +51,10 @@ for (const it of items) {
   })
 }
 
-mesh.swarm.join(catalog.discoveryKey, { server: true, client: false })
+mesh.swarm.join(topic(catalog.key), { server: true, client: false })
 await mesh.swarm.flush()
+// The pointer record: phones that know only the station key find the catalog through it, even with the station gone.
+await mesh.swarm.dht.mutablePut(mesh.keyPair, encodeRecord({ catalog: hex(catalog.key), length: catalog.length, shards: 1 }), { seq: catalog.length })
 const gossip = setInterval(() => mesh.gossip(), 2000)
 console.log('READY', hex(catalog.key), hex(mesh.keyPair.publicKey))
 

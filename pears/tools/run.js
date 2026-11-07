@@ -31,6 +31,9 @@ const SCENARIOS = {
   // Receive-only and Privacy mode alongside two full sharers.
   modes: { bs: 1, nodes: [L('s0', { until: 'wall', wall: 60 }), L('s1', { delay: 2000, until: 'wall', wall: 58 }), L('recv', { mode: 'receive', delay: 20000, wall: 40 }), L('priv', { mode: 'privacy', delay: 20000, wall: 40 })] },
   // Watermark bursts per profile: playhead at 20x, watermarks at a tenth, 18 minutes of audio in 54 s.
+  // The unplug demo: two listeners fetch, the station goes away at 25 s, and a newcomer that knows only the station key
+  // still finds the catalog (through the DHT record the others keep alive) and gets every set from listeners.
+  unplug: { bs: 4, unplugAt: 25000, nodes: [L('l0', { until: 'wall', wall: 75 }), L('l1', { delay: 3000, until: 'wall', wall: 72 }), L('late', { delay: 35000, noCatalog: true, wall: 40 })] },
   ...Object.fromEntries(['light', 'balanced', 'generous'].map((pr) => [`profile-${pr}`, { bs: 1, nodes: [L('a', { profile: pr, until: 'play', speed: 20, wmScale: 0.1, wall: 70 })] }]))
 }
 
@@ -54,15 +57,18 @@ for (const name of wanted) {
     })
     station.on('exit', (code) => reject(new Error('station exited ' + code)))
   })
+  if (sc.unplugAt) setTimeout(() => { station.kill('SIGTERM'); console.log('unplugged the station') }, sc.unplugAt)
   const runs = sc.nodes.map((n) => new Promise((resolve) => setTimeout(() => {
-    const child = spawn('node', [path.join(root, 'tools/listen.js'), '--dir', path.join(dir, n.name + '.store'), '--catalog', catalog, '--station', key,
+    const child = spawn('node', [path.join(root, 'tools/listen.js'), '--dir', path.join(dir, n.name + '.store'), ...(n.noCatalog ? [] : ['--catalog', catalog]), '--station', key,
       '--out', path.join(dir, n.name + '.jsonl'), '--mode', n.mode, '--profile', n.profile, '--speed', String(n.speed), '--wm-scale', String(n.wmScale),
       '--wall', String(n.wall), '--until', n.until], { env, stdio: ['ignore', 'inherit', 'inherit'] })
     child.on('exit', resolve)
   }, n.delay)))
   await Promise.all(runs)
-  station.kill('SIGTERM')
-  await new Promise((resolve) => station.on('exit', resolve))
+  if (station.exitCode === null) {
+    station.kill('SIGTERM')
+    await new Promise((resolve) => station.on('exit', resolve))
+  }
   const s = stationOut.match(/SUMMARY (.*)/)
   if (s) fs.writeFileSync(path.join(dir, 'station.json'), s[1])
   for (const f of fs.readdirSync(dir)) if (f.endsWith('.store') || f.endsWith('.music')) fs.rmSync(path.join(dir, f), { recursive: true, force: true })
