@@ -12,7 +12,7 @@ While the audience grows slowly, few phones are online together, so phones can't
 
 1. **The station owner (you).** Home machines, and any spare server. This is the first and main user.
 2. **Fans and Pears users** who want to help a station they like.
-3. **Later:** venue operators at beach events, running a seeder on the local network so phones get the music over the venue's Wi-Fi.
+3. **Later:** venue operators at beach events. A venue seeder is an ordinary global seeder; it is not limited to its own site (user, 7 Nov). Phones on the venue's Wi-Fi reach it over the LAN automatically, because HyperDHT tries local addresses when peers share a public IP, so the free local path comes without a special mode.
 
 ## Must
 
@@ -26,6 +26,7 @@ While the audience grows slowly, few phones are online together, so phones can't
 | S6 | **Bridge shards:** announce on several topic shards (design note §12), so seeders spread evenly and every shard has some. |
 | S7 | **Updates and rollback:** stay current with the Pears modules automatically, and let the user pin or roll back to an earlier version (design note §11). |
 | S8 | **Show what it's doing,** for very bright users (the same audience as the phone app): what it serves, to how many peers, per shard; data per day and month; proof that every block is verified; versions in the swarm; and whether it's reachable directly or only through relays. |
+| S11 | **Never local-only (user, 7 Nov):** every station is reachable globally by anyone who selects it. A seeder always serves the whole internet; the LAN is just a faster path when one exists. |
 | S9 | **Safe by design:** it stores and serves only blocks signed by the station key it was given, nothing else. It can't be used to spread other content. |
 | S10 | **Honest about privacy:** peers can see the computer's network address, as with any peer-to-peer sharing, and the app says so on first run. It stores no data about listeners. |
 
@@ -101,5 +102,5 @@ seeder: {
 ## Open questions
 
 1. Does the current Pear runtime still support `pear run` with pinned links and the update flow described above? Check before building.
-2. Who runs the first seeders besides you, and do venue seeders need a local-only mode (LAN topics, no internet)?
+2. Who runs the first seeders besides you? (Settled, 7 Nov: no local-only mode. Any station must be reachable globally by anyone who selects it.)
 3. A seeder doesn't build files. Should it offer "export the library as files", for backups?

@@ -157,6 +157,10 @@ Pears modules change often, and peers on different versions can fail to talk, as
 - **Staged rollout:** a phone takes a release only if `hash(its key)` falls under the rollout percentage.
 - **Distribution (user, 7 Nov):** the app won't ship through Google Play, so Play's rule against downloaded code doesn't apply. Engine bundles update over the mesh as above. A native change ships as a new APK, which can itself come over the mesh, signed by the release key.
 
+## 11a. Many stations, all global (user, 7 Nov)
+
+Any station is reachable by anybody, anywhere, who selects it; there is no local-only mode, even at a venue. Each station is just a public key, which gives it its own DHT record, catalog, set cores and topics. So a phone can follow any number of stations with no change to the engine, and seeders can carry one station or several. The LAN is used automatically as a faster, free path when peers share a network, never as a boundary. Choosing a station (a directory of station keys) is new product work, not designed yet.
+
 ## 12. Topic sharding: finding peers at millions of listeners (user, 7 Nov)
 
 Background is in `kademlia-research.md` §1. One topic is stored on the ~20 DHT nodes closest to its hash, and those nodes belong to other people's Pears apps. Announcements expire after 20 minutes, and a lookup returns at most 20 peers per node. With a million sharers on one topic, each of those nodes would get about 1,600 requests a second. Even then, a phone would see only a tiny, unfair sample of the swarm.
