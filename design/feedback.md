@@ -300,3 +300,68 @@ Constraints: a flash at 1 Hz at most; no strobing; the screen has to be readable
 - **Demo data:** all values come from `DemoMesh` in `ui/DemoScreens.kt` and each screen says `DEMO DATA` on screen, so design can iterate before the Pears spike. Buffer's title and Up next use the real library; its download state, frontier and block flow are made up.
 - **Not built:** Buffer states other than Filling, set bands, track and beat lines, the Swarm states, the Reduced and Minimal levels, and the real waveform summary, BPM and beat grid.
 - **To judge in the design:** the Swarm lanes are busy with 12 peers; the Buffer axis labels get tight near `1 h` and `6 h`.
+
+## 7 Nov: Pears spike decisions that change the design
+
+- **Sharing while playing (user's decision):** sharing carries on while music plays unless the listener turns it off. Please drop "and not playing" from the Share row, the first-use sheet's conditions, and the `Paused · playing` sharing state. Add a `Share while playing` switch, on by default, under Share with other listeners.
+- **Listener count is an estimate (user's decision):** each phone keeps a small summary merged across the mesh, accurate to about ±3%. Please show it with `≈`, for example `≈ 1.2 M listening`.
+- **Resource profile (coming, waiting on the user's OK):** Light, Balanced (the default) and Generous presets, plus Auto mode that follows battery, charging, Wi-Fi, heat and Data Saver and names its reason on screen. It extends Settings › Delivery. The settings, ranges, defaults and live figures are in `docs/pears-spike-design.md` §6 on the `pears-spike` branch. A screen brief will follow once the user agrees.
+- **Mobile data vs Wi-Fi (user, 7 Nov):** many listeners won't spend paid mobile data sharing with others, while on Wi-Fi they can usually share far more at no cost. So sharing is set **per network**. On mobile data it's off in every profile and only ever opt-in, with its own daily cap. On Wi-Fi it's generous. "Mobile" means any metered network, including hotspots. The user wants exceptionally good UI here. One suggestion from the code side: two side-by-side columns, **On Wi-Fi** and **On mobile data**, each with download and share. Each column would show today's real figures (`Shared 1.2 GB on Wi-Fi · 0 MB on mobile data`) and a clear line such as `Never uses your mobile data to share` while that column's share is off. The network the phone is on now would be marked. The full table is in `docs/pears-spike-design.md` §6.
+
+## 7 Nov: Mesh UX: suggestions for frontier screens (from the code side; the designs are yours)
+
+The user's brief: frontier UX. Assume listeners are very bright and curious about how the peer-to-peer mesh behaves, so show real mechanics and real units, with a summary first and more depth one tap down. Everything below is data the engine can supply (step 0 measured most of it on a laptop). Please treat these as ideas, not layouts. No Pears name or logo yet.
+
+1. **Block provenance:** tap any block on Buffer to see who sent it (key, station or listener, direct or relayed), how long it took (ms), its size, and that it was verified against the station's signed Merkle tree. Show the proof's depth and bytes, and the station key that signed it. A tamper-proof chain is the showcase.
+2. **Watermarks and the radio:** show the low and high watermarks as lines on Buffer, and how a burst refills between them. Add a radio timeline (bursts versus sleep) and a figure such as `radio asleep 11 m 40 s of the last 15 m`. This is where the battery saving becomes visible.
+3. **Data ledger, per network:** down and shared, on Wi-Fi and on mobile data, for today and this month. Add the measured protocol overhead (about 2%) and duplicate blocks (measured, see results) as their own lines. The mobile column says `Never uses your mobile data to share` while its sharing is off.
+4. **Profile tuner:** Light, Balanced, Generous and Auto, then advanced sliders (watermarks, connections, upload cap, RAM, allowance). Each shows its predicted cost beside the measured cost. Auto names its reason (`MESH · LIGHT · battery 18%`).
+5. **Connection anatomy on Swarm:** per peer, how it connected (direct, hole-punched or relayed), the round-trip time, its engine version and wire version, and bytes each way. Also show peers found but not connected, and why (the connection limit, or a failed punch).
+6. **The listener estimate made visible:** `≈ 1.2 M listening ±3%`. An optional detail view could show the 1024-register sketch as a small heatmap filling in as it converges across the mesh: a quiet way to show gossip working.
+7. **Building versus built:** each set as `building · 62% · in music/.building`, then `built · verified · moved to music/`. Built files play with no network at all, which is the unplug demo in one line.
+8. **Engine panel** (Settings › Advanced › Engine): the current, previous and candidate versions, the health gate's progress (boot, handshake, catalog, blocks verified, 10 min clean), Roll back, Pin and Auto-update. Add a small chart of the engine versions in use across connected peers.
+9. **Help from the wider Pears network:** today's count of DHT nodes run by other Pears apps that helped this phone, relays used, and blind peers holding the library. It credits the shared network honestly.
+10. **Privacy mode, exactly:** list what stopped (DHT announce, listener connections, sketch, uploads) and show the single connection that remains, to the station.
+
+Engine fields for each of these are in `docs/pears-spike-design.md` §4, §6, §10 and §11 on the `pears-spike` branch.
+
+## 7 Nov: Engine API field names for mesh screens
+
+`docs/engine-api.md` (on `pears-spike`) is the contract between the app and the mesh engine. §6 is the status snapshot: every field the Swarm, Buffer, header, Settings › Delivery and Engine screens can show, with units in the names. It maps each `DemoMesh` value to its real field. Please use these names in specs. Two new things to design for:
+- `buffer.radio` (radio awake versus asleep over 15 minutes)
+- `blockInfo` (per-block provenance and proof, on tap)
+
+Status updates 4 times a second on Buffer and Swarm and once a second elsewhere; block arrivals are batched at most 4 times a second.
+
+## 7 Nov: Auto mode, nym, and a new app (the desktop seeder): suggestions only
+
+- **Auto mode reasons** (design note §6): `Battery Saver on`, `phone hot`, `battery 18%`, `Data Saver on`, `on Wi-Fi and charging`, `on battery`, `on mobile data`, `phone warm`. Shown as `MESH · <PROFILE> · <reason>` with the time of the last change. Adjustable:
+  - the low-battery line (10 to 50%, default 20);
+  - whether Auto may pick Generous;
+  - whether Generous needs charging;
+  - the hot level (moderate or severe);
+  - or Auto off with a pinned preset.
+- **Nym:** it is now the listener's own Ed25519 signature (`docs/nym.md`), so peers verify it and no one can show a nym for someone else's key. A "verified" mark on nyms in the Swarm list could show that. The Shuffle button keeps the keypair and gives a new name.
+- **Desktop seeder** (`docs/desktop-seeder.md`): a Pear desktop app and headless tool that seeds the station's library from always-on computers. It needs screens. The audience is the same as the phone app: very bright and curious. Ideas:
+  1. A first-run sheet: what it does, the disk and upload caps, "pause on metered", and the honest line that peers can see your network address.
+  2. A live view: shards it covers (rotating hourly), peers served per shard, blocks served with their proofs, and whether the DHT node is persistent and reachable.
+  3. Data per day and month, and served time in listening hours (at 72 MB an hour).
+  4. An engine and app version panel with Pin and Roll back, like the phone's.
+  5. Seeders shown as their own kind on the phone's Swarm screen (station, seeder, listener).
+
+  No Pears name or logo; the footnote may say it runs on the Pear runtime.
+
+## 7 Nov: Request from the user: first-run identity wizard screens
+
+The user asked Claude Code to ask you for help with these screens. The flow and the engineering are in `docs/keys.md` (on `pears-spike`). In short: on first start the phone makes its identity from several sources of entropy, the wizard explains and guides, and the user may add their own randomness. The audience is very bright and curious about how it works. Steps:
+
+1. Welcome.
+2. Machine sources ticking in (name and byte count, never values).
+3. Add your own randomness (optional): a scribble pad or moving the phone. Clearly extra, never needed.
+4. Mixing, with an expandable "how this works" (keyed BLAKE2b, and why Ed25519 and X25519 clamp but our seed is never clamped).
+5. Meet your nym, with the key's first 8 hex digits and Shuffle.
+6. Back up: optional for listeners, recommended for seeders, required for the station's publisher.
+7. On to the existing first-use sharing sheet.
+
+The same wizard is needed on the desktop seeder and its browser control page, using mouse and keyboard timing instead of touch. Data the engine provides: `makeSeed`'s `report` (engine API). No Pears name or logo.
+- **Addition to the identity wizard (user, 7 Nov): use as many of the phone's sensors as possible.** The "gathering" step will have many more sources, often 15 to 25 per phone: every hardware sensor (motion, magnetic, pressure, light, proximity, and more), battery noise, CPU jitter, GNSS raw data if satellites are on, and opt-in camera dark-frame and microphone noise with their own permission prompts. Each ticks in by name with its byte count. A sensor with no noise is listed as dropped, which is a nice honest detail. The list differs on every phone, so the screen needs to fit any number. Details: `docs/keys.md`, "Phone sensors".
