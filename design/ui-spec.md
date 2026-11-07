@@ -1,4 +1,4 @@
-# UI spec (hand-off 16)
+# UI spec (hand-off 23)
 
 Field names come from Claude Code's "Fields that exist today" table in `feedback.md`, as of 1 Nov 2026. If one has been renamed since, use the new name.
 
@@ -17,6 +17,8 @@ Field names come from Claude Code's "Fields that exist today" table in `feedback
 - **Track names** (title, artist, set or show) come from the stream, stamped by sample number. They switch when the new track's first sample reaches the ear (start + n / 48 kHz + D), never when the name arrives, so the name changes with the music. With no track name, show the set or show; with neither, show the station or event, with `Live` as the second line. Show the progress line only when the stream gives the track's start and length.
 - **Parked** until the Pears proof of concept is validated (user, 2 Nov): **Privacy mode** (satellites off) also turns off sharing, and any social feature added later (the user's decision, 2 Nov). It never changes the listener's saved choices: they come back when satellites go back on. Nothing in Privacy mode asks the listener to turn satellites on.
 - **Required terms** (the user's decision, 2 Nov): **Rushing** (heard ahead of flowtime), **Dragging** (heard behind flowtime), **Catching-up** (nudging faster to catch up) and **Slowing-down** (nudging slower). Always these words, never "gap closes" or "sound is behind flowtime". The pitch figure shows a minus when Slowing-down.
+- **Log scales** (the user's decision, 4 Nov): any scale that spans orders of magnitude is logarithmic, with labelled marks at each decade. Signed values use a signed log with a linear knee at 100 µs, so the marks sit evenly; listeners will understand it.
+- **Always a time source** (the user's decision, 4 Nov): the clock runs from app open, so there is no "no time yet" state. For the first second or two, before the first fit, show the cell tower with dashed waves and `NTP · getting time`; the Stopped badge reads `■ STOPPED · · · getting time`.
 - **Now playing updates once a second** (the user's decision, 2 Nov). Nothing on it needs a faster refresh.
 - **Screen levels** (Full, Reduced, Minimal, Off): see the last section. Every screen follows them.
 - **Accessibility:** use words and a mark, never colour alone. Every tappable item is at least 44 × 44. Respect reduced motion: no sweep and no glow pulse. Screen-reader labels match the visible words.
@@ -29,15 +31,15 @@ Field names come from Claude Code's "Fields that exist today" table in `feedback
 
 | Element | Shows | Source | States and taps | Status |
 |---|---|---|---|---|
-| Header | Left (user's request, 3 Nov: the station name and `Live · D 60 s` added nothing): your colour-fruit-animal name as the eyebrow (`AMBER FIG HERON`), then `● 12 listeners linked` (accent dot; the count of connected listeners). Inside an event, the event name replaces your name. The whole block opens Swarm. D stays on the Test bench only. Right: icon buttons (44 × 44) for Time signals, Calibration, Archive and Settings | Listener key nym; swarm connection count | Taps open Swarm | later |
-| Now playing | The **artist photo** (52 px square, rounded 12, cropped at the photo's focus point), then track title (20 px, bold, one line) and `artist · set` (13 px, `textSecondary`), a **Kept** marker, then the **library line**: `LIBRARY`, a thin bar and `38 of 52 sets` | Artist entry (canonical name, photo, focus point, credit); file record and cue list; library download state | The photo opens Artist photo, full screen. It and the names switch when the new track reaches the ear. With no photo: the artist's initials in accent on a dark tile, not tappable. Kept is locked on for the beta: not a button. | later |
+| Header | Left: your colour-fruit-animal name as the eyebrow (`AMBER FIG HERON`), then `● ≈ 1.2 M listening`: the mesh's estimate of everyone listening, always with `≈` (accurate to about ±3%; user, 7 Nov). Inside an event, the event name replaces your name. The whole block opens Swarm. Right: icon buttons (44 × 44) for Time signals, Calibration, Archive and Settings | Listener key nym; mesh listener estimate | Taps open Swarm | later (demo data now) |
+| Now playing | The **artist photo** (52 px square, rounded 12, cropped at the photo's focus point) with **Kept** as a small bookmark in its corner (locked on for the beta, no tap), then track title (20 px, bold, one line) and `artist · set` (13 px, `textSecondary`), then the **channel chip** on the right (see Channel control), then the **library line**: `LIBRARY`, a thin bar and `38 of 52 sets` | Artist entry; file record and cue list; channel setting; library download state | The photo opens Artist photo. The chip needs press and hold. With no photo: the artist's initials in accent on a dark tile. | later |
 | Brocast clock | A dial. Along the top of the bezel, curved: `TEDDINGTON · GREENWICH`, with an accent meridian tick at 12 o'clock between the two names. Inside: the zone (GMT or BST), HH:MM:SS large, the **time-source pictogram**, then local time. Updates once a second; no sub-second dial and no ns digits. | Flowtime | See the Times rule | now |
 | Seconds sweep | The outer accent arc fills once per flowtime **minute**, like a second hand | Seconds of the current minute | Steps once a second at Reduced level | now |
-| Time-source pictogram | **Satellites:** a mini constellation: the sky squashed into a small ellipse, one dot per satellite in view, lit in accent for each one in use, the ones in use joined by faint lines (the same shortest-path pattern as the Satellites screen), no labels; then `GPS · 10 of 14`. Tapping it opens Satellites. **Hold:** an accent hourglass beside the same sky gone dark, `HOLDING · 41 s`. **NTP:** a cell tower with radio waves, `NTP · stratum 1` (Privacy mode shows this one). **None yet:** a grey tower with a red ✕, `NO TIME YET`. | `FlowTime.chosen`, `GpsTime.used`, `seen`, `lastBoot`, `NtpClient.stratum`; per-satellite positions **later** (until then, place dots evenly) | Updates once a second | partly |
+| Time-source pictogram | **Satellites:** a mini constellation: the sky squashed into a small ellipse, one dot per satellite in view, lit in accent for each one in use, the ones in use joined by faint lines (the same shortest-path pattern as the Satellites screen), no labels; then `GPS · 10 of 14`. Tapping it opens Satellites. **Hold:** an accent hourglass beside the same sky gone dark, `HOLDING · 41 s`. **NTP:** a cell tower with radio waves, `NTP · stratum 1` (Privacy mode shows this one). **First second:** the tower with dashed waves, `NTP · getting time`, until the first fit (never a 'no time' state). | `FlowTime.chosen`, `GpsTime.used`, `seen`, `lastBoot`, `NtpClient.stratum`; per-satellite positions **later** (until then, place dots evenly) | Updates once a second | partly |
 | Precision ring | A glow whose width shows the sync error on the budget's log scale; its figure is on the bottom bezel | Sync error | | now |
 | Play control and sync badge | A 52 px round button left of the badge: **Stop** (a white square, outlined) while playing; **Play** (an accent-filled circle with a dark triangle) when stopped; dashed and disabled while the set due now is downloading. The badge shows words, the ± figure and the source. | See Badge states | Play starts in sync at once. Tapping the badge opens the error budget detail. | now |
 | Latest event | Time, lane mark and name, and the event text, **directly under the badge**. The text wraps onto as many lines as it needs, with no ellipsis, and the row grows (the user's decision, 2 Nov). | `EventLog.latest()` | Tapping opens the Event log. A banner elsewhere links to its own event. | now |
-| Sync card (replaces the error budget, user's request 3 Nov) | **Headline:** `You hear it within ±3.0 ms of everyone's clock` (the badge figure, accent). **Window:** a linear line from 10 ms earlier to 10 ms later around the Brocast clock (a white tick, `BROCAST CLOCK`); an accent band shows where this phone's sound most likely is (centred on the held gap, here 200 µs later, half-width √(clock² + delay estimate²)); a dot marks the centre; dashed lines at ±5 ms mark a typical event limit, labelled `EARLIER` and `LATER`. The scale widens to ±50 ms when the band would not fit. **What makes up the ±:** one bar split by each part's share of the total (squared), output delay estimate in amber, clock in accent, then one sentence naming the largest part and what would tighten it (`Mostly your headphones' delay estimate (±2.8 ms). Clock ±400 µs. An earcup test can tighten it.`). The output word follows the output in use. | Badge figure; `errAt`; Calibration ±; `NudgeControl.gapAt` | The whole card opens Time signals for the detail. | partly |
+| Sync card (replaces the error budget, user's request 3 Nov) | **Headline:** `You hear it within ±3.0 ms of everyone's clock` (the badge figure, accent). **Window:** a signed log line from 1 s earlier to 1 s later around the Brocast clock (marks at 1, 10, 100 ms and 1 s each side, knee at 100 µs; `0` at the centre) (a white tick, `BROCAST CLOCK`); an accent band shows where this phone's sound most likely is (centred on the held gap, here 200 µs later, half-width √(clock² + delay estimate²)); a dot marks the centre; dashed lines at ±5 ms mark a typical event limit, labelled `EARLIER` and `LATER`. **What makes up the ±:** one bar split by each part's share of the total (squared), output delay estimate in amber, clock in accent, then one sentence naming the largest part and what would tighten it (`Mostly your headphones' delay estimate (±2.8 ms). Clock ±400 µs. An earcup test can tighten it.`). The output word follows the output in use. | Badge figure; `errAt`; Calibration ±; `NudgeControl.gapAt` | The whole card opens Time signals for the detail. | partly |
 | Gap row | The rate nudge row: mode chip, the gap value, then two small lines (`Dragging · Catching-up, 1.40 s` and `pitch +0.014%`; Rushing with Slowing-down shows `pitch −0.014%`) | `NudgeControl.gapAt`, `mode`, `secondsLeft`, `state.rate` | Opens Nudge control. The 60 s gap trace has left this screen to make room for the track; history belongs on Nudge control, **later**. | now |
 | Tiles | SOURCE, the output tile (`HEADPHONES`, `SPEAKER`, `PORTABLE SPEAKER` or `CAR AUDIO` by the output in use, with lag and the device's reported name), AHEAD (how much is downloaded ahead, in hours and minutes) | `FlowTime.chosen`, `GpsTime`, `Settings.lagMs`, download state (**later**) | SOURCE opens Time signals; HEADPHONES opens Calibration; AHEAD opens Buffer | partly |
 | Use satellites | A full-width row with a switch, never locked, one tap from the main screen. Shows `Position stays on this phone · off = Privacy mode`. | `GpsTime.active` | Off: the badge becomes Privacy mode. On: asks for location permission if needed; if refused, it returns to off. | now |
@@ -50,7 +52,7 @@ Field names come from Claude Code's "Fields that exist today" table in `feedback
 |---|---|---|---|---|
 | LISTENING · Use satellites | The same switch as Now playing | `GpsTime.active` | Never locked | now |
 | LISTENING · Calibration | `Calibration`, then route · lag ± · source (`Bluetooth · 182 ms ±2.8 · Earcup`), as a link | `Playout.track.routedDevice`, `Settings.lagMs`; ± and source **later** | Opens Calibration | partly |
-| LISTENING · Stereo pair | `Stereo pair`, then `Off · this phone plays both channels`, or `Left · paired with Teal Plum Otter` | Channel setting; pairing | Opens Stereo pair | later |
+| LISTENING · Stereo pair | `Stereo pair`, then `Stereo · back to Stereo each start`, or `Left · until the app restarts` | Channel setting | Opens Stereo pair | now |
 | LISTENING · Local time under the clock | A switch, on by default | A new setting | Off hides the local line on every clock | now |
 | SCREEN · No flashing | A switch, off by default | Not built (light show) | Always respected; screen levels never override it | later |
 | SCREEN · Screen level | The current automatic level | Not built | Read-only | later |
@@ -58,10 +60,8 @@ Field names come from Claude Code's "Fields that exist today" table in `feedback
 | ARCHIVE · Size limit | Stepped slider: 1, 2, 5, 10, 20, 50 GB; 5 GB by default | A new setting | Disabled in Kept only and Off | later |
 | ARCHIVE · Storage bar | Rolling (accent) out of the limit, then Kept (`text`) as extra | Archive store | | later |
 | ARCHIVE · Open archive | A link | | Opens Archive | later |
-| DELIVERY · Download ahead on mobile data | A switch, on by default, with `About 72 MB an hour of listening` | A new setting | Off: downloads only on Wi-Fi | later |
-| DELIVERY · Share with other listeners | A switch, with `Only on Wi-Fi, while charging and not playing` | A new setting | On by default, set by the first-use prompt (see First use). Locked off in Privacy mode (parked). Status line: see Sharing states. | later |
-| DELIVERY · Only during global parties | A switch, off by default, with `Share only while a scheduled Brocast party is on` | A new setting; party windows from the signed schedule | Adds party times to the conditions. Dimmed while sharing is off or locked. Not on the first-use sheet. | later |
-| DELIVERY · Sharing allowance | A storage figure, separate from the archive | A new setting | | later |
+| DELIVERY · Share with other listeners | A switch, with `On Wi-Fi as your profile allows · never on mobile data unless you choose` | Sharing setting | Set by the first-use prompt (default on). Locked off in Privacy mode (parked). | now |
+| DELIVERY · Data and sharing | `Data and sharing`, then `Auto · Balanced now · shared 1.2 GB today on Wi-Fi` | Profile, today's figures | Opens Data and sharing | later |
 | ADVANCED · Strict mode | A switch tagged `EVENTS ONLY`, off by default, plus a `My limit` slider (1–50 ms, default 5), dimmed while off | Not built (needs events) | Applies only inside an event, and can only tighten the event's own limit. On the radio it does nothing, and the caption says so. | later |
 
 ## Archive
@@ -98,7 +98,7 @@ The user's decision (2 Nov): on first use the listener chooses whether to share 
 | Sheet | A bottom sheet over Now playing, shown once at first launch, before any sharing starts | It must be answered: no swipe-away, and back doesn't dismiss it. Sharing never starts before the answer. **In Privacy mode it waits (parked):** sharing stays off, and the sheet appears the first time Use satellites is turned on. |
 | Picture | Your phone in accent, linked to four outlined phones | Decorative, hidden from screen readers |
 | Title and body | `Pass the music on?`, then why it helps: everyone gets the music sooner, and the station needs fewer servers | |
-| Conditions | Three rows: only on Wi-Fi; only while charging and not playing; up to the sharing allowance, separate from the archive | The allowance shows the real current value. The party-only option lives in Settings, not here. |
+| Conditions | Three rows: `Only on Wi-Fi. Never uses your mobile data`; `Not when your battery is under 30%. Music keeps playing as normal`; `Up to 4 GB, separate from your archive` (Balanced's values) | The figures follow the profile in use. Party-only lives in Data and sharing. |
 | Share with other listeners | Primary button: the default, with initial focus | Turns sharing on |
 | Not now | Secondary button | Leaves sharing off. Nothing asks again; Settings › Delivery can turn it on. |
 | Footnote | Only music files are shared; as with any peer-to-peer sharing, peers can see the phone's network address; how to change it later | This line must stay, because it's the honest part of the default |
@@ -109,13 +109,13 @@ Peers are found across the network, not by distance, so the wording says **other
 
 ![](screens/sharing-states.png)
 
-The sharing row in Settings › Delivery. Sharing runs only on Wi-Fi, while charging and not playing. If the listener turns on **Only during global parties** (the user's decision, 2 Nov: a listener option, off by default), it also waits for a scheduled party.
+The sharing row in Settings › Delivery. Sharing runs on Wi-Fi as the profile allows, while music plays too (user, 7 Nov). If the listener turns on **Only during global parties** (the user's decision, 2 Nov: a listener option, off by default), it also waits for a scheduled party.
 
 | State | Switch | Status line (under the title) | When |
 |---|---|---|---|
 | On · sharing | on | ● accent dot, `Sharing now` | Every condition holds |
 | On · waiting | on | ○ outline dot, `Waiting for the next global party` | Only with the party option on, outside party times. Checked first, so it wins over the paused reasons. |
-| On · paused | on | ○ outline dot, `Paused · ` plus the first unmet condition, in this order: `not on Wi-Fi`, `not charging`, `playing` | A condition isn't met |
+| On · paused | on | ○ outline dot, `Paused · ` plus the first unmet condition, in this order: `on mobile data`, `battery under 30%`, `playing` (only with Share while playing off) | A condition isn't met |
 | Off | off | none; the conditions line stays | `Not now` on first use, or switched off |
 | Privacy mode (**parked**) | locked: dashed outline with a lock, `aria-disabled` | lock icon, `Off in Privacy mode`; the title in `textSecondary` | Satellites off. Sharing stops at once. No button to turn satellites on. The saved choice returns when satellites go back on. |
 
@@ -229,7 +229,7 @@ The user wants this to be a showcase for peer delivery (2 Nov), so the swarm get
 | Verdict | Under 1 ms total: the Very accurate wording (Satellites states), with no LIMIT tag anywhere. Otherwise one plain sentence naming the largest limit and its size (`Your phone's GPS chip limits timing to about ±10 ms.`), then the reason in words. A neutral info mark, not a fault: amber outline for a hardware limit, accent tick when the signal is the limit. | Largest of the What limits it rows | now |
 | Your sky | Sky view: horizon circle, 30° and 60° rings, N E S W. One mark per satellite in view, shaped by system (GPS circle, Galileo diamond, GLONASS triangle, BeiDou square), filled accent when in use, outlined grey when not, each labelled (`G12`, `E05`, `R07`, `C21`). The satellites in use are joined into a **constellation**: faint accent lines along the shortest tree that links them. `10 in use of 14` top right. | Per-satellite azimuth, elevation, system, used-in-fix | later |
 | Tap a satellite | A 44 px target round each mark. The tapped one gets a white ring, and a card below shows label, system, in use or not, height (elevation), direction (azimuth and compass word), signal (dB-Hz) with a bar, and one line in words. Close with ×. | Per-satellite C/N0 | later |
-| What limits it | Three rows, each with figure and bar, the largest tagged `LIMIT` in amber: **Chip time stamp** (the chip's declared uncertainty, `erUnc`), **Satellite signal** (how well the satellites agree), **Link to the Brocast clock** (Gold or Silver). A note says which figures are 95% ranges and which one standard deviation. | `erUnc`, `biasUnc`, `gold`, the fit | now |
+| What limits it | Three rows, each with figure and a bar on a log scale (1 µs to 10 ms, labelled `log · 1 µs · 100 µs · 10 ms`), the largest tagged `LIMIT` in amber: **Chip time stamp** (the chip's declared uncertainty, `erUnc`), **Satellite signal** (how well the satellites agree), **Link to the Brocast clock** (Gold or Silver). A note says which figures are 95% ranges and which one standard deviation. | `erUnc`, `biasUnc`, `gold`, the fit | now |
 | Will more satellites help? | A direct answer: `No, not on this phone` when the chip or the link is the limit; `Yes` with open-sky advice when the signal is. | Which row is largest | now |
 | Gold or Silver | A `GOLD` or `SILVER` chip and plain words for both. Then the chip name, whether it gives raw clock reports, and where leap seconds came from. | `gnssHardwareModelName`, `gold`, leap-second source | now |
 | Use satellites | The same switch as everywhere, never locked, with `Off: Privacy mode. Brocast uses internet time instead.` and a link to Time signals | `GpsTime.active` | now |
@@ -250,31 +250,33 @@ The user wants this to be a showcase for peer delivery (2 Nov), so the swarm get
 
 ![](screens/stereo-pair.png)
 
-The user's request (4 Nov): two phones make stereo, one playing Left and one Right. Every phone already plays on the same flowtime, so the timing needs nothing new; this screen picks the channel, pairs the two phones, and says whether they are close enough for a steady stereo image. Reached from Settings › Listening and from the Now playing channel chip. The Test bench's `Stream channel` (Both, Left, Right) is the engineering version of the same choice.
+The user's decisions (4 Nov): two phones make stereo by one playing Left and the other Right. **No pairing:** each phone plays its own channel off flowtime, which is accurate enough (listeners already hear stereo speakers at varying distances). The channel options are **Left, Stereo, Right**; "Both" is renamed **Stereo**. Every app start is **Stereo**.
 
-| Element | Shows | Source | Status |
-|---|---|---|---|
-| Intro | One sentence: two phones, one each side, already on the same clock | | |
-| Picture | Two phones on a line, `L` and `R`, this phone in accent with sound arcs; the listener in front, `1–2 m APART` and `1–2 m BACK` | | |
-| This phone plays | Segmented: Left, Both, Right; Both by default. With headphones as the output, locked to Both, with a line saying why | Channel setting (exists on the Test bench) | now |
-| Partner | Once paired: the partner's name (nym), the side it plays, its output and model, its own ± and `● LINKED`. Swap sides, Unpair. Paired phones take opposite sides automatically, share their ±, and fall back to Both if the other stops. | Pairing link (same six-digit or QR code as the two-phone test) | later |
-| Stereo image | A bar from 0 to 10 ms with a marker at the pair's combined error, √(this phone² + partner²), and a word: `● STEADY` under 1 ms, `▲ LOOSE` 1–5 ms (the sound may pull toward one phone), `✕ TOO LOOSE` over 5 ms (offers Play both). One sentence with the figures. | Both phones' badge figures | later (needs the partner's ±) |
-| Set up | Same height, facing you, 1–2 m apart; the same model matches best, otherwise run the earcup test on each phone's speaker first; stereo is for speakers | | |
+| Element | Shows | Status |
+|---|---|---|
+| Intro | Two phones, one each side, already on the same clock; no pairing needed | |
+| Picture | `L` this phone and `R` the other phone, the listener in front, `1–2 m APART` and `1–2 m BACK` | |
+| This phone plays | Segmented: Left, Stereo, Right. Stereo after every app start. With headphones, locked to Stereo. | now (Test bench has the split) |
+| Note | Back to Stereo every start; also changeable from Now playing by press and hold | |
+| Set up | Same height, facing you, 1–2 m apart; same model matches best, otherwise run the earcup test on each phone's speaker | |
 
-Thresholds (1 and 5 ms) are starting values: about 1 ms between speakers starts to shift where the sound seems to come from.
+Dropped (user, 4 Nov): the partner card, pairing, the stereo image bar, the fall-back to Both, and the states that relied on them.
 
-## Stereo states
+## Channel control
 
 ![](screens/stereo-states.png)
 
-| State | Shows | Taps |
+On Now playing, right of the track title. **Protected against pocket taps.**
+
+| Step | Shows | Rule |
 |---|---|---|
-| Now playing chip | `L LEFT` or `R RIGHT`, accent outline, next to Kept, only while this phone plays one side | Opens Stereo pair |
-| Not paired | The side chosen; works without pairing, but nothing checks the other phone or falls back | Pair with the other phone |
-| Both on one side | ▲ amber `BOTH PHONES PLAY LEFT`: the right channel is missing (paired only) | Play Right, Keep |
-| Partner stopped | The partner drawn dashed; ○ `PLAYING BOTH CHANNELS`; event `Partner Teal Plum Otter stopped: playing both channels so nothing is missing`. Back to one side when it returns. | |
-| Too loose | The image bar in amber; why (for example the partner is on internet time) and what would tighten it | Play both instead |
-| Mono music | ○ `THIS SET IS MONO`: both play the same; nothing to do | |
+| 1 · Stereo | A neutral outline chip: two overlapping rings and `STEREO` (44 px tall) | Every app start |
+| 2 · A tap | A hint bubble, `Hold to change channel`, for 2 s; nothing changes | A plain tap never changes the channel |
+| 3 · Press and hold | An accent ring fills round the chip over **0.8 s**; let go early and nothing happens | Haptic tick when full |
+| 4 · Pick a side | A bottom sheet, `This phone plays`, with three large buttons (Left, Stereo, Right, 76 px tall), the current one in accent | Swipe down or tap outside to cancel |
+| 5 · Changed | The chip turns accent: `L LEFT` or `R RIGHT`; a toast `Playing Left only` with **Undo** for 6 s; an event `Channel changed to Left: until the app restarts` | |
+| Pocket guard | Touches are ignored while the screen is off, locked or covered (proximity sensor), and for 1 s after the screen turns on. The lock screen and notification have no channel control. | |
+| Headphones | Chip dimmed, `STEREO`, not changeable | |
 
 ## Artist photo
 
@@ -296,6 +298,108 @@ It follows the track: if the artist changes while open, the viewer cross-fades t
 
 Every track or set points to **one artist entry**: a canonical name, its photos with focus points and credits, and the tags that map to it. Uploads spell names differently, so ingest matches tags case-insensitively, ignoring extra spaces and accents, and treating `&`, `and`, `x` and `feat.` alike. Anything still unsure (for example a number spelled as a digit) is held for a person to confirm at upload, never guessed on a phone. Artists so far: three. Their names and photos are kept out of this repo (the user's decision, 4 Nov); the user holds them.
 
+## Data and sharing
+
+![](screens/data-sharing.png)
+
+From the Pears spike (7 Nov), the user's decisions: resource **profiles**; **sharing per network** (Wi-Fi generous, mobile data never unless chosen, with its own daily cap); **Share while playing**, on by default. The user asked for detailed descriptions so listeners understand the behaviour. Settings and ranges: `docs/pears-spike-design.md` §6 on the `pears-spike` branch. Opens from Settings › Delivery › Data and sharing.
+
+| Element | Shows | Status |
+|---|---|---|
+| Intro | `How much data, battery, memory and storage Brocast may use to fetch music and pass it on to other listeners. None of it changes the timing.` | |
+| Profile | Segmented: Auto, Light, Balanced, Generous. With Auto, the profile Auto picked is underlined in accent, and the label top right says `Auto · Balanced now` | later |
+| Auto explained | One sentence, then the reason now: `Right now: Balanced, because you're on Wi-Fi with 64% battery` | later |
+| What it does | A card for the profile in force, five lines with icons: downloading (bursts and buffer levels), on Wi-Fi, on mobile data, connections, memory and allowance, and `Timing is never affected`. Exact figures per profile below. | later |
+| By network | Two columns, **On Wi-Fi** and **On mobile data**. The one the phone is on has an accent border and `● YOU'RE ON IT`. Each: DOWNLOAD and SHARE in words, one line on why, and today's real figures (`today ↓ 1.4 GB · shared ↑ 1.2 GB`). Mobile says `Never uses your mobile data to share. Includes hotspots and paid Wi-Fi.` while its sharing is off. | later |
+| Switches | `Allow sharing on mobile data` (off; turning it on opens the daily-cap sheet first), `Share while playing` (on), `Only during global parties` (off) | later |
+| Measured today | Battery used by sharing (`≈ 3%`), radio asleep (share of the last hour), connected of allowed. Real figures, labelled so. | later |
+| Data log | A link row: `Data log: every byte, today and this month`. Opens Data log | later |
+| Advanced | A link row: buffer levels, connections, memory, allowance. Opens Advanced | later |
+
+**Profile figures** (Balanced is the default):
+
+| | Light | Balanced | Generous |
+|---|---|---|---|
+| Downloads | Bursts; top up to 15 min when under 2 min | Top up to 2 h when under 5 min | Top up to 24 h when under 30 min |
+| On Wi-Fi | Shares only while charging, up to 1 Mbps | Shares unless battery under 30%, up to 4 Mbps | Always shares, no speed limit |
+| On mobile data | Downloads up to 100 MB a day; never shares | Up to 500 MB a day; never shares unless allowed | No daily limit; never shares unless allowed |
+| Connections, memory, allowance | 4, 24 MB, 1 GB; finds peers but doesn't announce | 8, 64 MB, 4 GB; announces while sharing | 24, 192 MB, 10 GB; always announces |
+
+## Data and sharing states
+
+![](screens/data-sharing-states.png)
+
+| State | Shows |
+|---|---|
+| Light, Generous | Their What it does cards |
+| Auto's reasons | The chip Auto shows, and why: `MESH · LIGHT · battery 18%` (under 20%, not charging), `MESH · LIGHT · phone warm`, `MESH · BALANCED · Wi-Fi`, `MESH · GENEROUS · charging` (Wi-Fi and charging), `MESH · DATA SAVER` (no sharing on mobile data). Shown under the profile buttons and logged as an event when Auto changes profile. |
+| Moving between networks | A toast: `Moved to mobile data: sharing stopped. Downloads carry on, up to 380 MB more today.` Back on Wi-Fi, sharing resumes by itself; every byte is counted against the network it used. |
+| Share on mobile data? | A sheet before opting in: why it costs paid data, a daily cap on a **log scale** from 10 MB to 1 GB (default 50 MB), that it stops at the cap until midnight, and that Data Saver always wins. `Allow up to 50 MB a day`, Cancel. |
+| Safety floors | No setting can starve playback: always at least 30 s ahead, one connection, and the station's servers as fallback. |
+
+## Data and sharing: advanced
+
+![](screens/data-sharing-advanced.png)
+
+Every engine setting from `docs/pears-spike-design.md` §6, with what it costs. Opens from Data and sharing › Advanced. Each row: name, value top right (mono), the control, one plain sentence on what it does and what it costs.
+
+| Element | Shows | Status |
+|---|---|---|
+| Profile | `Auto · Balanced now`, and `Change any setting below and the profile becomes Custom` | later |
+| Cost of these settings · a day | Battery, Wi-Fi data, Mobile data, Memory, Storage. Each: PREDICTED (outlined bar) and TODAY (a line, real figures). Predicted comes from this phone's own last 7 days. A line and its figure go amber when today runs more than 25% over. Updates while dragging. | later |
+| AUTO | Low battery line (10 to 50%, 20%; Auto leaves Light 10 points higher); Auto may pick Generous (on); Generous only while charging (on); Hot phone: Moderate or Severe (Severe) | later |
+| DOWNLOADING | Keep ahead: a two-thumb range on a log scale, 30 s to 24 h (5 min → 2 h). Low thumb = refill point, high thumb = refill to. | later |
+| ON WI-FI | Share on Wi-Fi: Off, Charging, Over 30%, Always (Over 30%). Upload speed limit, log, 0.25 Mbps to no limit (4 Mbps) | later |
+| ON MOBILE DATA | Download limit a day, log, 10 MB to no limit (500 MB). Share on mobile data (off; turning on opens the daily-cap sheet) | later |
+| CONNECTIONS, MEMORY, STORAGE | Connections, log₂, 2 to 32 (8). Be findable: Never, While sharing, Always (While sharing; this is DHT announce). Memory, log, 16 to 256 MB (64). Sharing allowance, 0 to 20 GB (4) | later |
+| Can't go lower | The floors: 30 s ahead, one connection, station servers; no setting touches the timing | |
+
+Values shown are Balanced's. Every slider snaps to the steps on its tick labels and reads its value aloud (`aria-valuetext`).
+
+## Data and sharing: advanced states
+
+![](screens/data-sharing-advanced-states.png)
+
+| State | Shows |
+|---|---|
+| Custom | Changing any setting adds a fifth profile button, **Custom**, and selects it. Auto stops choosing. Changed rows get an amber dot and `Changed from 8 (Balanced)`. `Start again from Balanced` resets. Tapping another profile drops Custom, with a 10 s Undo toast. |
+| While dragging | A before → after box under the control for each cost that moves: `Storage ≤ 4 GB → ≤ 4.3 GB`, `Battery ≈ 4% → ≈ 3.5%`. |
+| Running over the prediction | The amber line, `Battery is 75% over the prediction today`, the likely cause, and one suggested change as a button (`Try 8 connections`). Brocast never changes settings by itself here. |
+| Not enough history yet | First day on a phone: predictions use a typical phone and say so: `≈ 4% (typical phone; yours from tomorrow)`. |
+
+## Block provenance
+
+![](screens/block-provenance.png)
+
+Tap any block tile on Buffer (near zone, 44 px target including its column) and a sheet rises. Summary first, every field one tap down. Fed by `blockInfo` (`docs/engine-api.md` §6, pears-spike branch). The selected tile gets a white ring; tap another tile to switch.
+
+| Element | Shows | Source |
+|---|---|---|
+| Eyebrow | `BLOCK · +8 s · PLAYS 14:32:15` | `g`, flowtime |
+| Title | `From <nym>, a listener`, or `From the station` | `from`, `peer` → nym |
+| Chips | route, time, size, `✓ verified` (accent) | `via`, `ms`, `bytes`, `verified` |
+| Route | Sender → you. Listener: rounded pill; station: solid tile, matching Buffer's tiles. Line labelled `<route> · <ms>`. Relayed: dashed line through a padlock box, `blind relay · can't read it`. Routes: `same Wi-Fi` (lan), `direct`, `hole-punched`, `relayed`. | `via`, `ms` |
+| Why you can trust it | A chain of five ticked steps: Station key (`ed25519 7c2e…19ab`, built into the app), Signed tree (signature ✓, length), Proof (nodes, bytes), This block (BLAKE2b, size), Plays (flowtime). One plain sentence each. | `signedBy`, `treeLength`, `proof`, hash, `g` |
+| Footnote | `Brocast never keeps a block that fails this check…` | |
+| All details | Expands to every field with its engine name in small mono under it: sender's key, kind, route, asked → verified, size in bytes, set and second, transport block, proof, signed by, tree length | `blockInfo` |
+
+There is no "unverified" state to design: an unverified block is never stored. Station blocks get the same chain ("the station gets no shortcut"). Played blocks can't be tapped (they're consumed). Reduced motion: the sheet fades instead of rising.
+
+## Data log
+
+![](screens/data-ledger.png)
+
+Every byte by the network it went over. Opens from Data and sharing › Data log. Today or This month (segmented; resets at local midnight and on the 1st). Fed by `ledger`.
+
+| Element | Shows | Source |
+|---|---|---|
+| Totals | DOWNLOADED `1.53 GB` `≈ 21 h of music`; SHARED (accent) `1.20 GB` `≈ 17 listening hours given`. Hours at 72 MB an hour (160 kbps). | `ledger.today.*` |
+| By network | Wi-Fi and Mobile data cards, the current one with `● YOU'RE ON IT`. ↓ down (solid bar) and ↑ shared (outline bar), same scale in both. Mobile: `Never uses your mobile data to share.` while off, and what's left of today's cap. | `ledger.today.wifi`, `.metered`, `network.kind` |
+| Where the bytes went | Music downloaded, Music shared, Proof and protocol (% and MB), Duplicate blocks (% and MB, with why), Finding peers (MB). One plain line each. | `downBytes`, `upBytes`, `overheadPct`, `duplicatePct`, `dhtBytes` |
+| Month so far | Day bars: downloaded above the line (Wi-Fi accent, mobile grey stacked on top), shared below as outlines. Today framed. Days to come as dots. Totals top right; mobile total in words under it. Tap a day for its lines. | `ledger.month`, daily history |
+
+This month view: the same cards and lines for the month, chart unchanged.
+
 ## Badge states
 
 ![](screens/badge-states.png)
@@ -309,7 +413,7 @@ Every track or set points to **one artist entry**: a canonical name, its photos 
 | REJOINING | ▲ amber | A data gap longer than D, or a jump of more than 20 ms |
 | SILENT · OVER LIMIT ± | ▲ amber, with offers | Over the event's limit. Offer what could help: **Sync from nearby phones** (**later**), and **Use satellites** if they're off. GPS is never required. |
 | CLOCK CHECK FAILED | ✕ red (`danger`) | GPS and NTP differ by more than 50 ms |
-| NOT IN SYNC | ✕ red | No time source, or no stream, while playing |
+| NOT IN SYNC | ✕ red | No stream while playing (there is always a time source) |
 | STOPPED ± | ■ grey (`textMuted`), neutral outline | The listener has not pressed Play, or pressed Stop. Never red. The figure is the clock's own error and the source line reads `clock ready`. |
 | DOWNLOADING n% | download arrow, neutral outline, with the time left | The set due now hasn't arrived; Play is disabled until it has |
 | TIGHTENING chip | accent text | Under the badge, only when the tightening rule above holds |
@@ -369,6 +473,20 @@ A repeated event within 10 s gets a count (`×3`) instead of new rows. The Copy 
 | Sky plot and legend | Satellite positions, constellation, signal strength | Counts only today | later (counts now) |
 | NTP servers | Host, stratum, reference, round trip, offset from GPS | `NtpClient` (one server) | partly |
 | Safety check | GPS vs NTP, and its age; PASSED or FAILED | `NtpClient.minusGpsUs` | now |
+
+
+### Tap a source
+
+![](screens/time-signals-sources.png)
+
+The user's request (5 Nov): tapping a node in SOURCES shows what it is. Each node, its line and its label make one 44 px target. The tapped node gets a white ring and a sheet rises: the name and its state (`in charge`, `standing by`, `in use`, `discarded`), a plain definition, then live details. Tap another node to switch; swipe down or × to close. The SOURCES caption reads `Node size = accuracy. Tap a node to see what it is.`
+
+| Node | Definition | Details |
+|---|---|---|
+| Flowtime | The shared clock every phone plays to: UK time, Teddington · Greenwich, following the most accurate source | Source in charge, error, hand-overs this session |
+| GPS | Time from navigation satellites via this phone's GPS chip; the best a phone can get | Satellites used of seen, Gold or Silver, last fix, error; link to Satellites |
+| Hold | This phone's own clock carrying on from the last satellite fix; takes over when GPS drops, error grows with time and temperature | Error now, growth rate, last fix, when internet time would take over; link to Satellites |
+| Internet time server (NTP) | A time server over the internet; S1 is one step from an atomic clock; NPL is the UK's National Physical Laboratory | Server, stratum, reference, round trip, difference from GPS, error, in use or discarded |
 
 ## Calibration
 

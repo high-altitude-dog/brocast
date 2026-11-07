@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=390">
+<title>Time signals sources · Beach Sync</title>
+<!-- Exported from the Beach Sync UI Mock-ups canvas. Static: tokens are in ../tokens.json, behaviour in ../ui-spec.md -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&amp;family=Space+Grotesk:wght@400;500;700&amp;display=swap">
+<style>
+body{margin:0;background:#0A0C0F}
+a{color:#C8FF4D}a:hover{color:#E2FF9E}
+</style>
+</head>
+<body>
+<div style="width: 390px; height: 1200px; box-sizing: border-box; background: #0A0C0F; color: #ECEFF2; font-family: 'Space Grotesk', system-ui, sans-serif; padding: 16px 18px 18px; display: flex; flex-direction: column; gap: 12px; overflow: hidden">
+  <div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 11px; letter-spacing: 0.16em; color: #8B95A1; font-weight: 500">TIME SIGNALS · SOURCES</span>
+  <span style="font-size: 18px; font-weight: 700">Tap a node to see what it is</span>
+  <span style="font-size: 11.5px; color: #8B95A1; line-height: 1.35">Every node, its line and its label are one 44 px target. A sheet rises with a plain definition and live details; tap another node to switch, or swipe down to close.</span></div>
+
+  <div style="background: #12161B; border: 1px solid #222932; border-radius: 14px; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px">
+    <div style="display: flex; justify-content: space-between; align-items: baseline"><span style="font-size: 10.5px; letter-spacing: 0.16em; color: #8B95A1">SOURCES</span>
+    <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px; color: #C8FF4D">GPS in charge · ±400 µs</span></div>
+    <svg width="100%" height="160" viewBox="0 0 350 172" role="img" aria-label="Hold selected. Time sources as nodes sized by accuracy: GPS in charge at plus or minus 400 microseconds, holdover clock 0.6, NTP servers 5 to 9 milliseconds">
+      <line x1="80" y1="48" x2="175" y2="86" stroke="#C8FF4D" stroke-width="2"></line>
+      <line x1="80" y1="128" x2="175" y2="86" stroke="#4A5562" stroke-width="1" stroke-dasharray="4 4"></line>
+      <line x1="270" y1="34" x2="175" y2="86" stroke="#4A5562" stroke-width="1" stroke-dasharray="4 4"></line>
+      <line x1="262" y1="86" x2="175" y2="86" stroke="#4A5562" stroke-width="1" stroke-dasharray="4 4"></line>
+      <line x1="270" y1="138" x2="175" y2="86" stroke="#4A5562" stroke-width="1" stroke-dasharray="4 4"></line>
+      <circle cx="175" cy="86" r="30" fill="#0A0C0F" stroke="#C8FF4D" stroke-width="1.5"></circle>
+      <circle cx="175" cy="86" r="36" fill="none" stroke="#C8FF4D" stroke-opacity="0.2" stroke-width="6"></circle>
+      <text x="175" y="83" text-anchor="middle" font-size="10.5" fill="#ECEFF2" font-family="JetBrains Mono, monospace" font-weight="600">FLOW</text>
+      <text x="175" y="96" text-anchor="middle" font-size="10.5" fill="#ECEFF2" font-family="JetBrains Mono, monospace" font-weight="600">TIME</text>
+      <circle cx="80" cy="48" r="22" fill="#C8FF4D" fill-opacity="0.18" stroke="#C8FF4D" stroke-width="2"></circle>
+      <text x="80" y="52" text-anchor="middle" font-size="12" fill="#ECEFF2" font-weight="700">GPS</text>
+      <text x="80" y="88" text-anchor="middle" font-size="11.5" fill="#C8FF4D" font-family="JetBrains Mono, monospace">±400 µs</text>
+      <circle cx="80" cy="128" r="17" fill="none" stroke="#8B95A1" stroke-width="1.5"></circle>
+      <text x="80" y="132" text-anchor="middle" font-size="10.5" fill="#C4CBD2">HOLD</text>
+      <text x="80" y="164" text-anchor="middle" font-size="11.5" fill="#8B95A1" font-family="JetBrains Mono, monospace">±600 µs</text>
+      <circle cx="270" cy="34" r="9" fill="none" stroke="#8B95A1" stroke-width="1.5"></circle>
+      <text x="284" y="30" font-size="11.5" fill="#C4CBD2">ntp1.npl S1</text>
+      <text x="284" y="44" font-size="11" fill="#8B95A1" font-family="JetBrains Mono, monospace">±5.5 ms</text>
+      <circle cx="262" cy="86" r="8" fill="none" stroke="#8B95A1" stroke-width="1.5"></circle>
+      <text x="274" y="82" font-size="11.5" fill="#C4CBD2">ntp4.npl S1</text>
+      <text x="274" y="96" font-size="11" fill="#8B95A1" font-family="JetBrains Mono, monospace">±7.0 ms</text>
+      <circle cx="270" cy="138" r="7" fill="none" stroke="#8B95A1" stroke-width="1.5"></circle>
+      <text x="284" y="134" font-size="11.5" fill="#C4CBD2">Paris S1</text>
+      <text x="284" y="148" font-size="11" fill="#8B95A1" font-family="JetBrains Mono, monospace">±9.1 ms</text>
+    <circle cx="80" cy="128" r="24" fill="none" stroke="#ECEFF2" stroke-width="1.5"></circle></svg>
+  </div>
+
+  <div role="dialog" aria-labelledby="hold-t" style="background: #12161B; border: 1px solid #2A323C; border-radius: 18px; padding: 8px 14px 14px; display: flex; flex-direction: column; gap: 8px"><span aria-hidden="true" style="width: 36px; height: 4px; border-radius: 2px; background: #4A5562; align-self: center"></span><div style="display: flex; align-items: center; justify-content: space-between"><span style="display: flex; align-items: center; gap: 8px"><svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="7" fill="none" stroke="#8B95A1" stroke-width="1.5"></circle></svg><span id="hold-t" style="font-size: 17px; font-weight: 700">Hold</span><span style="font-size: 12px; color: #8B95A1">standing by</span></span><button aria-label="Close" style="appearance: none; width: 44px; height: 36px; border: none; background: transparent; color: #8B95A1; font-size: 20px">×</button></div><span style="font-size: 12.5px; color: #C4CBD2; line-height: 1.4">This phone’s own clock, carrying on from the last satellite fix. It takes over the moment GPS drops out, and stays very good for a while; its error grows slowly with time and temperature until internet time is better.</span><div style="display: flex; flex-direction: column"><div style="display: flex; justify-content: space-between; gap: 10px; padding: 6px 0; border-bottom: 1px solid #1A1F26; font-size: 12.5px"><span style="color: #8B95A1">Error now</span><span style="font-family: 'JetBrains Mono', ui-monospace, monospace; color: #ECEFF2; text-align: right">±600 µs</span></div><div style="display: flex; justify-content: space-between; gap: 10px; padding: 6px 0; border-bottom: 1px solid #1A1F26; font-size: 12.5px"><span style="color: #8B95A1">Growing by</span><span style="font-family: 'JetBrains Mono', ui-monospace, monospace; color: #ECEFF2; text-align: right">about 5 µs a second</span></div><div style="display: flex; justify-content: space-between; gap: 10px; padding: 6px 0; border-bottom: 1px solid #1A1F26; font-size: 12.5px"><span style="color: #8B95A1">Last satellite fix</span><span style="font-family: 'JetBrains Mono', ui-monospace, monospace; color: #ECEFF2; text-align: right">1 s ago</span></div><div style="display: flex; justify-content: space-between; gap: 10px; padding: 6px 0; font-size: 12.5px"><span style="color: #8B95A1">Would hand over to internet time</span><span style="font-family: 'JetBrains Mono', ui-monospace, monospace; color: #ECEFF2; text-align: right">in about 16 min</span></div></div><a href="satellites.html" style="min-height: 44px; display: flex; align-items: center; font-size: 13px">How satellites set this clock</a></div>
+
+  <div style="display: flex; flex-direction: column; gap: 0">
+    <span style="font-size: 10px; font-weight: 700; letter-spacing: 0.14em; color: #8B95A1">WHAT EACH NODE MEANS</span>
+    <div style="display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 10px; align-items: start; padding: 8px 0; border-bottom: 1px solid #1A1F26"><svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="9" fill="none" stroke="#C8FF4D" stroke-width="1.5"></circle></svg><span style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 13.5px; font-weight: 600">Flowtime</span><span style="font-size: 12px; color: #C4CBD2; line-height: 1.4">The shared clock every Brocast phone plays to: UK time, Teddington · Greenwich. It always follows the most accurate source below. Details: source in charge, error, hand-overs this session.</span></span></div>
+    <div style="display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 10px; align-items: start; padding: 8px 0; border-bottom: 1px solid #1A1F26"><svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="8" fill="#C8FF4D" fill-opacity="0.18" stroke="#C8FF4D" stroke-width="2"></circle></svg><span style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 13.5px; font-weight: 600">GPS</span><span style="font-size: 12px; color: #C4CBD2; line-height: 1.4">Time from navigation satellites, read from this phone’s GPS chip. The best a phone can get, usually well under a millisecond. Details: satellites used of seen, Gold or Silver link, last fix, error; links to Satellites.</span></span></div>
+    <div style="display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 10px; align-items: start; padding: 8px 0; border-bottom: 1px solid #1A1F26"><svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="7" fill="none" stroke="#8B95A1" stroke-width="1.5"></circle></svg><span style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 13.5px; font-weight: 600">Hold</span><span style="font-size: 12px; color: #C4CBD2; line-height: 1.4">This phone’s own clock carrying on from the last satellite fix. Details: error now, how fast it grows, last fix, when internet time would take over.</span></span></div>
+    <div style="display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 10px; align-items: start; padding: 8px 0; border-bottom: 1px solid #1A1F26"><svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="4.5" fill="none" stroke="#8B95A1" stroke-width="1.5"></circle></svg><span style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 13.5px; font-weight: 600">Internet time server (NTP)</span><span style="font-size: 12px; color: #C4CBD2; line-height: 1.4">A time server reached over the internet. S1 means one step from an atomic clock; NPL is the UK’s National Physical Laboratory. Details: server, stratum, its reference, round trip, difference from GPS, error, in use or discarded.</span></span></div>
+  </div>
+  <span style="font-size: 11px; color: #8B95A1; line-height: 1.4">Node size still means accuracy: bigger is better. The selected node gets a white ring.</span>
+</div>
+</body>
+</html>
