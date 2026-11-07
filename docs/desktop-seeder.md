@@ -99,8 +99,66 @@ seeder: {
 }
 ```
 
+## One codebase: station seed servers are headless seeders (user, 7 Nov)
+
+Yes. The station's own seed servers run this app in headless mode, with `role: 'station-seed'`. This also splits the station in two, which is safer:
+
+- **Publisher:** ingests uploads, signs blocks, the catalog and the DHT record, and holds the station key. It runs on a machine you control, can stay offline between editions, and serves nobody.
+- **Seed servers:** headless seeders that hold **no secret key**. A stolen cloud server can't sign anything. They're listed in the catalog's `seeds` with a cost class (next section), signed by the publisher.
+
+## Seeding priority: lowest cost first (user, 7 Nov)
+
+Cloud platforms charge for data leaving them (egress). The cheapest byte is one a peer sends over a network that's already paid for. Every source has a **cost class**:
+
+| Class | Source | Marginal cost |
+|---|---|---|
+| 0 | Peers on the same LAN | none |
+| 1 | Listeners sharing on Wi-Fi, home and venue seeders on flat-rate broadband | none to the station |
+| 2 | Station seed servers on flat-rate hosting | fixed, already paid |
+| 3 | Station seed servers on egress-billed cloud | per GB |
+
+A node's class comes from the catalog for station seeds, or from its signed hello for everyone else. A peer can claim a cheaper class than its real one, but not a station seed's place.
+
+**How the order is enforced with today's APIs:**
+
+1. **Class 3 seeds don't announce on any topic.** Phones find classes 0 to 2 through the swarm, and dial a class 3 seed by key (`joinPeer`) only under **deadline pressure**: buffered audio has fallen below the low watermark and no cheaper peer has the next missing block. They disconnect (`leavePeer`) once a cheaper peer covers them. So cloud egress pays only for music that would otherwise go silent.
+2. **Seed the seeders first:** when a new edition appears, class 2 and 3 seeds serve home and venue seeders (class 1) before any phone. Then the free tier carries it to listeners.
+3. **Super-seeding on paid seeds:** a class 3 seed tries to send each block once to a peer that will pass it on (a sharer or seeder), and refuses receive-only phones unless they're under deadline pressure. Receive-only phones never pass blocks on.
+4. **A hard egress cap** per class 3 seed: a daily budget, by default the provider's free monthly allowance divided by 30. You asked for a cap under the free 200 GiB earlier. Past the budget, the seed serves only phones under deadline pressure, up to a hard stop at 120% of the budget.
+5. **Measured, not assumed:** the ledger counts bytes served and received per cost class. The station's dashboard shows today's cloud egress against the budget and the cost per listener-hour.
+
+**Gaps:** Hypercore picks peers itself among those holding a block, so we control cost at the connection level (who we're connected to), not per request. Rate limits and a per-request priority hook would make this exact. Add both to the asks for the Pears developers.
+
+## Resource safety: never hang the machine (user, 7 Nov)
+
+A seeder must stay a good guest on a computer someone is using, including this one, which runs from a USB drive.
+
+- **Low priority by default:** nice 19 and the idle I/O class on Linux; background QoS on macOS; below-normal priority on Windows.
+- **Hard budgets, with sensible defaults the user can change:**
+
+  | Budget | Default |
+  |---|---|
+  | Memory (RSS) | 512 MB |
+  | Connections | 32 |
+  | Requests in flight | about 300 KB |
+  | Disk writes | 20 MB/s |
+  | Free-disk floor | 10%, and at least 5 GB |
+  | Upload | uncapped on unmetered connections |
+
+- **Back off under pressure (Linux, PSI):** the same rules as the `usb-cooldown` skill. If I/O pressure stays above 70% for 2 minutes, the swarm suspends for at least 60 s, and resumes only once pressure is under 30%. CPU and memory pressure work the same way. On macOS and Windows, use event-loop lag and the OS's thermal state.
+- **Watchdog:** if the event loop lags by more than 500 ms, halve the connections and requests in flight. If memory nears the cap, shrink caches first, then connections.
+- **Throttled persistence:** batch syncs to disk, and never sync once per block, so a cheap drive isn't hammered.
+- **Visible:** the status page names any back-off and its reason (`PAUSED · disk busy 82%`), the same way phones name their Auto reason.
+
+## A browser page on a local machine (user, 7 Nov: may seed or co-seed from one)
+
+Today's stack can't seed from inside a browser tab (checked 7 Nov): Hypercore's storage needs native RocksDB, and the transport is native UDP. A browser peer would need an old Hypercore, a different storage layer and a WebSocket bridge to the DHT (`@hyperswarm/dht-relay`), and that bridge is itself a server to pay for. It also stops when the tab closes.
+
+**The design instead:** the seeder runs as a local process (headless mode), and the **browser page is its control panel and dashboard**. It's served by the seeder at `http://127.0.0.1:<port>/`, using the same status snapshot as the desktop UI. So "seeding from a browser page" means opening a page, and closing the page doesn't stop the seeding. The local web UI listens on loopback only, checks the `Host` header, and needs a per-run token in the URL, so other websites can't drive it.
+
 ## Open questions
 
 1. Does the current Pear runtime still support `pear run` with pinned links and the update flow described above? Check before building.
 2. Who runs the first seeders besides you? (Settled, 7 Nov: no local-only mode. Any station must be reachable globally by anyone who selects it.)
 3. A seeder doesn't build files. Should it offer "export the library as files", for backups?
+4. Which cloud provider and egress price should the default budget assume? (Your earlier note: stay under the free 200 GiB.)

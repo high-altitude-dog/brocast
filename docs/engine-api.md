@@ -66,7 +66,7 @@ Reserved for later: `publishHeadsetResult` (design §7).
   swarm: {
     connected, relayed, foundNotConnected, shard, shards,
     stations: [{ key, via, rttMs, toYouBps }],
-    peers: [{ key, nym, via: lan|direct|holepunched|relayed, rttMs, toYouBps, fromYouBps, engine, wire, sinceSec }]  // busiest 16
+    peers: [{ key, nym, role: listener|seeder|station-seed, cost: 0|1|2|3, via: lan|direct|holepunched|relayed, rttMs, toYouBps, fromYouBps, engine, wire, sinceSec }]  // busiest 16
   },
   buffer: {
     playheadG, aheadSec, holes: [[g, n]], fillX,       // fillX: arrival rate as a multiple of real time, null when steady
@@ -78,7 +78,8 @@ Reserved for later: `publishHeadsetResult` (design §7).
   ledger: {                                           // per network, since local midnight and this calendar month
     today: { wifi: { downBytes, upBytes }, metered: { downBytes, upBytes } },
     month: { wifi: {...}, metered: {...} },
-    overheadPct, duplicatePct, dhtBytes
+    overheadPct, duplicatePct, dhtBytes,
+    byCost: { 0: { downBytes, upBytes }, 1: {...}, 2: {...}, 3: {...} }   // seeding priority (desktop-seeder.md)
   },
   listeners: { estimate, errorPct, sharers, censusSharers }   // censusSharers null until shards exist
   pears: { dhtNodesToday, relaysUsed, blindPeers }             // help from the wider Pears network (design §10)
