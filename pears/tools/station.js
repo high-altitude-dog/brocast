@@ -1,0 +1,64 @@
+// The station's seed server for step 0: puts each Opus set in its own core as blocks of N seconds, publishes the
+// catalog, and serves. Prints `READY <catalog key> <station key>`, then a JSON summary on SIGTERM.
+// Usage: node tools/station.js --dir D --seed-file F --library DIR --block-seconds N  (BOOTSTRAP env: JSON host/port list)
+import fs from 'node:fs'
+import path from 'node:path'
+import crypto from 'hypercore-crypto'
+import { Mesh, hex } from '../engine/mesh.js'
+import { blocks, FORMAT } from '../engine/blocks.js'
+import { buildOgg, serialOf, sha256 } from '../engine/builder.js'
+
+const arg = (k, d) => { const i = process.argv.indexOf('--' + k); return i > 0 ? process.argv[i + 1] : d }
+const dir = arg('dir')
+const seedFile = arg('seed-file')
+const library = arg('library')
+const blockSeconds = Number(arg('block-seconds', 1))
+const bootstrap = process.env.BOOTSTRAP ? JSON.parse(process.env.BOOTSTRAP) : undefined
+
+if (!fs.existsSync(seedFile)) fs.writeFileSync(seedFile, crypto.randomBytes(32), { mode: 0o600, flag: 'wx' })
+const mesh = new Mesh({ dir, seed: fs.readFileSync(seedFile), bootstrap })
+const store = mesh.store.namespace('blocks-' + blockSeconds)
+
+const items = []
+for (const name of fs.readdirSync(library).filter((f) => f.endsWith('.opus')).sort()) {
+  const id = name.replace(/\.opus$/, '')
+  const core = store.get({ name: 'set/' + id })
+  await core.ready()
+  if (core.length === 0) {
+    const all = blocks(path.join(library, name), blockSeconds)
+    for (let i = 0; i < all.length; i += 256) await core.append(all.slice(i, i + 256))
+  }
+  const all = []
+  for (let i = 0; i < core.length; i++) all.push(await core.get(i))
+  const sha = sha256(buildOgg(serialOf(core.key), all)) // the hash of the file every phone will build
+  items.push({ id, title: id, artist: '', blocks: core.length, seconds: core.length * blockSeconds, core: hex(core.key), sha256: sha })
+}
+
+const catalog = store.get({ name: 'catalog' })
+await catalog.ready()
+if (catalog.length === 0) {
+  await catalog.append(Buffer.from(JSON.stringify({
+    edition: 1, start_ns: 0, block_format: FORMAT, block_seconds: blockSeconds, seeds: [hex(mesh.keyPair.publicKey)], items
+  })))
+}
+
+const uploads = new Map()
+for (const it of items) {
+  store.get({ key: Buffer.from(it.core, 'hex') }).on('upload', (index, bytes, to) => {
+    const k = hex(to.remotePublicKey).slice(0, 8)
+    uploads.set(k, (uploads.get(k) || 0) + bytes)
+  })
+}
+
+mesh.swarm.join(catalog.discoveryKey, { server: true, client: false })
+await mesh.swarm.flush()
+const gossip = setInterval(() => mesh.gossip(), 2000)
+console.log('READY', hex(catalog.key), hex(mesh.keyPair.publicKey))
+
+process.on('SIGTERM', async () => {
+  clearInterval(gossip)
+  const summary = { uploads: Object.fromEntries(uploads), uploaded: [...uploads.values()].reduce((a, b) => a + b, 0), wire: mesh.wire(), sketch: mesh.sketch.estimate() }
+  console.log('SUMMARY', JSON.stringify(summary))
+  await mesh.close()
+  process.exit(0)
+})

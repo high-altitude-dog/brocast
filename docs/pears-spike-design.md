@@ -26,7 +26,8 @@ Not used: **Hyperdrive** for audio (see §2), **Autobase** (there's one writer, 
 - **Ingest:** the station splits `set.opus` into 1 s blocks with the same logic as `OpusBlocks`, then appends them. A set core is complete once written. Live shows later reuse the same model, at one append a second.
 - **Fetch order:** a deadline scheduler, the same idea as `FetchPlan`. In order: a hole in the next 10 s; the playhead up to the low watermark, in order; then the rest of the horizon. A block that's late gets asked of two peers at once.
 - **Storage:** played blocks outside Keep are freed with `core.clear()`. Keep marks a set core so that it's never cleared. The Archive limit is the eviction budget.
-- **Block length:** 1 s now. Step 0 also measures 2 s and 4 s for proof overhead and request count.
+- **Block length:** the block on the wire (the transport block) and the block on the timeline are separate. The timeline, the ring and the Buffer screen stay at 1 s. Each set's transport block length is a field in the catalog (`block_seconds`), so the station can change it without an app update, and the phone splits each transport block back into 1 s blocks. Step 0 measured 1, 2, 4 and 8 s: see `pears-spike-results.md`.
+- **Finished files (user, 7 Nov):** a set is built as an Ogg Opus file in `music/.building/<id>.opus`, block by block in timeline order. The layout is canonical, so the station publishes the finished file's SHA-256 in the catalog. Once whole, the file is checked against that hash, synced to disk and renamed into `music/<id>.opus`; a rename on the same disk is atomic. So `music/` only ever holds whole, verified files. The existing player (`OpusFile`, `LocalSupply`) plays them unchanged. They are plain files, so they survive any engine update or rollback. A leftover in `.building/` after a crash is rebuilt from the store.
 
 ## 3. Identity
 
@@ -50,7 +51,7 @@ Not used: **Hyperdrive** for audio (see §2), **Autobase** (there's one writer, 
 
 Turning it on, at once: leave every topic, close all listener connections, stop the sketch and stop serving blocks. Missing blocks come only from the station's seed servers, dialled by key, so only the station sees the phone's address. Already-held blocks keep playing in sync. Turning it off restores the saved choices.
 
-**Unproven:** whether Hypercore 11 can refuse uploads on a connection that stays open. If it can't, "receiving only" (sharing paused) also limits itself to seed servers, and listeners can't send to it.
+**Receiving only (sharing paused, or on mobile data):** Hypercore 11 always tells peers it is uploading and serves any block it holds. Its wire protocol already has an `uploading` flag that peers obey, but no public API sets it. Until it does, a phone that isn't sharing copies each verified block into its `.building` file and clears it from the core, so peers find nothing to ask for. Step 0 showed this works: 0 bytes uploaded, while most of its blocks came from listeners. Better: ask the Pears developers for a public `setUploading(false)`.
 
 ## 6. Resource profile (new: your 7 Nov request)
 
@@ -104,6 +105,32 @@ The listener chooses how much data, battery, memory and storage the mesh may use
 - **Measured:** time to first block; time to fill 5 min and 2 h; per-block latency (p50, p95, max); the fraction of blocks from listeners; wire bytes over audio bytes (proof overhead); RSS and CPU per process; and whether a phone can refuse uploads (§5).
 - Load `usb-cooldown` before `npm install`. Results go in `docs/pears-spike-results.md`.
 
+## 10. Using every Pears node, not just Brocast listeners (user, 7 Nov)
+
+Other Pears apps' users don't hold our audio, so they can't carry its bandwidth unless they choose to. They can help with everything else:
+
+1. **The public HyperDHT** is run by every Pears app's long-lived nodes. It already finds our peers and coordinates hole punching. Phones stay ephemeral; desktop seeders run as full DHT nodes, so Brocast gives back.
+2. **DHT records:** the station signs a small mutable record holding the newest catalog length and the seed keys, stored on the DHT. Phones then learn about new editions even with the station offline, which is the unplug demo. To confirm: whether a third party can re-put a station-signed record when it expires.
+3. **Blind relays:** when hole punching fails (carrier-grade NAT on both phones), traffic goes through a blind relay, which can't read it. Holepunch runs relays for its own apps, and using them needs their OK. Any Brocast desktop seeder can also act as a relay.
+4. **Blind peers** (`blind-peering`): always-on nodes that keep cores available, as Keet uses. This is the most direct way existing Pears infrastructure could carry our library. Ask whether a pool exists for showcase apps.
+5. **A desktop seeder for any Pears user:** `pear run pear://<key>`, one command, the same engine and resource profile, seeding the library from a home computer. This is how Pears users who aren't phone listeners can carry the bandwidth.
+
+## 11. An engine the app can update and roll back (user, 7 Nov)
+
+Pears modules change often, and peers on different versions can fail to talk, as seen with Keet. So the engine is a separate module the app can swap.
+
+- **Two layers:** a stable host in the APK (Kotlin, bare-kit and the native add-ons: udx, RocksDB, sodium) and a **JS engine bundle** (made with `bare-pack`) that runs in the worklet. Only the bundle updates over the air. A native change ships through the store.
+- **A narrow, versioned contract:** the host speaks engine API vN over `bare-rpc`: start (profile, identity), block(n), status stream, set policy, suspend, resume, stop. Each bundle declares the API versions, native add-on versions, wire protocol and storage format it supports. The host refuses a bundle that doesn't match.
+- **Releases come over the mesh:** a release core signed by a separate release key, kept offline. Each record holds the version, bundle hash and size, API, native add-ons, wire and storage versions, and a rollout percentage. HTTPS is the fallback.
+- **Slots:** current, previous (last known good) and candidate are all kept on the phone.
+- **Health gate:** the candidate must boot within 5 s, complete the API handshake, read the catalog, verify a set number of blocks, and run 10 minutes of playback without a crash. If it passes, it becomes current. If it fails, the app rolls back to the last good version at once and blocks that version on this phone.
+- **Never mid-music:** the switch happens at Stop or when idle. Playback never depends on the engine anyway, because finished files play from `music/`.
+- **Listener control:** Settings › Advanced › Engine shows the current version and lets the listener roll back, pin a version, or turn auto-update off.
+- **Storage is never migrated in place:** the identity seed belongs to the host, not the engine, and finished music is plain files. Each storage format gets its own store (`store-v<N>/`). An engine with a new format starts a fresh store and re-fetches what it needs. The old store stays until the new one has been healthy for 24 h, so a rollback is instant.
+- **Mixed versions on the wire:** the swarm topic includes the wire protocol's major version. An engine that speaks two versions joins both topics during a transition, and seed servers run one process per supported major version. Peers swap engine versions in a hello message, so the Swarm screen can show the mix of versions.
+- **Staged rollout:** a phone takes a release only if `hash(its key)` falls under the rollout percentage.
+- **Store policy risk (needs your decision):** Google Play forbids downloading executable code from outside Play, except code run in a VM or interpreter with only indirect access to Android APIs. JS in Bare with no new native code is close to that exception, but Bare's add-ons reach native code, so whether it qualifies is unclear. For the alpha and beta, distributing the APK directly sidesteps the question.
+
 ## 9. Decisions and open questions
 
 **Decided by the user, 7 Nov:**
@@ -112,7 +139,10 @@ The listener chooses how much data, battery, memory and storage the mesh may use
 - The listener count is an estimate, shown with `≈` (§4).
 - The rule of no Pears branding and nothing that implies endorsement stays until the user says otherwise. The Pears.com submission doesn't need either inside the app.
 
+- The Light, Balanced and Generous presets, with Balanced as the default, plus Auto mode (approved for now).
+- Partly built sets live in `music/.building/` and move to `music/` only when whole.
+
 **Still open:**
 
-1. **Where the code lives:** the brief says `pears/` in this worktree, but the user started this session in an empty `~/Documents/pears-engine`. The recommendation is the worktree, as briefed, kept as a standalone package so it can move later.
-2. Are the **Light, Balanced and Generous** presets right, with Balanced as the default, plus Auto mode?
+1. **Where the code lives:** the code is in `pears/` in this worktree, as the brief said. The user didn't answer.
+2. Over-the-air engine updates versus store policy (§11).
