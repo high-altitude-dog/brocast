@@ -33,12 +33,13 @@ fun StereoScreen(state: BenchState, actions: BenchActions, back: () -> Unit) {
         Card {
             BasicText("THIS PHONE PLAYS", style = Tokens.Text.cardLabel.style())
             // Headphones already give each ear its own side, so the choice is locked to Both there.
-            Segmented("Channel", listOf("Both", "Left", "Right"), if (headphones) Renderer.BOTH else state.channel, !headphones) { actions.setChannel(it) }
+            val order = listOf(Renderer.LEFT, Renderer.BOTH, Renderer.RIGHT)
+            Choice(listOf("Left", "Stereo", "Right"), order.indexOf(if (headphones) Renderer.BOTH else state.channel), { actions.setChannel(order[it]) }, enabled = !headphones)
             BasicText(
                 when {
-                    headphones -> "Headphones are the output, so this stays on Both. Stereo is for speakers."
-                    running -> "Changes at once, while the music plays."
-                    else -> "Used from the next Play."
+                    headphones -> "Headphones are the output, so this stays on Stereo. Left and Right are for speakers."
+                    running -> "Changes at once, while the music plays. Back to Stereo every app start; also changeable from Now playing by press and hold."
+                    else -> "Used from the next Play. Back to Stereo every app start."
                 },
                 style = Tokens.Text.small.style(Ink.textSecondary),
             )

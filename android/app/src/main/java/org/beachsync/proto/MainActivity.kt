@@ -1,5 +1,14 @@
 package org.beachsync.proto
 
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
+import android.os.SystemClock
+import org.beachsync.proto.ui.PocketGuard
+import org.beachsync.proto.ui.DataSharingScreen
+import org.beachsync.proto.ui.DataSharingAdvancedScreen
+import org.beachsync.proto.ui.DataLogScreen
 import android.Manifest
 import android.content.pm.PackageManager
 import android.graphics.Color
@@ -71,8 +80,21 @@ class MainActivity : ComponentActivity(), BenchActions {
 
     override fun onStop() { visible = false; if (session == null) stopIdle(); super.onStop() }
 
+    private val proximity = object : SensorEventListener {
+        override fun onSensorChanged(e: SensorEvent) { PocketGuard.covered = e.values[0] < e.sensor.maximumRange.coerceAtMost(5f) }
+        override fun onAccuracyChanged(s: Sensor?, a: Int) {}
+    }
+
+    override fun onPause() {
+        getSystemService(SensorManager::class.java).unregisterListener(proximity)
+        PocketGuard.covered = false
+        super.onPause()
+    }
+
     override fun onResume() {
         super.onResume()
+        PocketGuard.resumedAt = SystemClock.uptimeMillis()
+        getSystemService(SensorManager::class.java).let { sm -> sm.getDefaultSensor(Sensor.TYPE_PROXIMITY)?.let { sm.registerListener(proximity, it, SensorManager.SENSOR_DELAY_NORMAL) } }
         val bluetooth = getSystemService(AudioManager::class.java).getDevices(AudioManager.GET_DEVICES_OUTPUTS)
             .any { it.type == AudioDeviceInfo.TYPE_BLUETOOTH_A2DP || it.type == AudioDeviceInfo.TYPE_BLE_HEADSET }
         if (bluetooth && !askedForHeadsetName && checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
@@ -114,7 +136,7 @@ class MainActivity : ComponentActivity(), BenchActions {
             var logLane by remember { mutableStateOf<Lane?>(null) }
             BackHandler(page != home) {
                 if (page == Page.EARCUP) cancelEarcup()
-                page = when (page) { Page.LOG, Page.NUDGE -> from; Page.EARCUP -> Page.CALIBRATION; else -> home }
+                page = when (page) { Page.LOG, Page.NUDGE -> from; Page.EARCUP -> Page.CALIBRATION; Page.ADVANCED, Page.DATALOG -> Page.DATA; Page.DATA -> Page.SETTINGS; else -> home }
             }
             when (page) {
                 Page.NOW -> NowPlaying(state, this, { logLane = null; from = Page.NOW; page = Page.LOG }, { from = Page.NOW; page = Page.NUDGE }, { page = Page.BENCH }, { page = Page.SETTINGS }, { page = Page.SIGNALS }, { page = Page.CALIBRATION }, { page = Page.SATELLITES }, { page = Page.STEREO }, { page = Page.ARTIST }, { page = Page.SWARM }, { page = Page.BUFFER })
@@ -128,7 +150,10 @@ class MainActivity : ComponentActivity(), BenchActions {
                 Page.SWARM -> SwarmScreen { page = home }
                 Page.BUFFER -> BufferScreen(state, { page = home }) { page = Page.SWARM }
                 Page.SATELLITES -> SatellitesScreen(state, this, { page = home }, { page = Page.SIGNALS })
-                Page.SETTINGS -> SettingsPage(state, this, { page = home }, { page = Page.CALIBRATION }, { page = Page.SATELLITES }, { page = Page.SYNC }, { page = Page.BEAT }, { page = Page.STEREO })
+                Page.SETTINGS -> SettingsPage(state, this, { page = home }, { page = Page.CALIBRATION }, { page = Page.SATELLITES }, { page = Page.SYNC }, { page = Page.BEAT }, { page = Page.STEREO }, { page = Page.DATA })
+                Page.DATA -> DataSharingScreen({ page = Page.SETTINGS }, { page = Page.DATALOG }, { page = Page.ADVANCED })
+                Page.ADVANCED -> DataSharingAdvancedScreen { page = Page.DATA }
+                Page.DATALOG -> DataLogScreen { page = Page.DATA }
                 Page.BENCH -> TestBench(state, this, { logLane = it; from = Page.BENCH; page = Page.LOG }, { from = Page.BENCH; page = Page.NUDGE })
                 Page.LOG -> EventLogScreen(state, logLane) { page = from }
                 Page.NUDGE -> StreamGapScreen(state, this) { page = from }
@@ -138,6 +163,8 @@ class MainActivity : ComponentActivity(), BenchActions {
 
     override fun onDestroy() {
         if (onRunStopped === runStopped) onRunStopped = null
+        // Closing the app (Back out of it, or finished) stops the music. Home, the screen going off or a rotation don't.
+        if (isFinishing && !isChangingConfigurations && session != null) { stopRun(); SessionService.end(this) }
         super.onDestroy()
     }
 
@@ -281,7 +308,7 @@ class MainActivity : ComponentActivity(), BenchActions {
         state.url = prefs.getString(KEY_URL, "http://192.168.1.10:8080") ?: ""
         state.stream = prefs.getBoolean(KEY_STREAM, false)
         state.policy = when (prefs.getString(KEY_POLICY, "AUTO")) { "GPS" -> Policy.GPS_ONLY; "NTP" -> Policy.NTP_ONLY; else -> Policy.AUTO }
-        state.channel = when (prefs.getString(KEY_CHANNEL, "BOTH")) { "LEFT" -> Renderer.LEFT; "RIGHT" -> Renderer.RIGHT; else -> Renderer.BOTH }
+        state.channel = Renderer.BOTH   // Stereo at every app start (hand-off 18); a change lasts until the app restarts
         state.pitch = prefs.getString(KEY_PITCH, "2000") ?: "2000"
         state.lag = prefs.getString(KEY_LAG, "0") ?: "0"
         state.satellites = prefs.getBoolean(KEY_SATELLITES, true)
@@ -301,7 +328,7 @@ class MainActivity : ComponentActivity(), BenchActions {
             .apply()
     }
 
-    private enum class Page { NOW, BENCH, LOG, NUDGE, SETTINGS, SIGNALS, CALIBRATION, EARCUP, SATELLITES, SYNC, BEAT, STEREO, ARTIST, SWARM, BUFFER }
+    private enum class Page { NOW, BENCH, LOG, NUDGE, SETTINGS, SIGNALS, CALIBRATION, EARCUP, SATELLITES, SYNC, BEAT, STEREO, ARTIST, SWARM, BUFFER, DATA, ADVANCED, DATALOG }
 
     companion object {
         /** Kept outside the activity, so a test run survives the screen being rebuilt. */

@@ -11,7 +11,9 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -26,6 +28,9 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -38,6 +43,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -61,6 +67,7 @@ import kotlin.math.sin
 object DemoMesh {
     const val NYM = "AMBER FIG HERON"
     const val LISTENERS = 12
+    const val LISTENING = "≈ 1.2 M"   // the mesh's estimate of everyone listening, always with ≈ (hand-off 21)
     const val AHEAD_TEXT = "6 h 12 m"
     class Peer(val key: String, val relayed: Boolean, val toYouKbps: Int, val fromYouKbps: Int)
     val peers = listOf(
@@ -74,10 +81,10 @@ object DemoMesh {
 }
 
 @Composable
-private fun DemoBanner() {
+internal fun DemoBanner(text: String = "Made up until the Pears spike links the real swarm.") {
     Row(Modifier.fillMaxWidth().background(Ink.surface, RoundedCornerShape(Tokens.Radius.tile.dp)).border(Tokens.Stroke.card.dp, Ink.warn, RoundedCornerShape(Tokens.Radius.tile.dp)).padding(10.dp)) {
         BasicText("DEMO DATA  ", style = Tokens.Text.cardLabel.style(Ink.warn))
-        BasicText("Made up until the Pears spike links the real swarm.", style = Tokens.Text.small.style(Ink.textSecondary))
+        BasicText(text, style = Tokens.Text.small.style(Ink.textSecondary))
     }
 }
 
@@ -202,7 +209,9 @@ fun BufferScreen(state: BenchState, back: () -> Unit, openSwarm: () -> Unit) {
     val lib = state.library
     val item = nowPlayingItem(lib, boot)
     val utc = FlowTime.fit()?.utcAt(boot) ?: (System.currentTimeMillis() * 1_000_000L)
+    var picked by remember { mutableStateOf<Int?>(null) }
     val upNext = lib?.let { l -> editionAt(l.editions, utc)?.items?.let { items -> items.indexOf(item).let { i -> if (i < 0) emptyList() else items.drop(i + 1) + items.take(i) } } }.orEmpty().take(3)
+    Box(Modifier.fillMaxSize()) {
     Column(
         Modifier.fillMaxSize().background(Ink.bg).safeDrawingPadding().verticalScroll(rememberScrollState())
             .padding(top = Tokens.Space.screenPaddingTop.dp, start = Tokens.Space.screenPaddingSide.dp, end = Tokens.Space.screenPaddingSide.dp, bottom = Tokens.Space.screenPaddingBottom.dp),
@@ -213,7 +222,10 @@ fun BufferScreen(state: BenchState, back: () -> Unit, openSwarm: () -> Unit) {
         BasicText(item?.title ?: "Beach Sync Radio", style = Tokens.Text.bodyStrong.style(), maxLines = 2, overflow = TextOverflow.Ellipsis)
         item?.artist?.ifEmpty { null }?.let { BasicText(it, style = Tokens.Text.small.style(Ink.textSecondary)) }
         BasicText("● Filling · ${DemoMesh.AHEAD_TEXT} ahead", style = Tokens.Text.bodyStrong.style(Ink.accent))
-        Canvas(Modifier.fillMaxWidth().height(150.dp).semantics { contentDescription = "Buffer timeline: five seconds played, the next twelve seconds block by block, then everything downloaded to the frontier six hours ahead, then not yet. Demo data." }) {
+        BasicText("Tap any block near the playhead to see where it came from and why it can be trusted.", style = Tokens.Text.small.style(Ink.textSecondary))
+        Canvas(Modifier.fillMaxWidth().height(150.dp).pointerInput(Unit) {
+            detectTapGestures { p -> val v = p.x / (size.width / 390f); if (v >= 60f && v < 204f) picked = ((v - 60f) / 12f).toInt() }
+        }.semantics { contentDescription = "Buffer timeline: five seconds played, the next twelve seconds block by block, then everything downloaded to the frontier six hours ahead, then not yet. Demo data." }) {
             val f = size.width / 390f
             val mid = 74.dp.toPx(); val h = 44.dp.toPx()
             fun x(v: Float) = v * f
@@ -224,6 +236,7 @@ fun BufferScreen(state: BenchState, back: () -> Unit, openSwarm: () -> Unit) {
                 drawRect(Ink.accent.copy(alpha = 0.10f), Offset(x(60f + s * 12f) + 0.5f, mid - h / 2f), Size(11f * f, h))
                 for (b in 0 until 4) { val l = loudness(100 + s * 4 + b); drawRect(Ink.accent, Offset(x(60f + s * 12f + b * 3f), mid - h * 0.5f * l), Size(2f * f, h * l)) }
             }
+            picked?.let { s -> drawRect(Ink.text, Offset(x(60f + s * 12f) - 1.dp.toPx(), mid - h / 2f - 3.dp.toPx()), Size(11f * f + 2.dp.toPx(), h + 6.dp.toPx()), style = Stroke(1.5.dp.toPx())) }
             // Downloaded, far: a loudness band at 55%, on a log axis.
             var px = x(204f)
             while (px < x(330f)) { val l = loudness((px / 3f).toInt() + 300); drawRect(Ink.accent.copy(alpha = 0.55f), Offset(px, mid - h * 0.5f * l), Size(2.2f * f, h * l)); px += 3f * f }
@@ -267,5 +280,7 @@ fun BufferScreen(state: BenchState, back: () -> Unit, openSwarm: () -> Unit) {
                 }
             }
         }
+    }
+    picked?.let { BlockProvenanceSheet(it, utc, item?.id?.toString() ?: "set") { picked = null } }
     }
 }

@@ -28,11 +28,15 @@ class Playout(
     @Volatile var error: String? = null
     /** A temporary diagnostic offset on top of the headphone lag, in ns, set from the Sync view. Larger plays earlier. 0 unless someone is testing. */
     @Volatile var extraLagNs = 0L
+    /** Silenced for a phone call. Volume only: the timeline keeps running, so the music comes back in sync. */
+    @Volatile var muted = false
+        set(v) { field = v; track?.setVolume(if (v) 0f else 1f) }
 
     override fun run() {
         Process.setThreadPriority(Process.THREAD_PRIORITY_URGENT_AUDIO)
         val t = try { makeTrack() } catch (e: Exception) { error = e.toString(); state = "audio failed"; return }
         track = t
+        if (muted) t.setVolume(0f)
         val buf = FloatArray(CHUNK * 2)
         val ts = AudioTimestamp()
         var written = 0L

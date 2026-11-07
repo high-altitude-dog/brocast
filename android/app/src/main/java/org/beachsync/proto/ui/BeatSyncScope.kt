@@ -54,21 +54,27 @@ fun BeatSyncScope(state: BenchState, back: () -> Unit) {
     val utc = if (s != null && fit != null && m != null) fit.utcAt(frame) - Math.round(screenMs * 1e6) else null
     val rate = 48000.0
     val pos = if (utc != null && m != null) (utc - m.startNs - m.dMs * 1_000_000L).toDouble() * rate / 1e9 else Double.NaN
+    // The set's own grid, worked out after download, comes first; the live tracker is only a fallback until it's ready.
+    val lib = state.library
+    val setBeat = if (s != null && s.s.library && lib != null && utc != null && !pos.isNaN()) libraryBeat(lib, utc, pos) else null
     val gridMap = track?.grids
     val window = if (pos.isNaN()) 0L else BeatTrack.windowAt(pos.toLong())
     val known = gridMap != null && (0L..2L).all { gridMap.containsKey(window + it) }
     val grid = gridMap?.let { BeatGrid.resolve(window, it) }
     // Where we are in the grid.
     var beatFrac = 0.0; var beatInBar = 0; var sinceBeat = Double.POSITIVE_INFINITY
-    if (grid != null && !pos.isNaN()) {
+    if (setBeat != null) {
+        beatFrac = setBeat.beatFrac; beatInBar = setBeat.beatInBar; sinceBeat = setBeat.sinceBeatSamples
+    } else if (grid != null && !pos.isNaN()) {
         val x = (pos - grid.phaseSample) / grid.periodSamples
         val k = Math.floor(x)
         beatFrac = x - k
         beatInBar = Math.floorMod(k.toLong() - grid.barOffset, 4L).toInt()
         sinceBeat = beatFrac * grid.periodSamples
     }
-    val sweep = if (grid == null) 0f else if (perBar) ((beatInBar + beatFrac) / 4.0).toFloat() else beatFrac.toFloat()
-    val flashNow = flashOn && grid != null && sinceBeat < 0.05 * rate && (!perBar || beatInBar == 0)
+    val haveBeat = setBeat != null || grid != null
+    val sweep = if (!haveBeat) 0f else if (perBar) ((beatInBar + beatFrac) / 4.0).toFloat() else beatFrac.toFloat()
+    val flashNow = flashOn && haveBeat && sinceBeat < 0.05 * rate && (!perBar || beatInBar == 0)
     Box(Modifier.fillMaxSize()) {
         Screen {
             ScreenHeader("Beat sync view", back)
@@ -86,10 +92,11 @@ fun BeatSyncScope(state: BenchState, back: () -> Unit) {
                 }
                 BasicText(
                     when {
+                        setBeat != null -> "%.1f beats per minute · bar %d · beat %d of 4 · worked out in advance".format(Locale.ROOT, setBeat.bpm, setBeat.bar + 1, beatInBar + 1)
                         grid != null -> "%.1f beats per minute · beat %d of 4 · confidence %.0f%%".format(Locale.ROOT, 60 * rate / grid.periodSamples, beatInBar + 1, grid.confidence * 100)
                         known -> "No clear beat in this stretch of music."
                         else -> "Listening for the beat… (needs about 16 s of music)"
-                    },
+                    } + (org.beachsync.proto.SetBeatAnalyser.current()?.working?.let { (title, pct) -> if (setBeat == null) "\nFinding the beats and bars in $title: $pct%" else "" } ?: ""),
                     style = Tokens.Text.small.style(Ink.textSecondary),
                 )
                 ClockLine(s!!, frame)
@@ -111,4 +118,12 @@ fun BeatSyncScope(state: BenchState, back: () -> Unit) {
         // The flash covers the whole screen, over everything else.
         if (flashNow) Box(Modifier.fillMaxSize().background(Color.White))
     }
+}
+
+/** The beat at stream sample [pos], from the playing set's own grid, or null if that set's grid isn't worked out yet. */
+internal fun libraryBeat(lib: org.beachsync.proto.LibraryStore, utc: Long, pos: Double): org.beachsync.proto.SetBeats.Pos? {
+    val e = org.beachsync.proto.editionAt(lib.editions, utc) ?: return null
+    val n = Math.floorDiv(Math.floor(pos).toLong(), 48000L)
+    val (item, block) = e.at(n) ?: return null
+    return lib.beats(item.id)?.at(block * 48000.0 + (pos - n * 48000.0))
 }

@@ -111,6 +111,8 @@ fun NowPlaying(state: BenchState, actions: BenchActions, openLog: () -> Unit, op
     val dueMissing = playing != null && !lib.file(playing.first.id).exists()
     val ahead = lib?.let { l -> editionAt(l.editions, utcNow)?.let { ed -> playing?.let { aheadSeconds(ed, it.first, it.second) { item -> l.file(item.id).exists() } } } }
     val everythingHere = lib != null && playing != null && !dueMissing && ahead == null
+    val chUi = rememberChannelUi()
+    Box(Modifier.fillMaxSize()) {
     Column(
         Modifier.fillMaxSize().background(Ink.bg).safeDrawingPadding().verticalScroll(rememberScrollState())
             .padding(top = Tokens.Space.screenPaddingTop.dp, start = Tokens.Space.screenPaddingSide.dp, end = Tokens.Space.screenPaddingSide.dp, bottom = Tokens.Space.screenPaddingBottom.dp),
@@ -126,9 +128,10 @@ fun NowPlaying(state: BenchState, actions: BenchActions, openLog: () -> Unit, op
                 if (silentS > 0) BasicText("Starts in ${silentS / 60}:${"%02d".format(silentS % 60)}", style = Tokens.Text.small.style(Ink.accent).copy(fontSize = 13.sp), maxLines = 1)
                 else playing?.first?.artist?.ifEmpty { null }?.let { BasicText(it, style = Tokens.Text.small.style(Ink.textSecondary).copy(fontSize = 13.sp), maxLines = 1, overflow = TextOverflow.Ellipsis) }
             }
-            StereoChip(state.channel, actions.output().kind == org.beachsync.proto.OutputKind.HEADPHONES, openStereo)
+            ChannelChip(chUi, state.channel, actions.output().kind == org.beachsync.proto.OutputKind.HEADPHONES)
             KeptBadge()
         }
+        ChannelHint(chUi)
         LibraryLine(state.library)
         Dial(s, s?.gps ?: state.idleGps, boot, state.localTime, lagUncNs, openSatellites)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Top) {
@@ -147,6 +150,8 @@ fun NowPlaying(state: BenchState, actions: BenchActions, openLog: () -> Unit, op
             Tile("AHEAD", aheadText(lib != null && playing != null, everythingHere, ahead), if (everythingHere) "all downloaded" else "downloaded", Modifier.weight(1f).clickable(role = Role.Button, onClick = openBuffer))
         }
         Card { SatellitesRow(state.satellites, actions::setSatellites, "Position stays on this phone · off = Privacy mode") }
+    }
+    ChannelOverlays(chUi, state, actions)
     }
 }
 
@@ -206,12 +211,12 @@ private fun PlayStopButton(playing: Boolean, disabled: Boolean, onClick: () -> U
 private fun Masthead(s: Session?, openBench: () -> Unit, openSwarm: () -> Unit, openSettings: () -> Unit, openSignals: () -> Unit, openCalibration: () -> Unit) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Column(
-            Modifier.weight(1f).pointerInput(Unit) { detectTapGestures(onLongPress = { openBench() }, onTap = { openSwarm() }) }.semantics { contentDescription = "${DemoMesh.NYM}, ${DemoMesh.LISTENERS} listeners linked, demo data. Tap for the swarm; hold to open the test bench." },
+            Modifier.weight(1f).pointerInput(Unit) { detectTapGestures(onLongPress = { openBench() }, onTap = { openSwarm() }) }.semantics { contentDescription = "${DemoMesh.NYM}, ${DemoMesh.LISTENING} listening, demo data. Tap for the swarm; hold to open the test bench." },
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             // The design wants your nym and "N listeners linked" here, opening Swarm. Neither exists yet (see design/feedback.md), so only the name stays. D lives on the Test bench.
             BasicText(DemoMesh.NYM, style = Tokens.Text.eyebrow.style())
-            BasicText("● ${DemoMesh.LISTENERS} listeners linked · demo", style = Tokens.Text.small.style(Ink.accent))
+            BasicText("● ${DemoMesh.LISTENING} listening · demo", style = Tokens.Text.small.style(Ink.accent))
         }
         // Archive isn't built, so its button is dimmed and does nothing.
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {

@@ -25,7 +25,7 @@ import androidx.compose.ui.unit.dp
 
 /** Only the LISTENING section for now: the design's other sections have nothing behind them yet. */
 @Composable
-fun SettingsPage(state: BenchState, actions: BenchActions, back: () -> Unit, openCalibration: () -> Unit, openSatellites: () -> Unit, openSync: () -> Unit, openBeat: () -> Unit, openStereo: () -> Unit) {
+fun SettingsPage(state: BenchState, actions: BenchActions, back: () -> Unit, openCalibration: () -> Unit, openSatellites: () -> Unit, openSync: () -> Unit, openBeat: () -> Unit, openStereo: () -> Unit, openData: () -> Unit) {
     rememberTick(SETTINGS_TICK_MS).value    // the output's name can change during a run
     val s = state.session
     Column(
@@ -51,7 +51,7 @@ fun SettingsPage(state: BenchState, actions: BenchActions, back: () -> Unit, ope
             }
             Column(Modifier.fillMaxWidth().heightIn(min = Tokens.Space.touchTarget.dp).clickable(role = Role.Button, onClick = openStereo), Arrangement.Center) {
                 BasicText("Stereo pair", style = Tokens.Text.bodyStrong.style())
-                BasicText(when (state.channel) { org.beachsync.proto.Renderer.LEFT -> "This phone plays Left"; org.beachsync.proto.Renderer.RIGHT -> "This phone plays Right"; else -> "This phone plays Both" }, style = Tokens.Text.small.style(Ink.textSecondary))
+                BasicText(when (state.channel) { org.beachsync.proto.Renderer.LEFT -> "This phone plays Left"; org.beachsync.proto.Renderer.RIGHT -> "This phone plays Right"; else -> "Stereo · back to Stereo each start" }.let { if (it.startsWith("This phone plays ")) it.removePrefix("This phone plays ") + " · until the app restarts" else it }, style = Tokens.Text.small.style(Ink.textSecondary))
             }
             Column(Modifier.fillMaxWidth().heightIn(min = Tokens.Space.touchTarget.dp).clickable(role = Role.Button, onClick = openCalibration), Arrangement.Center) {
                 BasicText("Calibration", style = Tokens.Text.bodyStrong.style())
@@ -70,6 +70,15 @@ fun SettingsPage(state: BenchState, actions: BenchActions, back: () -> Unit, ope
                 }
                 Spacer(Modifier.width(10.dp))
                 SatellitesSwitch(state.localTime)
+            }
+        }
+        BasicText("DELIVERY", Modifier.padding(top = 6.dp), Tokens.Text.cardLabel.style())
+        Card {
+            BasicText("DEMO: nothing here reaches a mesh yet", style = Tokens.Text.cardLabel.style(Ink.warn))
+            SwitchRow("Share with other listeners", "On Wi-Fi as your profile allows · never on mobile data unless you choose", DemoSharing.shareOn) { DemoSharing.shareOn = it }
+            Column(Modifier.fillMaxWidth().heightIn(min = Tokens.Space.touchTarget.dp).clickable(role = Role.Button, onClick = openData), Arrangement.Center) {
+                BasicText("Data and sharing", style = Tokens.Text.bodyStrong.style())
+                BasicText("${DemoSharing.profileLine} · shared 1.2 GB today on Wi-Fi", style = Tokens.Text.small.style(Ink.textSecondary))
             }
         }
     }

@@ -79,6 +79,9 @@ class Session(ctx: Context, val s: Settings, private val satellitesOn: Boolean) 
         watcher.start()
     }
 
+    /** A call or other short interruption. Called from the main thread, never the audio thread. */
+    fun mute(on: Boolean) { play.muted = on }
+
     fun stop() {
         play.running = false
         stream?.running = false; stream?.interrupt()
@@ -108,6 +111,9 @@ class Session(ctx: Context, val s: Settings, private val satellitesOn: Boolean) 
         note(Lane.AUDIO, if (ms == 0.0) "Diagnostic audio offset cleared" else "Diagnostic audio offset set to %+.0f ms (%s)".format(java.util.Locale.ROOT, ms, if (ms > 0) "plays earlier" else "plays later"))
     }
     val diagnosticOffsetMs get() = play.extraLagNs / 1e6
+
+    /** From the UI thread: the channel chip's change, for the event log. */
+    fun logChannel(text: String) = note(Lane.AUDIO, text)
 
     private fun note(lane: Lane, text: String) {
         val boot = nowBoot()

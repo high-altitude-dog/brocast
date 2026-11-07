@@ -99,5 +99,5 @@ The engine never writes the seed itself (engine API §9).
 
 ## Open
 
-1. **Backup format:** 24 words from a 2048-word list (256 bits plus an 8-bit BLAKE2b checksum), plainly labelled "Brocast recovery words, not a crypto wallet". Using BIP-39 itself would mean its SHA-256 checksum, and would invite confusion with crypto wallets.
+1. **Backup format (decided by the user, 7 Nov):** 24 words from a 2048-word list (256 bits plus an 8-bit BLAKE2b checksum), plainly labelled "Brocast recovery words, not a crypto wallet". Using BIP-39 itself would mean its SHA-256 checksum, and would invite confusion with crypto wallets.
 2. Should the wizard offer to **re-key** later (a new identity, with the old one announced as retired)? This ties to station key rotation on the security backlog.

@@ -6,6 +6,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.drag
 import androidx.compose.foundation.horizontalScroll
@@ -80,6 +81,7 @@ import org.beachsync.proto.tooFastNote
 import org.beachsync.proto.nudgeWord
 import java.util.Locale
 import kotlin.math.abs
+import kotlin.math.roundToInt
 import kotlin.math.ln
 import kotlin.math.log10
 import kotlin.math.log2
@@ -383,6 +385,8 @@ fun TimeSignalsScreen(state: BenchState, actions: BenchActions, openSatellites: 
     val boot = rememberTick(SCREEN_TICK_MS).value
     val s = state.session
     val fit = FlowTime.fit()
+    var picked by remember { mutableStateOf<Int?>(null) }
+    Box(Modifier.fillMaxSize()) {
     Screen {
         ScreenHeader("Time signals", back)
         Card {
@@ -394,8 +398,8 @@ fun TimeSignalsScreen(state: BenchState, actions: BenchActions, openSatellites: 
                     style = Tokens.Text.valueSmall.style(if (s != null && chosen != null) Ink.accent else Ink.muted),
                 )
             }
-            SourcesField(s, boot)
-            BasicText("Node size = accuracy.", style = Tokens.Text.small.style())
+            SourcesField(s, boot, picked) { picked = it }
+            BasicText("Node size = accuracy. Tap a node to see what it is.", style = Tokens.Text.small.style())
         }
         Card {
             BasicText("SKY", style = Tokens.Text.cardLabel.style())
@@ -438,10 +442,12 @@ fun TimeSignalsScreen(state: BenchState, actions: BenchActions, openSatellites: 
             }
         }
     }
+    picked?.let { SourceSheet(it, s, boot, openSatellites) { picked = null } }
+    }
 }
 
 @Composable
-private fun SourcesField(s: Session?, boot: Long) {
+private fun SourcesField(s: Session?, boot: Long, picked: Int?, onPick: (Int) -> Unit) {
     val resources = LocalContext.current.resources
     val paint = remember { Paint(Paint.ANTI_ALIAS_FLAG).apply { typeface = resources.getFont(R.font.jetbrains_mono); textAlign = Paint.Align.CENTER } }
     val chosen = if (s != null) FlowTime.chosen else null
@@ -450,7 +456,15 @@ private fun SourcesField(s: Session?, boot: Long) {
     val hold = if (s != null && holding) FlowTime.gps?.errAt(boot) else null
     val ntp = if (s != null) FlowTime.ntp?.errAt(boot) else null
     val host = s?.ntp?.host?.substringBefore(".co.uk") ?: "NTP"
-    Canvas(Modifier.fillMaxWidth().height(190.dp).semantics { contentDescription = "Time sources, with ${chosen?.name ?: "none"} in charge" }) {
+    Canvas(Modifier.fillMaxWidth().height(190.dp).semantics { contentDescription = "Time sources, with ${chosen?.name ?: "none"} in charge. Tap a node to see what it is." }
+        .pointerInput(Unit) {
+            detectTapGestures { p ->
+                // Flowtime, GPS, Hold, NTP: the same places as the drawing below; each node with its label is about a 44 px target.
+                val at = listOf(0.5f to 0.45f, 0.16f to 0.2f, 0.16f to 0.68f, 0.84f to 0.4f).map { (fx, fy) -> Offset(size.width * fx, size.height * fy) }
+                val i = at.indices.minByOrNull { (at[it] - p).getDistance() }
+                if (i != null && (at[i] - p).getDistance() < 44.dp.toPx()) onPick(i)
+            }
+        }) {
         val flow = Offset(size.width * 0.5f, size.height * 0.45f)
         fun node(name: String, err: Double?, at: Offset, lit: Boolean) {
             val r = (22f - (if (err == null) 1f else ((log10(err.coerceAtLeast(1e3)) - 3.0) / 4.0).coerceIn(0.0, 1.0).toFloat()) * 10f).dp.toPx()
@@ -466,6 +480,8 @@ private fun SourcesField(s: Session?, boot: Long) {
                 c.nativeCanvas.drawText(if (err != null) "±" + fmtDuration(err) else "—", at.x, at.y + r + 28.dp.toPx(), paint)
             }
         }
+        val ring = listOf(0.5f to 0.45f, 0.16f to 0.2f, 0.16f to 0.68f, 0.84f to 0.4f)
+        picked?.let { val (fx, fy) = ring[it]; drawCircle(Ink.text, if (it == 0) 40.dp.toPx() else 27.dp.toPx(), Offset(size.width * fx, size.height * fy), style = Stroke(2.dp.toPx())) }
         node("GPS", gps, Offset(size.width * 0.16f, size.height * 0.2f), chosen == Source.GPS && !holding)
         node("HOLD", hold, Offset(size.width * 0.16f, size.height * 0.68f), holding)
         node(host, ntp, Offset(size.width * 0.84f, size.height * 0.4f), chosen == Source.NTP)
@@ -477,5 +493,66 @@ private fun SourcesField(s: Session?, boot: Long) {
             c.nativeCanvas.drawText("FLOW", flow.x, flow.y - 2.dp.toPx(), paint)
             c.nativeCanvas.drawText("TIME", flow.x, flow.y + 11.dp.toPx(), paint)
         }
+    }
+}
+
+/** Tap a source (user, 5 Nov): what the node is, in plain words, then its live details. */
+@Composable
+private fun SourceSheet(which: Int, s: Session?, boot: Long, openSatellites: () -> Unit, close: () -> Unit) {
+    val chosen = if (s != null) FlowTime.chosen else null
+    val holding = chosen == Source.GPS && s?.sourceName(boot) != "GPS"
+    val gpsFit = FlowTime.gps
+    val ntpFit = FlowTime.ntp
+    val gps = s?.gps
+    val ntp = s?.ntp
+    fun ago(b: Long) = if (b == 0L) "—" else "${((boot - b) / 1_000_000_000L).coerceAtLeast(0)} s ago"
+    fun err(f: org.beachsync.proto.ClockFit?) = f?.let { "±" + fmtDuration(it.errAt(boot)) } ?: "—"
+    val (name, stateWord, definition) = when (which) {
+        0 -> Triple("Flowtime", if (chosen != null) "in charge" else "waiting for a source", "The shared clock every Brocast phone plays to: UK time, Teddington · Greenwich. It always follows the most accurate source.")
+        1 -> Triple("GPS", when { chosen == Source.GPS && !holding -> "in charge"; gpsFit != null -> "standing by"; else -> "off" }, "Time from navigation satellites, read from this phone's GPS chip. The best a phone can get, usually well under a millisecond.")
+        2 -> Triple("Hold", if (holding) "in charge" else "standing by", "This phone's own clock, carrying on from the last satellite fix. It takes over the moment GPS drops out, and stays very good for a while; its error grows slowly with time and temperature until internet time is better.")
+        else -> Triple("Internet time server (NTP)", when { chosen == Source.NTP -> "in charge"; ntp != null && ntp.samples > 0 -> "in use"; else -> "standing by" }, "A time server reached over the internet. S1 means one step from an atomic clock; NPL is the UK's National Physical Laboratory.")
+    }
+    val rows: List<Pair<String, String>> = when (which) {
+        0 -> listOf("Source in charge" to (if (holding) "Hold" else chosen?.name ?: "none"), "Error" to err(FlowTime.fit()), "Hand-overs this session" to "${FlowTime.switches}")
+        1 -> listOf(
+            "Satellites" to (if (gps != null && gps.active) "${gps.used} of ${gps.seen}" else "off"),
+            "Link" to when (gps?.gold) { true -> "Gold"; false -> "Silver"; null -> "—" },
+            "Last fix" to ago(gps?.lastBoot ?: 0L), "Error" to err(gpsFit),
+        )
+        2 -> {
+            val growth = gpsFit?.growth ?: Double.NaN
+            val now = gpsFit?.errAt(boot)
+            val handOver = if (gpsFit != null && ntpFit != null && growth > 0) {
+                val ns = (ntpFit.errAt(boot) / 1.2 - now!!) / growth
+                if (ns <= 0) "now" else "in about ${(ns / 60e9).roundToInt().coerceAtLeast(1)} min"
+            } else "—"
+            listOf(
+                "Error now" to err(gpsFit),
+                "Growing by" to (if (growth.isNaN()) "—" else "about ${fmtDuration(growth * 1e9)} a second"),
+                "Last satellite fix" to ago(gps?.lastBoot ?: 0L),
+                "Would hand over to internet time" to handOver,
+            )
+        }
+        else -> listOf(
+            "Server" to (ntp?.host ?: "—"), "Stratum" to (ntp?.let { "S${it.stratum}" } ?: "—"), "Reference" to (ntp?.refId?.ifEmpty { null } ?: "—"),
+            "Round trip" to (ntp?.rttMs?.takeIf { !it.isNaN() }?.let { fmtDuration(it * 1e6) } ?: "—"),
+            "Difference from GPS" to (ntp?.minusGpsUs?.takeIf { !it.isNaN() }?.let { fmtSigned(it * 1e3) } ?: "—"),
+            "Error" to err(ntpFit),
+        )
+    }
+    Sheet(close) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            BasicText(name, style = Tokens.Text.screenTitle.style().copy(fontSize = 20.sp))
+            BasicText("  $stateWord", Modifier.weight(1f), Tokens.Text.small.style(if (stateWord == "in charge") Ink.accent else Ink.textSecondary))
+            BasicText("✕", Modifier.size(44.dp).clickable(role = Role.Button, onClick = close).padding(12.dp), Tokens.Text.bodyStrong.style(Ink.textSecondary))
+        }
+        BasicText(definition, style = Tokens.Text.body.style())
+        for ((k, v) in rows) Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            BasicText(k, Modifier.weight(1f), Tokens.Text.body.style(Ink.textSecondary))
+            BasicText(v, style = Tokens.Text.valueSmall.style())
+        }
+        if (s == null) BasicText("Live details appear while the music plays.", style = Tokens.Text.small.style(Ink.muted))
+        if (which == 1 || which == 2) BasicText("How satellites set this clock", Modifier.heightIn(min = 44.dp).clickable(role = Role.Button) { close(); openSatellites() }.padding(vertical = 12.dp), Tokens.Text.body.style(Ink.accent))
     }
 }

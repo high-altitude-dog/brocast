@@ -40,6 +40,22 @@ class LibraryStore private constructor(ctx: Context) : Thread("library") {
     /** The artist photo for a track, copied here by hand for now (the photos stay out of the repo). It may not exist. */
     fun photo(id: String) = File(dir, "$id.jpg")
 
+    /** The set's beat and bar grid, saved by [SetBeatAnalyser]. */
+    fun beatsFile(id: String) = File(dir, "$id.beats")
+
+    private val beatCache = java.util.concurrent.ConcurrentHashMap<String, SetBeats>()
+    private val beatLooked = java.util.concurrent.ConcurrentHashMap<String, Long>()
+
+    /** The set's grid, or null until it's worked out. Cheap enough for every frame: a missing file is looked for again at most every 5 s. */
+    fun beats(id: String): SetBeats? {
+        beatCache[id]?.let { return it }
+        val now = android.os.SystemClock.uptimeMillis()
+        if (now - (beatLooked[id] ?: Long.MIN_VALUE / 2) < 5000) return null
+        beatLooked[id] = now
+        val f = beatsFile(id)
+        return if (f.exists()) SetBeats.decode(f.readText())?.also { beatCache[id] = it } else null
+    }
+
     private fun read(text: String) {
         val j = JSONObject(text)
         dMs = j.optLong("D_ms", 60000L)
@@ -181,6 +197,7 @@ class LibraryStore private constructor(ctx: Context) : Thread("library") {
             val s = get(ctx)
             s.url = url
             if (!s.isAlive) s.start() else s.interrupt()
+            SetBeatAnalyser.begin(s)
             return s
         }
     }

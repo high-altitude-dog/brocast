@@ -75,6 +75,9 @@ if (capBytes) {
   for (const it of items) store.get({ key: Buffer.from(it.core, 'hex') }).on('upload', () => guard.check())
 }
 console.log('READY', hex(catalog.key), hex(mesh.keyPair.publicKey))
+// Auto-stop (user, 7 Nov): every seed server stops itself after --minutes, 10 by default, so none is left running.
+const minutes = Number(arg('minutes', 10))
+setTimeout(() => { console.log(`AUTOSTOP after ${minutes} min`); process.kill(process.pid, 'SIGTERM') }, minutes * 60e3)
 
 process.on('SIGTERM', async () => {
   clearInterval(gossip)
