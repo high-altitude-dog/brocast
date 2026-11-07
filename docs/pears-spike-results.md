@@ -55,6 +55,19 @@
 - `MeshSupply : BlockSupply` beside `LocalSupply`, splitting 4 s blocks into 1 s blocks for `StreamClient`'s ring. Built sets play from `music/` through `LocalSupply`, unchanged.
 - The first-run wizard (`makeSeed`), with the seed in the Android Keystore. `DemoMesh` values map to fields in the status snapshot (API §6). No `Nym.kt` is needed.
 
+## Designed, not built (don't mistake these for working code)
+
+- **On the phone, the whole engine host:** the bare-kit worklet, `PearsEngine.kt`, `MeshSupply`, the wizard and Keystore storage. Nothing in `android/` has changed on this branch.
+- **Topic sharding:** only the topic format exists, with one shard. Not built: the shard count growing with the audience, the census, and the change-over (design §12).
+- **Auto mode:** `auto()` exists as a pure function only. Nothing feeds it phone state yet.
+- **Engine updates:** the version boundary is declared in `index.js`, but there are no slots, health gate, release core or rollback.
+- **Seeder:**
+  - no seeder app, Pear packaging or browser control page;
+  - `assess.js` probes and computes limits, but nothing enforces them;
+  - the egress guard is wired into the step 0 station only.
+- **Seeding cost classes:** the cost order (cloud seeds only under deadline pressure, seeding the seeders first, super-seeding) is design only.
+- **Not started:** headset delays (design §7), blind peers, relays, the desktop seeder's shard bridging, and the station directory.
+
 ## Open questions
 
 1. **Backup format:** 24 recovery words with a BLAKE2b checksum? (BIP-39 would bring back SHA-256.)
