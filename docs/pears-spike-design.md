@@ -65,18 +65,23 @@ The listener chooses how much data, battery, memory and storage the mesh may use
 
 **Engine settings:**
 
+**Mobile data and Wi-Fi are treated differently (user, 7 Nov).** Mobile data is the listener's paid allowance, so the phone never shares on it unless the listener opts in, in any preset. Wi-Fi usually costs nothing, so sharing there is generous. "Mobile" means any network Android reports as metered, which includes phone hotspots and paid Wi-Fi. Android Data Saver always counts as no sharing on mobile data.
+
 | Setting | Range | Light | Balanced (default) | Generous |
 |---|---|---|---|---|
 | Low / high watermark (refill when below low, up to high) | 30 s to 24 h | 2 m / 15 m | 5 m / 2 h | 30 m / 24 h |
-| Mobile data cap per day | 0 to unlimited | 100 MB | 500 MB | unlimited |
-| Share | off, Wi-Fi + charging, Wi-Fi, always | off | Wi-Fi + charging | Wi-Fi |
-| Share while playing | on or off | (sharing off) | on | on |
-| Upload rate cap | 0 to unlimited | 0 | 1 Mbps | unlimited |
+| **On Wi-Fi:** share | off, while charging, unless battery under 30%, always | while charging | unless battery under 30% | always |
+| **On Wi-Fi:** upload rate cap | 0 to unlimited | 1 Mbps | 4 Mbps | unlimited |
+| **On mobile data:** download cap per day | 0 to unlimited | 100 MB | 500 MB | unlimited |
+| **On mobile data:** share | off, or on with a daily cap | off | off | off |
+| **On mobile data:** sharing cap per day (when opted in) | 10 MB to 1 GB | | | |
+| Share while playing (user, 7 Nov) | on or off | on | on | on |
 | Max connections | 2 to 32 | 4 | 8 | 24 |
 | Announce on the DHT | client only, or announce | client only | announce while sharing | announce |
 | RAM budget (cache and in-flight requests) | 16 to 256 MB | 24 MB | 64 MB | 192 MB |
-| Sharing allowance (storage) | 0 to 20 GB | 0 | 2 GB | 10 GB |
+| Sharing allowance (storage) | 0 to 20 GB | 1 GB | 4 GB | 10 GB |
 
+- **Moving between networks:** the moment the phone goes from Wi-Fi to metered, uploads stop, DHT announces stop, and the phone keeps only enough connections to download. Back on Wi-Fi, sharing resumes on its own. Every byte is counted against the network it went over, so the figures can say `Shared 1.2 GB on Wi-Fi · 0 MB on mobile data`.
 - **Ephemeral DHT node always:** a phone never routes other peers' DHT traffic.
 - **Hard floors:** a low watermark of at least 30 s, at least 1 connection, and seed-server fallback, so no setting can starve playback.
 - **Auto mode (the frontier part):** the policy reacts to the phone's state, the way screen levels do. Inputs are Wi-Fi or metered, charging, battery %, thermal headroom, Android Data Saver (always obeyed) and Doze. For example, at under 20% battery and not charging, the phone drops to Light and says why (`MESH · LIGHT · battery 18%`). On Wi-Fi and charging, it opens up to Generous.
