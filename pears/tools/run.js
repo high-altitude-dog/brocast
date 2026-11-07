@@ -31,6 +31,8 @@ const SCENARIOS = {
   // Receive-only and Privacy mode alongside two full sharers.
   modes: { bs: 1, nodes: [L('s0', { until: 'wall', wall: 60 }), L('s1', { delay: 2000, until: 'wall', wall: 58 }), L('recv', { mode: 'receive', delay: 20000, wall: 40 }), L('priv', { mode: 'privacy', delay: 20000, wall: 40 })] },
   // Watermark bursts per profile: playhead at 20x, watermarks at a tenth, 18 minutes of audio in 54 s.
+  // The egress cap at a test size: 10 MB, so the station must shut itself down before the 18.7 MB library is through.
+  'egress-cap': { bs: 4, cap: 10 * 1048576, nodes: [L('a', { wall: 30 })] },
   // The unplug demo: two listeners fetch, the station goes away at 25 s, and a newcomer that knows only the station key
   // still finds the catalog (through the DHT record the others keep alive) and gets every set from listeners.
   unplug: { bs: 4, unplugAt: 25000, nodes: [L('l0', { until: 'wall', wall: 75 }), L('l1', { delay: 3000, until: 'wall', wall: 72 }), L('late', { delay: 35000, noCatalog: true, wall: 40 })] },
@@ -46,7 +48,7 @@ for (const name of wanted) {
   const dir = path.join(work, name)
   fs.rmSync(dir, { recursive: true, force: true })
   fs.mkdirSync(dir, { recursive: true })
-  const station = spawn('node', [path.join(root, 'tools/station.js'), '--dir', path.join(work, 'station'), '--seed-file', path.join(work, 'station-seed'), '--library', library, '--block-seconds', String(sc.bs)], { env })
+  const station = spawn('node', [path.join(root, 'tools/station.js'), '--dir', path.join(work, 'station'), '--seed-file', path.join(work, 'station-seed'), '--library', library, '--block-seconds', String(sc.bs), ...(sc.cap ? ['--cloud-cap-bytes', String(sc.cap)] : [])], { env })
   let stationOut = ''
   station.stderr.on('data', (d) => process.stderr.write('[station] ' + d))
   const [catalog, key] = await new Promise((resolve, reject) => {

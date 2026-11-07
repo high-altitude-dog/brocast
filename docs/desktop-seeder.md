@@ -124,7 +124,14 @@ A node's class comes from the catalog for station seeds, or from its signed hell
 1. **Class 3 seeds don't announce on any topic.** Phones find classes 0 to 2 through the swarm, and dial a class 3 seed by key (`joinPeer`) only under **deadline pressure**: buffered audio has fallen below the low watermark and no cheaper peer has the next missing block. They disconnect (`leavePeer`) once a cheaper peer covers them. So cloud egress pays only for music that would otherwise go silent.
 2. **Seed the seeders first:** when a new edition appears, class 2 and 3 seeds serve home and venue seeders (class 1) before any phone. Then the free tier carries it to listeners.
 3. **Super-seeding on paid seeds:** a class 3 seed tries to send each block once to a peer that will pass it on (a sharer or seeder), and refuses receive-only phones unless they're under deadline pressure. Receive-only phones never pass blocks on.
-4. **A hard egress cap** per class 3 seed: a daily budget, by default the provider's free monthly allowance divided by 30. You asked for a cap under the free 200 GiB earlier. Past the budget, the seed serves only phones under deadline pressure, up to a hard stop at 120% of the budget.
+4. **A hard egress cap: 1 GB a month for now (user, 7 Nov). Shut down and alert on reaching it.** Built in `pears/seeder/egress-guard.js` and used by `tools/station.js --cloud-cap-bytes`.
+   - **What it counts:** bytes sent on the wire across every connection, which is what clouds bill. The count is per calendar month (UTC) and persists across restarts.
+   - **When it acts:** it warns at 50, 80 and 90%, and **shuts down at 95%**. The 5% margin covers packet headers the count can't see, so the bill stays under the cap.
+   - **Checked on every block upload, not on a timer.** A test with a 10 MB cap showed why: checking once a second overshot to 12.3 MB. Checking per upload, it tripped at 9.52 MB.
+   - **On a trip:** every connection is cut synchronously, then the process exits with code 0, so a restart policy has nothing to retry.
+   - **It stays down until the user acts.** The trip is recorded in `egress.json`. A tripped seed refuses to start, even in a new month, until the user deletes that file or raises the cap.
+   - **Alerts:** a line on stderr, a line in `egress-alerts.log`, and a POST to `EGRESS_WEBHOOK` if one is set (for example an ntfy topic). Nothing leaves the machine unless the user sets a webhook.
+   - **Second safety, outside the app:** a budget alert in the cloud provider's own billing, set just above the cap.
 5. **Measured, not assumed:** the ledger counts bytes served and received per cost class. The station's dashboard shows today's cloud egress against the budget and the cost per listener-hour.
 
 **Gaps:** Hypercore picks peers itself among those holding a block, so we control cost at the connection level (who we're connected to), not per request. Rate limits and a per-request priority hook would make this exact. Add both to the asks for the Pears developers.
@@ -175,4 +182,4 @@ Today's stack can't seed from inside a browser tab (checked 7 Nov): Hypercore's 
 1. Does the current Pear runtime still support `pear run` with pinned links and the update flow described above? Check before building.
 2. Who runs the first seeders besides you? (Settled, 7 Nov: no local-only mode. Any station must be reachable globally by anyone who selects it.)
 3. A seeder doesn't build files. Should it offer "export the library as files", for backups?
-4. Which cloud provider and egress price should the default budget assume? (Your earlier note: stay under the free 200 GiB.)
+4. How should a tripped cap reach you: a webhook to your phone (for example ntfy), email, or the station dashboard only?

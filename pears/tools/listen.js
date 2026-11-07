@@ -93,7 +93,7 @@ let audio = 0
 const music = arg('dir') + '.music'
 for (const s of sets) {
   await s.core.ready()
-  s.builder = new SetBuilder({ music, id: s.it.id, blocks: s.blocks, serial: serialOf(s.core.key), sha: s.it.sha256 })
+  s.builder = new SetBuilder({ music, id: s.it.id, blocks: s.blocks, serial: serialOf(s.core.key), sha: s.it.blake2b })
   s.core.on('download', (index, bytes, from) => {
     const k = hex(from.remotePublicKey)
     log({ ev: 'block', set: s.n, index, bytes, peer: k.slice(0, 8), station: seeds.has(k) })
