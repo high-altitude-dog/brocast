@@ -1,4 +1,4 @@
-# UI spec (hand-off 23)
+# UI spec (hand-off 24)
 
 Field names come from Claude Code's "Fields that exist today" table in `feedback.md`, as of 1 Nov 2026. If one has been renamed since, use the new name.
 
@@ -399,6 +399,46 @@ Every byte by the network it went over. Opens from Data and sharing › Data log
 | Month so far | Day bars: downloaded above the line (Wi-Fi accent, mobile grey stacked on top), shared below as outlines. Today framed. Days to come as dots. Totals top right; mobile total in words under it. Tap a day for its lines. | `ledger.month`, daily history |
 
 This month view: the same cards and lines for the month, chart unchanged.
+
+## Identity wizard (first run)
+
+From `docs/keys.md` (pears-spike branch). Runs once, before First use · sharing. Six steps with a segmented progress bar and `YOUR IDENTITY · n OF 6 · STEP` at the top. Fed by `makeSeed`'s `report`: source names and byte counts only, never values. No Pears name or logo.
+
+| Step | Screen | Shows |
+|---|---|---|
+| 1 Welcome | ![](screens/id-welcome.png) | Key glyph; `Your phone makes its own identity.`; no account, email or server; key never leaves the phone. Three ticked lines (name from your key, everything signed, ~10 s). Live line `Already gathering: N sources while you read` (sensors sample during this screen). Start. |
+| 2 Gathering | ![](screens/id-gather.png) | Big counts: sources (ok + gathering) and KB of raw noise (`raw noise, not key size`). Groups MACHINE · ALWAYS USED, SENSORS · 3 s EACH, OTHER, each with `n of m`. One 36 px row per source: tick / spinner / ✕, plain name, engine id in small mono, bytes. Dropped rows struck through: `dropped · stuck at 5.0 cm`, `dropped · no events`. Sensors the phone lacks aren't listed. The list grows to any length (15 to 25 typical) and scrolls; Next stays pinned. Camera and microphone: an Add card. |
+| 3 Add yours | ![](screens/id-own-random.png) | `OPTIONAL · Your key is already safe without this`. Scribble or Move the phone. Scribble pad shows a fading trail. `Added  512 touch points · 6.1 KB`. Never a bit count. Skip / Add it and mix. |
+| 4 Mixing | ![](screens/id-mix.png) | Source chips (dropped ones dim with ✕) → `Mixed with keyed BLAKE2b` → 32 cells `Your 32-byte seed · shown as cells, never as values` → Ed25519, X25519 (same key), Storage key, Your name. `✓ Seed made and locked in the security chip`. **How this works** (expandable): strongest source wins; never from you alone; everything from the seed by hashing; clamping, and why the seed isn't touched; stored. |
+| 5 Your name | ![](screens/id-nym.png) | Nym large on its colour, `key e4a107c9…` (first 8 hex). One line on why it's verifiably yours. Shuffle (keeps the key). Same-name rule: 4 hex digits shown. Keep this name. |
+| 6 Back up | ![](screens/id-backup.png) | Listener: `OPTIONAL`; what losing the phone costs (only a new name); Skip for now / Show my words. Then straight to First use · sharing. |
+
+### Identity · back up states
+
+![](screens/id-backup-states.png)
+
+| State | Shows |
+|---|---|
+| Words (1 of 2) | 24 words in a 3-column numbered grid, `BROCAST RECOVERY WORDS · NOT A CRYPTO WALLET` in amber, warning (anyone with them is you; never into a website or wallet). `FLAG_SECURE`: no screenshots. I wrote them down. |
+| Seeder | `RECOMMENDED` chip; why (peers know the computer by its key). Skip needs a second tap. |
+| Publisher | `REQUIRED` chip; check 2 of 2: three random word positions, each field ticks when right; Finish disabled until all three match. No Skip. |
+
+### Identity · gathering states
+
+![](screens/id-gather-states.png)
+
+| State | Shows |
+|---|---|
+| Camera and microphone | Before the prompt, one line on what's taken (cover the lens; 1 s of room noise, low bits, nothing kept, music not paused). Then Android's prompt. Each becomes a row. |
+| Machine source fault | `STOPPED · MACHINE SOURCE FAULT` in red, the faulty row with ▲ and the fault (`repeated bytes`), why sensors are dropped but this stops it. Send details / Try again. Also covers `NEED_MACHINE_SOURCE`. |
+| Privacy mode | GNSS, Wi-Fi and Bluetooth rows shown with a dash, `not used: Privacy mode` (not struck through: not a fault). |
+| Few sensors | `6 sources · 96 KB  ✓ enough`. The screen never says weak. |
+
+### Identity · desktop seeder
+
+![](screens/id-desktop.png)
+
+The same six steps as a left rail, the step in the middle, sources on the right. Gathering: a mouse-and-typing pad (`Only the timing is used, never the keys`; `1,204 moves · 37 keys · 3.4 KB`). Sources: system generator, engine, CPU and disk timing jitter, battery (laptops), mouse timing, key timing; microphone and webcam opt-in from the browser control page with the browser's prompt. The browser control page uses the same layout.
 
 ## Badge states
 
