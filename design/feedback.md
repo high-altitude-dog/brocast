@@ -324,3 +324,11 @@ The user's brief: frontier UX. Assume listeners are very bright and curious abou
 10. **Privacy mode, exactly:** list what stopped (DHT announce, listener connections, sketch, uploads) and show the single connection that remains, to the station.
 
 Engine fields for each of these are in `docs/pears-spike-design.md` §4, §6, §10 and §11 on the `pears-spike` branch.
+
+## 7 Nov: Engine API field names for mesh screens
+
+`docs/engine-api.md` (on `pears-spike`) is the contract between the app and the mesh engine. §6 is the status snapshot: every field the Swarm, Buffer, header, Settings › Delivery and Engine screens can show, with units in the names. It maps each `DemoMesh` value to its real field. Please use these names in specs. Two new things to design for:
+- `buffer.radio` (radio awake versus asleep over 15 minutes)
+- `blockInfo` (per-block provenance and proof, on tap)
+
+Status updates 4 times a second on Buffer and Swarm and once a second elsewhere; block arrivals are batched at most 4 times a second.
