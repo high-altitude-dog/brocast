@@ -127,11 +127,38 @@ Pears modules change often, and peers on different versions can fail to talk, as
 - **Never mid-music:** the switch happens at Stop or when idle. Playback never depends on the engine anyway, because finished files play from `music/`.
 - **Listener control:** Settings › Advanced › Engine shows the current version and lets the listener roll back, pin a version, or turn auto-update off.
 - **Storage is never migrated in place:** the identity seed belongs to the host, not the engine, and finished music is plain files. Each storage format gets its own store (`store-v<N>/`). An engine with a new format starts a fresh store and re-fetches what it needs. The old store stays until the new one has been healthy for 24 h, so a rollback is instant.
-- **Mixed versions on the wire:** the swarm topic includes the wire protocol's major version. An engine that speaks two versions joins both topics during a transition, and seed servers run one process per supported major version. Peers swap engine versions in a hello message, so the Swarm screen can show the mix of versions.
+- **Mixed versions on the wire:** the swarm topic includes the wire protocol's major version (see §12). An engine that speaks two versions joins both topics during a transition, and seed servers run one process per supported major version. Peers swap engine versions in a hello message, so the Swarm screen can show the mix of versions.
 - **Staged rollout:** a phone takes a release only if `hash(its key)` falls under the rollout percentage.
 - **Store policy risk (needs your decision):** Google Play forbids downloading executable code from outside Play, except code run in a VM or interpreter with only indirect access to Android APIs. JS in Bare with no new native code is close to that exception, but Bare's add-ons reach native code, so whether it qualifies is unclear. For the alpha and beta, distributing the APK directly sidesteps the question.
 
-## 9. Decisions and open questions
+## 12. Topic sharding: finding peers at millions of listeners (user, 7 Nov)
+
+Background is in `kademlia-research.md` §1. One topic is stored on the ~20 DHT nodes closest to its hash, and those nodes belong to other people's Pears apps. Announcements expire after 20 minutes, and a lookup returns at most 20 peers per node. With a million sharers on one topic, each of those nodes would get about 1,600 requests a second. Even then, a phone would see only a tiny, unfair sample of the swarm.
+
+- **The topic:** `hash("brocast/topic" ‖ catalog key ‖ wire major ‖ shard)`, for shard 0 to S − 1. The wire major is the version boundary from §11.
+- **Which shard:** S is a power of two. A listener's shard is the top log2(S) bits of `hash(its public key)`, so everyone works out the same shard for any key, and a listener can't pick a crowded or empty one.
+- **Where S comes from:** a `shards` field in the catalog, and in the DHT pointer record (§10). Phones learn of a change without waiting for a new edition.
+- **Who announces:** only phones that are sharing now (normally on Wi-Fi), each on its own shard. Receive-only phones, phones on mobile data and Privacy mode never announce, so they add no DHT load.
+- **Who looks up:**
+  - A sharer looks up its own shard, plus one random other shard at each refresh.
+  - A receive-only phone looks up two random shards.
+  - The random shard keeps the mesh one connected graph, not S islands. The sketch gossip then crosses shards.
+- **Seed servers** are dialled directly by key (`joinPeer`), not found by topic, so every shard reaches them without the seeds announcing S times.
+- **Sizing:** about 1,000 announcing sharers per shard. That's about 1.7 requests a second to each node holding a shard, which is polite to other apps' nodes.
+  - S doubles when a shard averages over 2,000, and halves when one averages under 250.
+  - It changes at most once a day, so shards don't flap.
+- **Splitting cleanly:** when S doubles, shard i becomes shards 2i and 2i + 1. The extra key bit sends each listener to one of the two, so peers already connected mostly stay in the same shard.
+- **Change-over:** for one record lifetime (20 minutes) after S changes, a sharer announces on both its old and its new shard, then drops the old one.
+- **Slow growth:** S = 1 at launch, which is exactly what step 0 runs (one topic, the catalog's discovery key). Nothing changes until about 2,000 sharers.
+- **A census to check the count:** a lookup returns at most 20 records, so a 1,000-peer shard can't be counted by looking it up. Instead:
+  - A sharer also announces on one census topic, `hash("brocast/census" ‖ catalog key ‖ c)` for c in 0 to C − 1, but only if `hash(its key)` falls below a sampling fraction p.
+  - The station sets p and C in the catalog so each census topic holds about 10 records, comfortably under the cap of 20.
+  - Counting the records in a few random census topics, then multiplying by C / p, estimates the number of sharers.
+  - The sketch carries a second set of registers for sharers only (another 768 B). The census is compared against that set: a hostile peer could inflate the sketch, but faking census records needs real reachable addresses.
+  - Cost: p extra announces per sharer, for example 1% at a million listeners.
+- **Privacy mode** leaves every shard and census topic at once, as in §5.
+
+## 13. Decisions and open questions
 
 **Decided by the user, 7 Nov:**
 
@@ -141,6 +168,7 @@ Pears modules change often, and peers on different versions can fail to talk, as
 
 - The Light, Balanced and Generous presets, with Balanced as the default, plus Auto mode (approved for now).
 - Partly built sets live in `music/.building/` and move to `music/` only when whole.
+- Topic sharding goes in the design (§12). Not built yet.
 
 **Still open:**
 

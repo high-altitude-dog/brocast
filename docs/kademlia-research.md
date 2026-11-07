@@ -18,7 +18,7 @@ Every node has an ID, and the distance between two IDs is their XOR. Each node k
 
 - **Kademlia's own estimator [spec]:** with N nodes and uniform IDs, the k-th closest node to a random key is at distance of about k·2^256/N. Averaging a few lookups' k-th distances estimates N, and an attacker would need about N Sybils to move it much. But naive scaling undercounts badly in practice: libtorrent reported about a sixth of the real Mainline size.
 - **It doesn't count our listeners directly [inferred]:** phones are ephemeral, so they aren't in routing tables. Density over the whole HyperDHT measures all Pears nodes, not Brocast's.
-- **For Brocast:** keep the gossiped sketch as the primary count (§4 of the design note). Add a second, independent check from the shards in section 1: the number of announcers seen in a sampled shard × S estimates sharing listeners. Faking that needs real reachable addresses, so it bounds how far a hostile peer can inflate the sketch.
+- **For Brocast:** keep the gossiped sketch as the primary count (§4 of the design note). Add a second, independent check: a sampled census of sharers on a few small DHT topics, each holding about 10 records. A shard can't be counted by looking it up, because a lookup returns at most 20 records **[code]**. Faking census records needs real reachable addresses, so the census bounds how far a hostile peer can inflate the sketch. Details are in design note §12.
 
 ## 3. Records that outlive the station (the unplug demo)
 
@@ -52,9 +52,9 @@ Every node has an ID, and the distance between two IDs is their XOR. Each node k
 
 ## What this changes in the design
 
-1. Shard topics, with S in the catalog (new, in §1 of the design note). Do this before the audience reaches about 1,000.
+1. Shard topics, with S in the catalog (design note §12). Do this before the audience reaches about 1,000.
 2. A DHT pointer record re-put by every seeder and Wi-Fi phone (§10, now confirmed possible in code).
-3. Shard record counts as a check on the sketch (§4).
+3. A sampled sharer census as a check on the sketch (§12).
 4. Keep long-lived peers at the connection limit (§6).
 5. Race peers only near the deadline, and lower DHT concurrency on mobile data (step 1 measurements).
 
