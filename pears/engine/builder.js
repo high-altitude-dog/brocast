@@ -1,12 +1,13 @@
 // Turns a set's blocks back into an Ogg Opus file the app's player already reads (OpusFile), in a canonical layout:
 // OpusHead, OpusTags, then each block's 50 packets on pages of at most 255 lace values. The layout is deterministic, so
-// the station publishes the finished file's SHA-256 in the catalog and every phone can check what it built.
+// the station publishes the finished file's BLAKE2b-256 in the catalog, inside its Ed25519-signed log, and every phone
+// can check what it built.
 //
 // While a set is incomplete its file grows in <music>/.building/ (user, 7 Nov). Only a whole, checked file is renamed
 // into <music>/, so the music folder never holds a part-built set. A rename on the same disk is atomic.
 import fs from 'node:fs'
 import path from 'node:path'
-import nodeCrypto from 'node:crypto'
+import sodium from 'sodium-universal'
 
 const TABLE = new Uint32Array(256)
 for (let i = 0; i < 256; i++) {
@@ -102,7 +103,16 @@ export function buildOgg (serial, blocks) {
   return Buffer.concat(parts)
 }
 
-export const sha256 = (buf) => nodeCrypto.createHash('sha256').update(buf).digest('hex')
+/** BLAKE2b-256, streaming, through libsodium. */
+export function digest () {
+  const state = Buffer.alloc(sodium.crypto_generichash_STATEBYTES)
+  sodium.crypto_generichash_init(state, null, 32)
+  return {
+    update (b) { sodium.crypto_generichash_update(state, b); return this },
+    hex () { const out = Buffer.alloc(32); sodium.crypto_generichash_final(state, out); return out.toString('hex') }
+  }
+}
+export const blake2b = (buf) => digest().update(buf).hex()
 
 /**
  * Builds one set into <music>/.building/<id>.opus as its blocks arrive, in timeline order, then checks it and moves it
@@ -118,7 +128,7 @@ export class SetBuilder {
     this.done = fs.existsSync(this.final)
     if (this.done) return
     this.fd = fs.openSync(this.tmp, 'w') // a leftover from a crash is rebuilt: its blocks are still in the store
-    this.hash = nodeCrypto.createHash('sha256')
+    this.hash = digest()
     this.writer = new OggWriter(serial, blocks, (b) => { fs.writeSync(this.fd, b); this.hash.update(b) })
     this.busy = false
   }
@@ -141,7 +151,7 @@ export class SetBuilder {
       }
       fs.fsyncSync(this.fd)
       fs.closeSync(this.fd)
-      if (this.hash.digest('hex') !== this.sha) { fs.rmSync(this.tmp); this.done = true; return 'mismatch' }
+      if (this.hash.hex() !== this.sha) { fs.rmSync(this.tmp); this.done = true; return 'mismatch' }
       fs.renameSync(this.tmp, this.final)
       const dir = fs.openSync(path.dirname(this.final), 'r')
       fs.fsyncSync(dir)

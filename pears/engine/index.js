@@ -28,5 +28,6 @@ export const decodeRecord = (b) => JSON.parse(b4a.toString(b))
 export { Mesh, keysFromSeed, hex } from './mesh.js'
 export { profile, sharing, PRESETS, FLOORS } from './policy.js'
 export { Sketch } from './sketch.js'
-export { SetBuilder, buildOgg } from './builder.js'
+export { SetBuilder, buildOgg, blake2b } from './builder.js'
+export { nymProof, nymFrom, nymText } from './nym.js'
 export { blocks } from './blocks.js'

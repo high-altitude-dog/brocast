@@ -36,7 +36,7 @@
 | `blockInfo` | `{ g }` | see §6 | Provenance for one block, on tap. |
 | `keep` | `{ setId, keep }` | `{}` | A kept set is never cleared from the store. |
 | `sketch` | `{}` | `{ registers, sharers }` | Raw registers (base64, 1024 bytes each), for the heatmap. |
-| `shuffleNym` | `{ nymShuffle }` | `{}` | The host stores the counter. The engine sends it in its hello to peers. |
+| `shuffleNym` | `{ nymShuffle }` | `{ nym }` | The host stores the counter. The engine signs a new proof and sends the counter and proof in its hello to peers, who verify them before showing the nym. |
 | `subscribe` | `{ hz: 0\|1\|4, arrivals: bool }` | `{}` | The status rate follows what's on screen: 4 on Buffer or Swarm, 1 elsewhere, 0 with the screen off (state changes only). |
 | `suspend` / `resume` | `{}` | `{}` | Suspend stops the swarm and lets the radio sleep. The engine also suspends itself at the high watermark (design §6). |
 | `stop` | `{}` | `{}` | Closes cleanly within 2 s. The host may kill the worklet after that. |
@@ -49,7 +49,7 @@ Reserved for later: `publishHeadsetResult` (design §7).
 |---|---|---|
 | `status` | the snapshot in §6 | At the subscribed rate, and at once on any state change |
 | `arrivals` | `[{ g, bytes, peer, from: station\|listener, via, ms }]` | Batched at most 4 times a second, only while subscribed. Feeds the Buffer tiles in flight. |
-| `built` | `{ setId, path, sha256 }` | A set has been verified and moved into `music/` |
+| `built` | `{ setId, path, blake2b }` | A set has been verified and moved into `music/` |
 | `warning` | `{ code, text }` | Recoverable, for example `MISMATCH` (a built file failed its hash and is being rebuilt) |
 | `fatal` | `{ code, text }` | The engine can't go on. The host counts it against the health gate and may roll back. |
 
@@ -59,14 +59,14 @@ Reserved for later: `publishHeadsetResult` (design §7).
 {
   at: { flowtimeNs, uptimeSec },
   engine: { version, api, wire, storage },
-  me: { publicKey },                                   // the host makes the nym from this and nymShuffle
+  me: { publicKey, nym: [colour, fruit, animal], nymShuffle },   // computed by the engine (docs/nym.md)
   profile: { chosen, effective, reason },              // reason e.g. "battery 18%", shown as MESH · LIGHT · battery 18%
   network: { kind: wifi|metered|none, lan: bool },
   sharing: { state: sharing|waiting|paused|off|privacy, why },   // why: not on Wi-Fi | not charging | playing | battery low | mobile cap reached
   swarm: {
     connected, relayed, foundNotConnected, shard, shards,
     stations: [{ key, via, rttMs, toYouBps }],
-    peers: [{ key, via: lan|direct|holepunched|relayed, rttMs, toYouBps, fromYouBps, engine, wire, sinceSec }]  // busiest 16
+    peers: [{ key, nym, via: lan|direct|holepunched|relayed, rttMs, toYouBps, fromYouBps, engine, wire, sinceSec }]  // busiest 16
   },
   buffer: {
     playheadG, aheadSec, holes: [[g, n]], fillX,       // fillX: arrival rate as a multiple of real time, null when steady

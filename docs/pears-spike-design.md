@@ -27,13 +27,20 @@ Not used: **Hyperdrive** for audio (see §2), **Autobase** (there's one writer, 
 - **Fetch order:** a deadline scheduler, the same idea as `FetchPlan`. In order: a hole in the next 10 s; the playhead up to the low watermark, in order; then the rest of the horizon. A block that's late gets asked of two peers at once.
 - **Storage:** played blocks outside Keep are freed with `core.clear()`. Keep marks a set core so that it's never cleared. The Archive limit is the eviction budget.
 - **Block length:** the block on the wire (the transport block) and the block on the timeline are separate. The timeline, the ring and the Buffer screen stay at 1 s. Each set's transport block length is a field in the catalog (`block_seconds`), so the station can change it without an app update, and the phone splits each transport block back into 1 s blocks. Step 0 measured 1, 2, 4 and 8 s: see `pears-spike-results.md`.
-- **Finished files (user, 7 Nov):** a set is built as an Ogg Opus file in `music/.building/<id>.opus`, block by block in timeline order. The layout is canonical, so the station publishes the finished file's SHA-256 in the catalog. Once whole, the file is checked against that hash, synced to disk and renamed into `music/<id>.opus`; a rename on the same disk is atomic. So `music/` only ever holds whole, verified files. The existing player (`OpusFile`, `LocalSupply`) plays them unchanged. They are plain files, so they survive any engine update or rollback. A leftover in `.building/` after a crash is rebuilt from the store.
+- **Finished files (user, 7 Nov):** a set is built as an Ogg Opus file in `music/.building/<id>.opus`, block by block in timeline order. The layout is canonical, so the station publishes the finished file's BLAKE2b-256 in the catalog (inside its Ed25519-signed log). Once whole, the file is checked against that hash, synced to disk and renamed into `music/<id>.opus`; a rename on the same disk is atomic. So `music/` only ever holds whole, verified files. The existing player (`OpusFile`, `LocalSupply`) plays them unchanged. They are plain files, so they survive any engine update or rollback. A leftover in `.building/` after a crash is rebuilt from the store.
 
 ## 3. Identity
 
 - **Station:** one 32-byte seed in `IDENTITY_DIR` (the same pattern as `gateway.js`), never in the repo. Two keys are derived from it: the HyperDHT gateway keypair (exists) and the Corestore primary key. Set cores and the catalog come from the primary key by name. The app ships one public key, the catalog's; the catalog lists the station's seed-server keys.
 - **Listener:** an ed25519 keypair made on the phone and kept in the app's private files. It is both the Hyperswarm identity (peers see it as `remotePublicKey`) and the base of the phone's Corestore.
-- **Nym:** `BLAKE2b(publicKey ‖ shuffle as u32)` picks one word each from fixed colour, fruit and animal lists (64 × 128 × 256, so about 2 million names). Shuffle adds 1 to the counter and keeps the keypair. Peers get the counter during the connection handshake, so everyone works out the same nym. It's a pure function in a plain-Kotlin `Nym.kt`, tested in `simtest/`. The key is the identity; the nym is a label, and two listeners showing the same nym also show 4 hex digits of their key.
+- **Nym:** the listener's own deterministic Ed25519 signature of `brocast/nym/v1 ‖ shuffle` picks one word each from fixed colour, fruit and animal lists (64 × 64 × 256, so about a million names). Peers verify it against the key. The engine computes it; the host only shows it. Full spec and lists: `docs/nym.md`.
+- **Cryptography (user, 7 Nov: favour Ed25519 and X25519 over SHA-256):**
+  - Ed25519 for every identity and signature.
+  - X25519 sealed boxes, using the X25519 form of the same Ed25519 key, for anything encrypted to a key later (social features, private results). One keypair does both jobs.
+  - BLAKE2b, the stack's own hash, where a digest is needed, always under an Ed25519 signature.
+  - No SHA-256 in the engine.
+  - Checked in the installed code: HyperDHT's Noise IK transport already does its key exchange directly on Ed25519 keys (`noise-curve-ed`).
+  - The old HTTP path (`library.json` on the server) keeps SHA-256 until it's retired. Shuffle adds 1 to the counter and keeps the keypair. Peers get the counter during the connection handshake, so everyone works out the same nym. It's a pure function in a plain-Kotlin `Nym.kt`, tested in `simtest/`. The key is the identity; the nym is a label, and two listeners showing the same nym also show 4 hex digits of their key.
 
 ## 4. Real values behind `DemoMesh`
 
@@ -85,7 +92,26 @@ The listener chooses how much data, battery, memory and storage the mesh may use
 - **Moving between networks:** the moment the phone goes from Wi-Fi to metered, uploads stop, DHT announces stop, and the phone keeps only enough connections to download. Back on Wi-Fi, sharing resumes on its own. Every byte is counted against the network it went over, so the figures can say `Shared 1.2 GB on Wi-Fi · 0 MB on mobile data`.
 - **Ephemeral DHT node always:** a phone never routes other peers' DHT traffic.
 - **Hard floors:** a low watermark of at least 30 s, at least 1 connection, and seed-server fallback, so no setting can starve playback.
-- **Auto mode (the frontier part):** the policy reacts to the phone's state, the way screen levels do. Inputs are Wi-Fi or metered, charging, battery %, thermal headroom, Android Data Saver (always obeyed) and Doze. For example, at under 20% battery and not charging, the phone drops to Light and says why (`MESH · LIGHT · battery 18%`). On Wi-Fi and charging, it opens up to Generous.
+- **Auto mode (the default; user, 7 Nov: sensible defaults the listener can adjust).** Rules in order, first match wins (`auto()` in `pears/engine/policy.js`):
+
+  | Phone state | Profile | Reason shown |
+  |---|---|---|
+  | Android Battery Saver on | Light | `Battery Saver on` |
+  | Thermal at or above the hot level (default severe) | Light | `phone hot` |
+  | Not charging, battery at or under the low line (default 20%) | Light | `battery 18%` |
+  | Mobile data with Data Saver on | Light | `Data Saver on` |
+  | Wi-Fi, charging, thermal below moderate | Generous | `on Wi-Fi and charging` |
+  | Anything else | Balanced | `on battery`, `on mobile data` or `phone warm` |
+
+  - **No flapping:** a change towards less use happens at once. A change towards more use waits 5 minutes after the last change. A charging change counts only after 30 s, to allow for loose cables. Light for low battery is left only at 10 points above the low line.
+  - **The listener can adjust:**
+    - the low-battery line (10 to 50%);
+    - whether Auto may pick Generous;
+    - whether Generous needs charging;
+    - the hot level (moderate or severe);
+    - or turn Auto off and pin a preset.
+  - **Not adjustable**, because they are safety rules that sit outside Auto: no sharing on mobile data unless opted in, Data Saver obeyed, and the floors.
+  - **On screen:** `MESH · <PROFILE> · <reason>`, plus the time of the last change.
 - **Measured, not guessed:** the settings page shows real figures for this hour and today: MB down (mobile and Wi-Fi), MB shared, connections, and the battery cost of the mesh. The battery cost is estimated from `BatteryManager`'s charge counter against a short baseline with the mesh suspended. Each preset also shows an estimate before it's chosen, calibrated from the phone's own history.
 - **Suspend and resume:** when nothing needs fetching and sharing is paused, the worklet suspends its swarm, so the radio and CPU sleep. It wakes at the low watermark.
 - **Sharing while playing (user's decision, 7 Nov):** sharing carries on while music plays, unless the listener turns `Share while playing` off. This drops "not playing" from the spec's sharing conditions. The upload runs on the worklet's low-priority thread and never touches the audio thread.

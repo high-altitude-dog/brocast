@@ -53,3 +53,46 @@ export function sharing (p, phone) {
   if (phone.playing && !p.wifi.whilePlaying) return { on: false, why: 'playing' }
   return { on: true, why: null }
 }
+
+/**
+ * Auto mode (design note §6): picks a preset from the phone's state. The defaults are sensible; the listener can change
+ * each one in Settings. Safety rules (no sharing on mobile data unless opted in, Data Saver obeyed, the floors) sit in
+ * sharing() and the floors, so no Auto setting can weaken them.
+ */
+export const AUTO_DEFAULTS = {
+  lowBatteryPct: 20, // at or under this, not charging: Light. Range 10 to 50.
+  recoverBand: 10, // leave Light only at lowBatteryPct + this, so it doesn't flap
+  allowGenerous: true, // Auto may pick Generous
+  generousNeedsCharging: true, // Generous only on unmetered and charging
+  hot: 'severe', // thermal level that forces Light: 'moderate' or 'severe'
+  dwellMs: 5 * 60 * 1000, // least time between changes towards more use; changes towards less use are immediate
+  plugDebounceMs: 30 * 1000 // a charging change counts only once it has lasted this long (loose cables)
+}
+
+const THERMAL = { none: 0, light: 1, moderate: 2, severe: 3, critical: 4, emergency: 5, shutdown: 6 }
+const RANK = { light: 0, balanced: 1, generous: 2 }
+
+/**
+ * [phone]: { metered, charging, chargingSinceMs, batteryPct, thermal, batterySaver, dataSaver }.
+ * [prev]: the last result, or null. Returns { name, reason, sinceMs }.
+ */
+export function auto (phone, settings = AUTO_DEFAULTS, prev = null, nowMs = Date.now()) {
+  const s = { ...AUTO_DEFAULTS, ...settings }
+  const charging = phone.charging && nowMs - (phone.chargingSinceMs ?? 0) >= s.plugDebounceMs
+  const heat = THERMAL[phone.thermal] ?? 0
+  const lowLine = prev?.name === 'light' && prev.reason?.startsWith('battery') ? s.lowBatteryPct + s.recoverBand : s.lowBatteryPct
+  let pick
+  if (phone.batterySaver) pick = { name: 'light', reason: 'Battery Saver on' }
+  else if (heat >= THERMAL[s.hot]) pick = { name: 'light', reason: 'phone hot' }
+  else if (!charging && phone.batteryPct <= lowLine) pick = { name: 'light', reason: `battery ${phone.batteryPct}%` }
+  else if (phone.metered && phone.dataSaver) pick = { name: 'light', reason: 'Data Saver on' }
+  else if (s.allowGenerous && !phone.metered && (charging || !s.generousNeedsCharging) && heat < THERMAL.moderate) {
+    pick = { name: 'generous', reason: charging ? 'on Wi-Fi and charging' : 'on Wi-Fi' }
+  } else pick = { name: 'balanced', reason: phone.metered ? 'on mobile data' : heat >= THERMAL.moderate ? 'phone warm' : 'on battery' }
+
+  if (!prev) return { ...pick, sinceMs: nowMs }
+  if (pick.name === prev.name) return { ...prev, reason: pick.reason }
+  // Towards less use: at once. Towards more use: only after the dwell, so a brief plug-in doesn't swing it up and down.
+  if (RANK[pick.name] < RANK[prev.name] || nowMs - prev.sinceMs >= s.dwellMs) return { ...pick, sinceMs: nowMs }
+  return prev
+}

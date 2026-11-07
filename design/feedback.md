@@ -318,7 +318,7 @@ The user's brief: frontier UX. Assume listeners are very bright and curious abou
 4. **Profile tuner:** Light, Balanced, Generous and Auto, then advanced sliders (watermarks, connections, upload cap, RAM, allowance). Each shows its predicted cost beside the measured cost. Auto names its reason (`MESH · LIGHT · battery 18%`).
 5. **Connection anatomy on Swarm:** per peer, how it connected (direct, hole-punched or relayed), the round-trip time, its engine version and wire version, and bytes each way. Also show peers found but not connected, and why (the connection limit, or a failed punch).
 6. **The listener estimate made visible:** `≈ 1.2 M listening ±3%`. An optional detail view could show the 1024-register sketch as a small heatmap filling in as it converges across the mesh: a quiet way to show gossip working.
-7. **Building versus built:** each set as `building · 62% · in music/.building`, then `built · SHA-256 verified · moved to music/`. Built files play with no network at all, which is the unplug demo in one line.
+7. **Building versus built:** each set as `building · 62% · in music/.building`, then `built · verified · moved to music/`. Built files play with no network at all, which is the unplug demo in one line.
 8. **Engine panel** (Settings › Advanced › Engine): the current, previous and candidate versions, the health gate's progress (boot, handshake, catalog, blocks verified, 10 min clean), Roll back, Pin and Auto-update. Add a small chart of the engine versions in use across connected peers.
 9. **Help from the wider Pears network:** today's count of DHT nodes run by other Pears apps that helped this phone, relays used, and blind peers holding the library. It credits the shared network honestly.
 10. **Privacy mode, exactly:** list what stopped (DHT announce, listener connections, sketch, uploads) and show the single connection that remains, to the station.
@@ -332,3 +332,21 @@ Engine fields for each of these are in `docs/pears-spike-design.md` §4, §6, §
 - `blockInfo` (per-block provenance and proof, on tap)
 
 Status updates 4 times a second on Buffer and Swarm and once a second elsewhere; block arrivals are batched at most 4 times a second.
+
+## 7 Nov: Auto mode, nym, and a new app (the desktop seeder): suggestions only
+
+- **Auto mode reasons** (design note §6): `Battery Saver on`, `phone hot`, `battery 18%`, `Data Saver on`, `on Wi-Fi and charging`, `on battery`, `on mobile data`, `phone warm`. Shown as `MESH · <PROFILE> · <reason>` with the time of the last change. Adjustable:
+  - the low-battery line (10 to 50%, default 20);
+  - whether Auto may pick Generous;
+  - whether Generous needs charging;
+  - the hot level (moderate or severe);
+  - or Auto off with a pinned preset.
+- **Nym:** it is now the listener's own Ed25519 signature (`docs/nym.md`), so peers verify it and no one can show a nym for someone else's key. A "verified" mark on nyms in the Swarm list could show that. The Shuffle button keeps the keypair and gives a new name.
+- **Desktop seeder** (`docs/desktop-seeder.md`): a Pear desktop app and headless tool that seeds the station's library from always-on computers. It needs screens. The audience is the same as the phone app: very bright and curious. Ideas:
+  1. A first-run sheet: what it does, the disk and upload caps, "pause on metered", and the honest line that peers can see your network address.
+  2. A live view: shards it covers (rotating hourly), peers served per shard, blocks served with their proofs, and whether the DHT node is persistent and reachable.
+  3. Data per day and month, and served time in listening hours (at 72 MB an hour).
+  4. An engine and app version panel with Pin and Roll back, like the phone's.
+  5. Seeders shown as their own kind on the phone's Swarm screen (station, seeder, listener).
+
+  No Pears name or logo; the footnote may say it runs on the Pear runtime.

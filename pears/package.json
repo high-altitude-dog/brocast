@@ -3,7 +3,9 @@
   "private": true,
   "type": "module",
   "description": "Step 0 of the mesh spike: sets as signed 1 s Opus block logs, fetched by key from peers. Bare-compatible engine, run under Node on the laptop.",
-  "scripts": { "run0": "node tools/run.js" },
+  "scripts": {
+    "run0": "node tools/run.js"
+  },
   "dependencies": {
     "b4a": "1.9.0",
     "compact-encoding": "3.6.0",
@@ -11,6 +13,7 @@
     "hypercore-crypto": "3.7.0",
     "hyperdht": "6.36.0",
     "hyperswarm": "4.17.2",
-    "protomux": "3.13.0"
+    "protomux": "3.13.0",
+    "sodium-universal": "5.0.1"
   }
 }

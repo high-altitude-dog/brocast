@@ -5,7 +5,7 @@
 ## What works
 
 - **Fetch by key:** a listener given only the catalog key finds the station, reads the edition and fetches every set. Every block is verified against the station's signed tree. First block in 0.8 to 3 s from a cold process start; the whole library in 3.6 to 12.8 s.
-- **Finished files:** each set is built in `music/.building/` and moved to `music/` when whole. Every set, on every node, matched the SHA-256 the station published (0 mismatches). A built file round-trips block for block and decodes cleanly in ffmpeg. The app's `OpusFile` reads the same layout.
+- **Finished files:** each set is built in `music/.building/` and moved to `music/` when whole. Every set, on every node, matched the hash the station published (now BLAKE2b-256) (0 mismatches). A built file round-trips block for block and decodes cleanly in ffmpeg. The app's `OpusFile` reads the same layout.
 - **Swarm:** with 4 listeners joining 4 s apart, the later ones took 44 to 73% of their blocks from other listeners. The station sent 50 to 66 MB instead of 75 MB.
 - **Receive-only:** copying each block out and clearing it from the core gave 0 bytes uploaded, while 55 to 90% of that node's blocks came from listeners.
 - **Privacy mode:** one connection (the station), 0% from listeners, and not counted in the listener estimate.
@@ -45,14 +45,16 @@ Made by me, not yet approved: code in `pears/` in this worktree; one core per se
 
 - `docs/pears-spike-design.md` (design note), `docs/pears-spike-results.md` (this file), `design/feedback.md` (three entries for Claude Desktop).
 - `pears/engine/`: `blocks.js`, `builder.js`, `mesh.js`, `policy.js`, `sketch.js`. `pears/tools/`: `station.js`, `listen.js`, `run.js`, `report.js`. Run with `cd pears && npm install && node tools/run.js && node tools/report.js`.
-- Commits: `a821556`, `c9fdd8f`, `4ca8168`, then the step 0 commit. Nothing pushed.
+- Later design docs: `kademlia-research.md`, `engine-api.md` (the contract), `nym.md`, `desktop-seeder.md`; design note §6 Auto mode, §12 topic sharding. Engine: `index.js` (version boundary, topics, DHT record), `nym.js` and `nym-words.json` (Ed25519 nym).
+- Crypto (user, 7 Nov): Ed25519 and X25519 favoured; file checks are BLAKE2b-256 inside the Ed25519-signed catalog; no SHA-256 in the engine.
+- Commits from `a821556` on; see `git log`. Nothing pushed.
 
 ## What the main app needs to adopt it
 
 - A bare-kit worklet in `SessionService` running a `pears/engine` bundle, and a host-side `PearsEngine.kt` speaking a versioned `bare-rpc` API (design §11).
 - `MeshSupply : BlockSupply` beside `LocalSupply`, splitting transport blocks into 1 s blocks for `StreamClient`'s ring.
 - `LibraryStore` reads finished sets from `music/` as it does today. The engine writes them there.
-- Real values for `DemoMesh` from the engine's status stream (design §4), and the listener keypair and nym (`Nym.kt`).
+- Real values for `DemoMesh` from the engine's status stream (design §4), and the listener keypair. The nym comes from the engine (`docs/nym.md`), so there's no `Nym.kt`.
 
 ## Questions for the user
 
