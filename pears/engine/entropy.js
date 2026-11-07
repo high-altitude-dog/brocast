@@ -24,10 +24,19 @@ export const MACHINE = ['os', 'host-csprng', 'keystore-hmac', 'cpu-jitter']
 export function mixSeed (sources) {
   const own = b4a.alloc(MIN_OS_BYTES)
   sodium.randombytes_buf(own) // the engine draws from the OS itself too, whatever the host sent
-  const all = [{ name: 'engine-os', bytes: own }, ...sources]
   const machine = sources.filter((s) => MACHINE.includes(s.name))
   if (machine.reduce((n, s) => n + s.bytes.length, 0) < MIN_OS_BYTES) throw new Error('NEED_MACHINE_SOURCE')
-  healthCheck(all)
+  // A bad machine source stops everything. A bad sensor or user source is only dropped, and the wizard shows it.
+  const dropped = []
+  const kept = []
+  const seen = new Set()
+  for (const s of [{ name: 'engine-os', bytes: own }, ...sources]) {
+    const fault = health(s, seen)
+    if (!fault) { kept.push(s); continue }
+    if (s.name === 'engine-os' || MACHINE.includes(s.name)) throw new Error(fault + ' ' + s.name)
+    dropped.push({ name: s.name, why: fault })
+  }
+  const all = kept
 
   const state = b4a.alloc(sodium.crypto_generichash_STATEBYTES)
   sodium.crypto_generichash_init(state, CONTEXT, 32)
@@ -43,17 +52,15 @@ export function mixSeed (sources) {
   const seed = b4a.alloc(32)
   sodium.crypto_generichash_final(state, seed)
   for (const s of all) sodium.sodium_memzero(s.bytes) // the inputs are as secret as the seed until mixed
-  return { seed, report: all.map((s) => ({ name: s.name, bytes: s.bytes.length })) }
+  return { seed, report: { used: all.map((s) => ({ name: s.name, bytes: s.bytes.length })), dropped } }
 }
 
-/** Refuses obviously broken inputs: an all-zero or one-byte-repeated source, or two sources with the same bytes. */
-function healthCheck (all) {
-  const seen = new Set()
-  for (const s of all) {
-    if (!s.bytes || !s.bytes.length) throw new Error('EMPTY_SOURCE ' + s.name)
-    if (s.bytes.every((b) => b === s.bytes[0]) && s.bytes.length >= 8) throw new Error('STUCK_SOURCE ' + s.name)
-    const k = b4a.toString(s.bytes, 'hex')
-    if (seen.has(k)) throw new Error('REPEATED_SOURCE ' + s.name)
-    seen.add(k)
-  }
+/** What's wrong with a source, or null: empty, stuck on one byte value, or a repeat of another source's bytes. */
+function health (s, seen) {
+  if (!s.bytes || !s.bytes.length) return 'EMPTY_SOURCE'
+  if (s.bytes.length >= 8 && s.bytes.every((b) => b === s.bytes[0])) return 'STUCK_SOURCE'
+  const k = b4a.toString(s.bytes, 'hex')
+  if (seen.has(k)) return 'REPEATED_SOURCE'
+  seen.add(k)
+  return null
 }

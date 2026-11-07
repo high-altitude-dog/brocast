@@ -28,7 +28,7 @@
 | Command | Request | Reply | Notes |
 |---|---|---|---|
 | `hello` | `{ api: [1], host: { app, native: {...} } }` | `{ api: 1, engine: { version, wire, storage, native } }` | Within 5 s of boot, or the health gate fails. |
-| `makeSeed` | `{ sources: [{ name, bytes }] }` | `{ seed, report }` | First run only, before `start`. Mixes the host's entropy sources with the engine's own OS draw (`docs/keys.md`). The host stores the seed, encrypted with a Keystore key. `report` lists source names and sizes for the wizard, never values. |
+| `makeSeed` | `{ sources: [{ name, bytes }] }` | `{ seed, report }` | First run only, before `start`. Mixes the host's entropy sources with the engine's own OS draw (`docs/keys.md`). The host stores the seed, encrypted with a Keystore key. `report` is `{ used: [{ name, bytes }], dropped: [{ name, why }] }`, for the wizard, never values. Each sensor is its own source (`docs/keys.md`). |
 | `start` | `{ seed, nymShuffle, stationKey, dirs: { store, music }, profile, phone }` | `{ publicKey }` | `seed` is 32 bytes in hex. The host owns it and the engine never writes it to disk. `dirs.store` is per storage version (`store-v1/`). |
 | `setPhone` | `{ metered, charging, batteryPct, thermal, dataSaver, playing, privacy, screen }` | `{}` | Sent on every change. `privacy: true` is acknowledged only after uploads, announces and listener connections have stopped. |
 | `setProfile` | `{ name: light\|balanced\|generous\|auto, overrides }` | `{ effective }` | `overrides` uses the policy fields from design §6. |

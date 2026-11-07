@@ -17,14 +17,46 @@ The seed is stored whole. Checked 7 Nov: libsodium's secret key is `seed ‖ pub
 
 `mixSeed(sources)` takes every source the host gathered, adds its own 32 bytes from the OS (libsodium `randombytes_buf`), and mixes them all with **keyed BLAKE2b-256**, each source tagged with its name and length. The output is at least as unpredictable as the strongest single source, so a weak source can't make it worse.
 
-- **Refused:** no machine source from the host (`NEED_MACHINE_SOURCE`), so there are always at least two machine sources. Also refused: an empty, stuck (all one byte) or repeated source.
+- **Refused:** no machine source from the host (`NEED_MACHINE_SOURCE`), so there are always at least two machine sources. A faulty machine source (empty, stuck on one byte, or repeating another) also stops key generation. A faulty sensor or user source is dropped and listed instead.
 - **Never:** a seed from user input alone (the "brain wallet" mistake).
 - **Hygiene:** inputs are wiped after mixing. The wizard is told only which sources were used and how many bytes each gave, never their values.
 
 | Platform | Machine sources (at least one besides the engine's) | Optional, from the user |
 |---|---|---|
-| Android | `host-csprng`: Java `SecureRandom` (BoringSSL DRBG). `keystore-hmac`: HMAC-SHA512 of a random nonce under a key generated inside StrongBox or the TEE, so the bytes depend on the hardware's own random generator. | `touch-jitter`: the wizard's scribble pad, with nanosecond timings and coordinates. `sensor-noise`: the low bits of the accelerometer and gyroscope over about 2 s; no permission needed. |
+| Android | `host-csprng`: Java `SecureRandom` (BoringSSL DRBG). `keystore-hmac`: HMAC-SHA512 of a random nonce under a key generated inside StrongBox or the TEE, so the bytes depend on the hardware's own random generator. | Every phone sensor (next section), plus `touch-jitter`, the wizard's scribble pad |
 | Desktop seeder | `host-csprng`: the platform's generator. `cpu-jitter`: timing jitter of a tight loop, the jitterentropy method, counted conservatively. | `mouse-jitter`, `key-jitter`: in the desktop UI or the browser control page |
+
+### Phone sensors: as many as the phone has (user, 7 Nov)
+
+The host gathers sensor noise while the wizard's welcome screen is up, so it adds no waiting.
+
+1. **Every hardware sensor, discovered at run time.** `SensorManager.getSensorList(TYPE_ALL)` returns every sensor the phone has, so nothing is hard-coded. Typically:
+   - accelerometer, gyroscope and magnetometer, with their **uncalibrated** variants, whose raw bias and noise are better entropy;
+   - barometer, light, proximity, ambient temperature and humidity where present;
+   - hinge angle on foldables;
+   - the fused sensors (gravity, linear acceleration, rotation vectors). These are included even though they're derived from the others, because mixing can't make the seed weaker.
+2. **Sampling:**
+   - each sensor at its fastest rate for about 3 s, recording the full 32-bit float values (the low bits are the noise) and each event's nanosecond timestamp. The jitter between event times is a source in itself;
+   - `HIGH_SAMPLING_RATE_SENSORS` is declared (a normal permission, granted at install) so Android 12+ doesn't cap the rate at 200 Hz.
+3. **Other no-permission sources:**
+   - battery current and voltage (`BATTERY_PROPERTY_CURRENT_NOW` and the battery broadcast), read rapidly;
+   - the touch pad's timings and coordinates;
+   - timing jitter from a tight loop (`cpu-jitter`).
+4. **With a permission the listener has already granted:**
+   - GNSS raw measurements (pseudorange rates, carrier-phase and clock noise), only while Use satellites is on;
+   - Wi-Fi and Bluetooth scan signal strengths, only if their permissions are already held.
+
+   **None of these in Privacy mode,** and the app never asks for a permission just for this.
+5. **Opt-in, in the wizard, each with its own permission prompt:**
+   - **Camera:** a dark-frame shot of a covered lens; sensor shot noise is excellent entropy.
+   - **Microphone:** 1 s of room noise, using the low bits only. It's recording, not playback, so the sound rules aren't affected; nothing is kept.
+6. **Each source is named separately** (for example `sensor-gyroscope-uncalibrated`), so the wizard can tick each one in.
+7. **Faults:**
+   - A sensor with no noise (stuck readings, all identical) is **dropped and listed**, and doesn't stop key generation.
+   - A machine source with a fault stops it.
+8. **Privacy:** raw sensor data is never stored, logged or sent. It goes straight into the mixer and is wiped. Location-bearing sources (GNSS, Wi-Fi, Bluetooth) are mixed and destroyed in the same call, so even a crash dump can't hold a map of where the phone was.
+
+**On the desktop:** the counterparts are CPU and disk timing jitter, mouse and keyboard timing, battery readings on laptops, and an opt-in microphone or webcam dark frame through the browser control page.
 
 **Honest limits:**
 
