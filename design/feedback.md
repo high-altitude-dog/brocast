@@ -300,3 +300,9 @@ Constraints: a flash at 1 Hz at most; no strobing; the screen has to be readable
 - **Demo data:** all values come from `DemoMesh` in `ui/DemoScreens.kt` and each screen says `DEMO DATA` on screen, so design can iterate before the Pears spike. Buffer's title and Up next use the real library; its download state, frontier and block flow are made up.
 - **Not built:** Buffer states other than Filling, set bands, track and beat lines, the Swarm states, the Reduced and Minimal levels, and the real waveform summary, BPM and beat grid.
 - **To judge in the design:** the Swarm lanes are busy with 12 peers; the Buffer axis labels get tight near `1 h` and `6 h`.
+
+## 7 Nov: Pears spike decisions that change the design
+
+- **Sharing while playing (user's decision):** sharing carries on while music plays unless the listener turns it off. Please drop "and not playing" from the Share row, the first-use sheet's conditions, and the `Paused · playing` sharing state. Add a `Share while playing` switch, on by default, under Share with other listeners.
+- **Listener count is an estimate (user's decision):** each phone keeps a small summary merged across the mesh, accurate to about ±3%. Please show it with `≈`, for example `≈ 1.2 M listening`.
+- **Resource profile (coming, waiting on the user's OK):** Light, Balanced (the default) and Generous presets, plus Auto mode that follows battery, charging, Wi-Fi, heat and Data Saver and names its reason on screen. It extends Settings › Delivery. The settings, ranges, defaults and live figures are in `docs/pears-spike-design.md` §6 on the `pears-spike` branch. A screen brief will follow once the user agrees.

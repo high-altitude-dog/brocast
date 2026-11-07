@@ -44,7 +44,7 @@ Not used: **Hyperdrive** for audio (see §2), **Autobase** (there's one writer, 
 | Passed on today | The sum of `upload` bytes, reset at local midnight |
 | Listener count | See below |
 
-**Listener count at millions of listeners:** nobody can list every peer, so each phone keeps a **HyperLogLog sketch**. It has 1024 registers (about 768 B) and is accurate to about ±3%. Each phone adds `hash(its key ‖ hour)` and merges with its peers' sketches over a Protomux channel every 60 s; merging takes the larger value of each register. Counts spread across the whole mesh in a few rounds, and the hourly salt lets departed listeners age out. Shown as `≈ 1.2 M listening`. The risk: a hostile peer can inflate the count. To limit that, seed servers cap what they pass on; the station signing the count is a later option. Phones in Privacy mode don't take part.
+**Listener count at millions of listeners:** nobody can list every peer, so each phone keeps a **HyperLogLog sketch**. It has 1024 registers (about 768 B) and is accurate to about ±3%. Each phone adds `hash(its key ‖ hour)` and merges with its peers' sketches over a Protomux channel every 60 s; merging takes the larger value of each register. Counts spread across the whole mesh in a few rounds, and the hourly salt lets departed listeners age out. Shown as `≈ 1.2 M listening` (estimate approved by the user, 7 Nov). The risk: a hostile peer can inflate the count. To limit that, seed servers cap what they pass on; the station signing the count is a later option. Phones in Privacy mode don't take part.
 
 ## 5. Privacy mode
 
@@ -70,6 +70,7 @@ The listener chooses how much data, battery, memory and storage the mesh may use
 | Low / high watermark (refill when below low, up to high) | 30 s to 24 h | 2 m / 15 m | 5 m / 2 h | 30 m / 24 h |
 | Mobile data cap per day | 0 to unlimited | 100 MB | 500 MB | unlimited |
 | Share | off, Wi-Fi + charging, Wi-Fi, always | off | Wi-Fi + charging | Wi-Fi |
+| Share while playing | on or off | (sharing off) | on | on |
 | Upload rate cap | 0 to unlimited | 0 | 1 Mbps | unlimited |
 | Max connections | 2 to 32 | 4 | 8 | 24 |
 | Announce on the DHT | client only, or announce | client only | announce while sharing | announce |
@@ -81,6 +82,7 @@ The listener chooses how much data, battery, memory and storage the mesh may use
 - **Auto mode (the frontier part):** the policy reacts to the phone's state, the way screen levels do. Inputs are Wi-Fi or metered, charging, battery %, thermal headroom, Android Data Saver (always obeyed) and Doze. For example, at under 20% battery and not charging, the phone drops to Light and says why (`MESH · LIGHT · battery 18%`). On Wi-Fi and charging, it opens up to Generous.
 - **Measured, not guessed:** the settings page shows real figures for this hour and today: MB down (mobile and Wi-Fi), MB shared, connections, and the battery cost of the mesh. The battery cost is estimated from `BatteryManager`'s charge counter against a short baseline with the mesh suspended. Each preset also shows an estimate before it's chosen, calibrated from the phone's own history.
 - **Suspend and resume:** when nothing needs fetching and sharing is paused, the worklet suspends its swarm, so the radio and CPU sleep. It wakes at the low watermark.
+- **Sharing while playing (user's decision, 7 Nov):** sharing carries on while music plays, unless the listener turns `Share while playing` off. This drops "not playing" from the spec's sharing conditions. The upload runs on the worklet's low-priority thread and never touches the audio thread.
 - **Relation to the current spec:** this extends Settings › DELIVERY: Download ahead on mobile data, Share, Only during global parties, and Sharing allowance all become settings in this table. The screens belong to Claude Desktop. After your OK I'll send them the settings, ranges, defaults and the live figures the app can supply, through `design/feedback.md`.
 
 ## 7. Headset delays (designed now, built later)
@@ -97,10 +99,15 @@ The listener chooses how much data, battery, memory and storage the mesh may use
 - **Measured:** time to first block; time to fill 5 min and 2 h; per-block latency (p50, p95, max); the fraction of blocks from listeners; wire bytes over audio bytes (proof overhead); RSS and CPU per process; and whether a phone can refuse uploads (§5).
 - Load `usb-cooldown` before `npm install`. Results go in `docs/pears-spike-results.md`.
 
-## 9. Questions for you
+## 9. Decisions and open questions
 
-1. **Where the code lives:** the brief says `pears/` in this worktree, but you started me in an empty `~/Documents/pears-engine`. My recommendation is the worktree, as briefed, kept as a standalone package so it can move later.
-2. Are the **Light, Balanced and Generous** presets, Balanced as the default, and Auto mode what you want? I'll pass this to Claude Desktop as a design decision.
-3. **Sharing while playing:** the spec says sharing happens only "while charging and not playing", but brief step 4 tests seeding while playing. Should "while playing" become a profile setting (off in Light)?
-4. Is an **estimated listener count** (`≈`, ±3%) acceptable?
-5. **Pears.com submission:** I'll keep the no-branding and no-endorsement rule until you say otherwise. The submission itself needs none of that inside the app.
+**Decided by the user, 7 Nov:**
+
+- Sharing also runs while playing, on by default, and the listener can turn it off (§6).
+- The listener count is an estimate, shown with `≈` (§4).
+- The rule of no Pears branding and nothing that implies endorsement stays until the user says otherwise. The Pears.com submission doesn't need either inside the app.
+
+**Still open:**
+
+1. **Where the code lives:** the brief says `pears/` in this worktree, but the user started this session in an empty `~/Documents/pears-engine`. The recommendation is the worktree, as briefed, kept as a standalone package so it can move later.
+2. Are the **Light, Balanced and Generous** presets right, with Balanced as the default, plus Auto mode?
