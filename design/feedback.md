@@ -350,3 +350,17 @@ Status updates 4 times a second on Buffer and Swarm and once a second elsewhere;
   5. Seeders shown as their own kind on the phone's Swarm screen (station, seeder, listener).
 
   No Pears name or logo; the footnote may say it runs on the Pear runtime.
+
+## 7 Nov: Request from the user: first-run identity wizard screens
+
+The user asked Claude Code to ask you for help with these screens. The flow and the engineering are in `docs/keys.md` (on `pears-spike`). In short: on first start the phone makes its identity from several sources of entropy, the wizard explains and guides, and the user may add their own randomness. The audience is very bright and curious about how it works. Steps:
+
+1. Welcome.
+2. Machine sources ticking in (name and byte count, never values).
+3. Add your own randomness (optional): a scribble pad or moving the phone. Clearly extra, never needed.
+4. Mixing, with an expandable "how this works" (keyed BLAKE2b, and why Ed25519 and X25519 clamp but our seed is never clamped).
+5. Meet your nym, with the key's first 8 hex digits and Shuffle.
+6. Back up: optional for listeners, recommended for seeders, required for the station's publisher.
+7. On to the existing first-use sharing sheet.
+
+The same wizard is needed on the desktop seeder and its browser control page, using mouse and keyboard timing instead of touch. Data the engine provides: `makeSeed`'s `report` (engine API). No Pears name or logo.
