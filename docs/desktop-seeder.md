@@ -134,17 +134,31 @@ A node's class comes from the catalog for station seeds, or from its signed hell
 A seeder must stay a good guest on a computer someone is using, including this one, which runs from a USB drive.
 
 - **Low priority by default:** nice 19 and the idle I/O class on Linux; background QoS on macOS; below-normal priority on Windows.
-- **Hard budgets, with sensible defaults the user can change:**
+- **Hard limits come from the app's assessment of the machine, with headroom kept back (user, 7 Nov)**, never from fixed numbers. Code: `pears/seeder/assess.js`. `probe()` runs at start, every 5 minutes, and on power or disk events; `limits()` is pure.
+  - **What it measures:**
+    - RAM: total and available.
+    - CPU: cores and load.
+    - The store's disk: its real device, followed through LUKS and LVM, and whether it's USB, removable or spinning; free space.
+    - Power: battery or mains, charge level.
+    - Linux pressure stall (PSI) for I/O, CPU and memory.
+  - **What it learns while running:**
+    - the memory each connection really costs;
+    - the highest sustained upload seen without the round-trip time rising.
+  - **The owner picks one share:** Light, Normal (default) or Generous, worth 10%, 25% or 50% of the machine. Each limit is the **smaller** of what the share allows and what a seeder can usefully use at that share, so a big machine doesn't hand over gigabytes it won't use.
 
-  | Budget | Default |
+  | Limit | Rule |
   |---|---|
-  | Memory (RSS) | 512 MB |
-  | Connections | 32 |
-  | Requests in flight | about 300 KB |
-  | Disk writes | 20 MB/s |
-  | Free-disk floor | 10%, and at least 5 GB |
-  | Upload | uncapped on unmetered connections |
+  | Memory | the smallest of: what's needed (base + connections × per-connection cost + cache), share × RAM, and available RAM minus a reserve of max(1 GB, 15% of RAM). Never under 128 MB or over 4 GB. |
+  | CPU | the smaller of what's needed (0.5, 1 or 2 cores) and share × cores. Halved while the machine's load is over 80%. |
+  | Disk space | 2 × share × (free space − a floor of max(5 GB, 10% of the disk)). Nothing is stored at or below the floor. |
+  | Disk writes | by device class (USB flash 10, spinning disk 50, SSD 200 MB/s) × 2 × share. Syncs to disk every 10, 5 or 2 s. |
+  | Connections | what the memory limit holds, up to 8, 32 or 64 by share |
+  | Upload | half the highest sustained upload seen without the round-trip time rising, so the household's internet stays quick. 2 Mbps until that's measured. |
+  | Battery | running on battery forces Light. Under 30%, seeding pauses. |
 
+  - **Results on this laptop (7 Nov):** USB flash drive behind LUKS and LVM, correctly detected even though the drive reports itself as spinning; 31 GB RAM; 5.8 GB free; on battery at 31%. Every share gave 208 MB of memory, 0.5 cores, 0.1 GB of store, 2 MB/s writes and 8 connections. On mains at Normal it would be 544 MB, 1 core, 5 MB/s and 32 connections. A desktop with an SSD and 400 GB free would get 544 MB, 1 core, 150 GB of store and 100 MB/s.
+  - **Overriding:** the owner may lower any limit. Raising one above the assessment needs a confirmation that names the risk. The reserve and the disk floor can't be overridden.
+  - **The status page shows each limit with its reason**, for example `Memory 544 MB of 31 GB · keeping 4.7 GB free for you`.
 - **Back off under pressure (Linux, PSI):** the same rules as the `usb-cooldown` skill. If I/O pressure stays above 70% for 2 minutes, the swarm suspends for at least 60 s, and resumes only once pressure is under 30%. CPU and memory pressure work the same way. On macOS and Windows, use event-loop lag and the OS's thermal state.
 - **Watchdog:** if the event loop lags by more than 500 ms, halve the connections and requests in flight. If memory nears the cap, shrink caches first, then connections.
 - **Throttled persistence:** batch syncs to disk, and never sync once per block, so a cheap drive isn't hammered.
@@ -154,7 +168,7 @@ A seeder must stay a good guest on a computer someone is using, including this o
 
 Today's stack can't seed from inside a browser tab (checked 7 Nov): Hypercore's storage needs native RocksDB, and the transport is native UDP. A browser peer would need an old Hypercore, a different storage layer and a WebSocket bridge to the DHT (`@hyperswarm/dht-relay`), and that bridge is itself a server to pay for. It also stops when the tab closes.
 
-**The design instead:** the seeder runs as a local process (headless mode), and the **browser page is its control panel and dashboard**. It's served by the seeder at `http://127.0.0.1:<port>/`, using the same status snapshot as the desktop UI. So "seeding from a browser page" means opening a page, and closing the page doesn't stop the seeding. The local web UI listens on loopback only, checks the `Host` header, and needs a per-run token in the URL, so other websites can't drive it.
+**The design instead (agreed by the user, 7 Nov):** the seeder runs as a local process (headless mode), and the **browser page is its control panel and dashboard**. It's served by the seeder at `http://127.0.0.1:<port>/`, using the same status snapshot as the desktop UI. So "seeding from a browser page" means opening a page, and closing the page doesn't stop the seeding. The local web UI listens on loopback only, checks the `Host` header, and needs a per-run token in the URL, so other websites can't drive it.
 
 ## Open questions
 

@@ -86,10 +86,11 @@ The listener chooses how much data, battery, memory and storage the mesh may use
 | Share while playing (user, 7 Nov) | on or off | on | on | on |
 | Max connections | 2 to 32 | 4 | 8 | 24 |
 | Announce on the DHT | client only, or announce | client only | announce while sharing | announce |
-| RAM budget (cache and in-flight requests) | 16 to 256 MB | 24 MB | 64 MB | 192 MB |
+| RAM budget (cache and in-flight requests) | assessed from the device (user, 7 Nov), up to | 24 MB | 64 MB | 192 MB |
 | Sharing allowance (storage) | 0 to 20 GB | 1 GB | 4 GB | 10 GB |
 
 - **Moving between networks:** the moment the phone goes from Wi-Fi to metered, uploads stop, DHT announces stop, and the phone keeps only enough connections to download. Back on Wi-Fi, sharing resumes on its own. Every byte is counted against the network it went over, so the figures can say `Shared 1.2 GB on Wi-Fi · 0 MB on mobile data`.
+- **Assessed, not fixed (user, 7 Nov):** on phones, the RAM budget is also the smaller of the preset's figure and what the device can spare. The inputs are Android's memory class, low-RAM flag and available memory, minus headroom, by the same rules as the seeder (`desktop-seeder.md`).
 - **Ephemeral DHT node always:** a phone never routes other peers' DHT traffic.
 - **Hard floors:** a low watermark of at least 30 s, at least 1 connection, and seed-server fallback, so no setting can starve playback.
 - **Auto mode (the default; user, 7 Nov: sensible defaults the listener can adjust).** Rules in order, first match wins (`auto()` in `pears/engine/policy.js`):
