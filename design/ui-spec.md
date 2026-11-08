@@ -1,4 +1,4 @@
-# UI spec (hand-off 25)
+# UI spec (hand-off 30)
 
 Field names come from Claude Code's "Fields that exist today" table in `feedback.md`, as of 1 Nov 2026. If one has been renamed since, use the new name.
 
@@ -32,12 +32,12 @@ Field names come from Claude Code's "Fields that exist today" table in `feedback
 | Element | Shows | Source | States and taps | Status |
 |---|---|---|---|---|
 | Header | Left: your colour-fruit-animal name as the eyebrow (`AMBER FIG HERON`), then `● ≈ 1.2 M listening`: the mesh's estimate of everyone listening, always with `≈` (accurate to about ±3%; user, 7 Nov). Inside an event, the event name replaces your name. The whole block opens Swarm. Right: icon buttons (44 × 44) for Time signals, Calibration, Archive and Settings | Listener key nym; mesh listener estimate | Taps open Swarm | later (demo data now) |
-| Now playing | The **artist photo** (52 px square, rounded 12, cropped at the photo's focus point) with **Kept** as a small bookmark in its corner (locked on for the beta, no tap), then track title (20 px, bold, one line) and `artist · set` (13 px, `textSecondary`), then the **channel chip** on the right (see Channel control), then the **library line**: `LIBRARY`, a thin bar and `38 of 52 sets` | Artist entry; file record and cue list; channel setting; library download state | The photo opens Artist photo. The chip needs press and hold. With no photo: the artist's initials in accent on a dark tile. | later |
+| Now playing | The **artist photo** (52 px square, rounded 12, cropped at the photo's focus point) with **Kept** as a small bookmark in its corner (keeping locked on for the beta; the bookmark is its own 44 px target that **opens Kept**, user 7 Nov), then track title (20 px, bold, one line) and `artist · set` (13 px, `textSecondary`), then the **channel chip** on the right (see Channel control), then the **library line**: `LIBRARY`, a thin bar and `38 of 52 sets` | Artist entry; file record and cue list; channel setting; library download state | The photo opens Artist photo. The chip needs press and hold. With no photo: the artist's initials in accent on a dark tile. | later |
 | Brocast clock | A dial. Along the top of the bezel, curved: `TEDDINGTON · GREENWICH`, with an accent meridian tick at 12 o'clock between the two names. Inside: the zone (GMT or BST), HH:MM:SS large, the **time-source pictogram**, then local time. Updates once a second; no sub-second dial and no ns digits. | Flowtime | See the Times rule | now |
 | Seconds sweep | The outer accent arc fills once per flowtime **minute**, like a second hand | Seconds of the current minute | Steps once a second at Reduced level | now |
 | Time-source pictogram | **Satellites:** a mini constellation: the sky squashed into a small ellipse, one dot per satellite in view, lit in accent for each one in use, the ones in use joined by faint lines (the same shortest-path pattern as the Satellites screen), no labels; then `GPS · 10 of 14`. Tapping it opens Satellites. **Hold:** an accent hourglass beside the same sky gone dark, `HOLDING · 41 s`. **NTP:** a cell tower with radio waves, `NTP · stratum 1` (Privacy mode shows this one). **First second:** the tower with dashed waves, `NTP · getting time`, until the first fit (never a 'no time' state). | `FlowTime.chosen`, `GpsTime.used`, `seen`, `lastBoot`, `NtpClient.stratum`; per-satellite positions **later** (until then, place dots evenly) | Updates once a second | partly |
 | Precision ring | A glow whose width shows the sync error on the budget's log scale; its figure is on the bottom bezel | Sync error | | now |
-| Beat counter (user, 7 Nov) | A 44 px strip **under the clock**: `BAR 212` left, four beat cells, `BPM 124` right (mono). Beat 1's cell is wider and keeps an accent outline. The current beat's cell is filled accent, with a dark line inside it filling as the beat's phase runs to the next beat; beats already played this bar stay faintly lit. On beat 1 the strip's border flashes accent for 120 ms. Beats change when the sound **reaches your ears** (flowtime plus output lag), so every phone in a crowd lights beat 1 together. States: Working out the beats (dashed cells, `BEATS 62%`), No steady beat (`—`, dashed), Tempo change (new BPM in accent for one bar), New set (bar 1). | `SetBeats`: bar from set start, beat 1–4, bpm, beat phase; per set, after download | Tap opens Buffer. Reduced motion: no flash, no phase line, the cell steps. Reduced level: updates on the beat only. Minimal: hidden. | now (after analysis) |
+| Beat counter (user, 7 Nov) | A 44 px strip **under the clock**: `BAR 212` left, four beat cells, `BPM 124` right (mono). Beat 1's cell is wider and keeps an accent outline. The current beat's cell is filled accent, with a dark line inside it filling as the beat's phase runs to the next beat; beats already played this bar stay faintly lit. No flash on beat 1 by default; **Settings › Screen › Flash on each new bar** (off by default, user 7 Nov) lights the strip's border in accent for 120 ms on beat 1, never while No flashing is on. Beats change when the sound **reaches your ears** (flowtime plus output lag), so every phone in a crowd lights beat 1 together. States: Working out the beats (dashed cells, `BEATS 62%`), No steady beat (`—`, dashed), Tempo change (new BPM in accent for one bar), New set (bar 1). | `SetBeats`: bar from set start, beat 1–4, bpm, beat phase; per set, after download | Tap opens Buffer. Reduced motion: no phase line, no flash, the cell steps. Reduced level: updates on the beat only. Minimal: hidden. | now (after analysis) |
 | Play control and sync badge | A 52 px round button left of the badge: **Stop** (a white square, outlined) while playing; **Play** (an accent-filled circle with a dark triangle) when stopped; dashed and disabled while the set due now is downloading. The badge shows words, the ± figure and the source. | See Badge states | Play starts in sync at once. Tapping the badge opens the error budget detail. | now |
 | Latest event | Time, lane mark and name, and the event text, **directly under the badge**. The text wraps onto as many lines as it needs, with no ellipsis, and the row grows (the user's decision, 2 Nov). | `EventLog.latest()` | Tapping opens the Event log. A banner elsewhere links to its own event. | now |
 | Sync card (replaces the error budget, user's request 3 Nov) | **Headline:** `You hear it within ±3.0 ms of everyone's clock` (the badge figure, accent). **Window:** a signed log line from 1 s earlier to 1 s later around the Brocast clock (marks at 1, 10, 100 ms and 1 s each side, knee at 100 µs; `0` at the centre) (a white tick, `BROCAST CLOCK`); an accent band shows where this phone's sound most likely is (centred on the held gap, here 200 µs later, half-width √(clock² + delay estimate²)); a dot marks the centre; dashed lines at ±5 ms mark a typical event limit, labelled `EARLIER` and `LATER`. **What makes up the ±:** one bar split by each part's share of the total (squared), output delay estimate in amber, clock in accent, then one sentence naming the largest part and what would tighten it (`Mostly your headphones' delay estimate (±2.8 ms). Clock ±400 µs. An earcup test can tighten it.`). The output word follows the output in use. | Badge figure; `errAt`; Calibration ±; `NudgeControl.gapAt` | The whole card opens Time signals for the detail. | partly |
@@ -56,6 +56,7 @@ Field names come from Claude Code's "Fields that exist today" table in `feedback
 | LISTENING · Stereo pair | `Stereo pair`, then `Stereo · back to Stereo each start`, or `Left · until the app restarts` | Channel setting | Opens Stereo pair | now |
 | LISTENING · Local time under the clock | A switch, on by default | A new setting | Off hides the local line on every clock | now |
 | SCREEN · No flashing | A switch, off by default | Not built (light show) | Always respected; screen levels never override it | later |
+| SCREEN · Flash on each new bar | A switch, off by default: `The beat counter’s border lights on beat 1. Off when No flashing is on` | Setting | Disabled and off while No flashing is on | now |
 | SCREEN · Screen level | The current automatic level | Not built | Read-only | later |
 | ARCHIVE · Keep | Segmented: Off, Kept only, Everything. Off by default (opt-in). | A new setting | See Archive rules | later |
 | ARCHIVE · Size limit | Stepped slider: 1, 2, 5, 10, 20, 50 GB; 5 GB by default | A new setting | Disabled in Kept only and Off | later |
@@ -446,6 +447,65 @@ The same six steps as a left rail, the step in the middle, sources on the right.
 ![](screens/beat-states.png)
 
 One bar as it plays (beats 1, 2, 4), then: working out the beats, no steady beat, tempo change, new set, reduced motion. Rules are in the Now playing table.
+
+## Kept
+
+![](screens/kept.png)
+
+Opens from the Kept bookmark on Now playing's artist photo (user, 7 Nov). Everything whole and verified on this phone (`library.sets[].state = built`; in the beta, everything is kept), with what makes each one itself. `Archive ›` top right for the date-ordered list and storage.
+
+| Element | Shows | Source | Status |
+|---|---|---|---|
+| Summary | KEPT count (and by kind), LISTENING total time (`all play offline`), STORAGE (of the Archive limit) | Library | now |
+| Tempo map | One bar per item across its BPM range (low to high), thickness by length, a ring at the BPM it sits at most, name beside it. A two-handle range filters the list (`116–126 BPM · 4 of 5`); items outside dim to 32%. Items with no steady tempo aren't on the map. Two taps clear it. Bars still being analysed are dashed. | SetBeats per item | later |
+| Sort | Recent (kept date), BPM, Length, Artist | | |
+| Legend | energy, tempo, track change | | |
+| Card | Artist thumbnail (56 px; photo at its focus point, or initials on a tinted tile), title, `artist · set, 14 tracks`, mono `1:52:10 · 118–124 BPM · 135 MB`, bookmark (44 px). Under it the **fingerprint**: the whole file's energy as a band (waveform summary), its tempo as a white line (beat grid), track changes as ticks (cue list). Footer `✓ verified · plays offline · kept 7 Nov`, or `● Playing now · track 9 of 14` in accent. | File record, waveform summary, SetBeats, cue list | later |
+| Still finishing | A dashed row: `1 still finishing: Salt Lines · Kept, 62% built. Shows here once whole and verified.` | Library | now |
+
+## Kept states
+
+![](screens/kept-states.png)
+
+| State | Shows |
+|---|---|
+| Getting here | The bookmark on the photo is a 44 px target overlapping its corner; the rest of the photo still opens it full screen. |
+| A set, opened | Tap a card: 72 px thumbnail, a 72 px fingerprint with numbered track lines and the BPM range at its edge (drag along it to scrub), KEY · PEAK · LOUDNESS · KEPT, the track list (number, start time, title, track artist, BPM, length; the first 5, then `9 more tracks`), Replay · not synced (as Archive), Unkeep. Tap a track to replay from it. |
+| No track list yet | Fingerprint without ticks, `TRACK LIST NOT PUBLISHED YET`, and why. |
+| Beats still being worked out | `BPM: working out, 40%`; dashed bar on the tempo map; no tempo line. |
+| Unkeep (after the beta) | Toast with Undo: back to rolling storage, deleted when space is needed. |
+| Empty | Dashed tile and one line: items appear once whole and verified. |
+
+KEY and LOUDNESS need analysis that doesn't exist yet; hide them until it does.
+
+## Track ID review (station, desktop)
+
+![](screens/track-id-review.png)
+
+For the ShazamKit trial and, if it works, adding each new set (backlog). Runs where ShazamKit runs (a Mac or an Android device), never on listeners' phones. 1440 wide.
+
+| Element | Shows |
+|---|---|
+| Header | `STATION · NEW SET · TRACK LIST`; right: the run (`ShazamKit · 673 windows of 10 s · own catalog: 41 tracks`). |
+| Set | Thumbnail, title, artist · kind · length · BPM range; counts: matched (accent), named by you (white), ID · unknown (amber), blend to check (purple). |
+| Lanes, one time axis | ENERGY · BPM (the set's fingerprint); EACH WINDOW (one bar per 10 s window: accent height = match confidence, grey = no match, purple = two matches); TRACKS (segments, brighter = surer; unknown hatched amber; blend purple; named by a person grey-white; selected = white outline). |
+| Table | #, start, title (`ID` in amber when unknown), artist, source (Shazam / Own catalog / Person / `ID · unknown` / `blend · 2 matches`), match %, action (✓, `name it`, `split`). The selected row is outlined. |
+| Side panel | The selected segment: times and length, why it's unknown, a player over its fingerprint, Title, Artist (picked from the artist list, chips for each artist plus `+ new artist`), Save, **Keep as ID**, Split here. |
+| Footer | What's left; Save draft; **Publish track list · signed** (signed with the station key), disabled until every blend is split or merged. IDs may be published. |
+
+## Track names on the phone
+
+![](screens/track-id-states.png)
+
+| State | Shows |
+|---|---|
+| Unnamed track playing | Title `ID` with an amber `UNNAMED` tag, `artist · set`. Lock screen and notification: `ID · artist`. |
+| Kept track list | ID rows: `ID` in amber, `unnamed`, the set's artist, BPM and length still shown. Footer credit: `Track names identified with Shazam and checked by the station. 2 tracks unnamed.` |
+| Buffer Up next | `ID` in amber, `artist · track 6 · BPM`. |
+| Named later | The next catalog edition carries the name; it updates everywhere, and the event log says `Track 6 of Ridge Line is now named: Firn`. |
+| No track list | The set's name is the title; Buffer has no track lines. |
+
+Shazam credit wording and logo follow Apple's ShazamKit terms, checked in the trial.
 
 ## Badge states
 
