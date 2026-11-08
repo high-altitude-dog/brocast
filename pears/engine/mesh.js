@@ -35,16 +35,19 @@ export class Mesh {
   /**
    * lan: false turns off HyperDHT's LAN shortcut for the connections this node opens (step 2: internet paths only).
    * relayThrough: a blind relay's public key, used only when hole-punching fails or this node's NAT is randomized.
+   * forceRelay: (remotePublicKey) => bool; those connections go only through relayThrough (no fast open, no punch).
+   *   Step 2 test only, to prove the relay path; the default (null) relays only after a punch fails.
    * onconn: called with one record per connection attempt and per accepted connection (step 2's connection types).
    */
-  constructor ({ dir, seed, bootstrap, maxPeers = 64, relaySketch = true, lan = true, relayThrough = null, onconn = null }) {
+  constructor ({ dir, seed, bootstrap, maxPeers = 64, relaySketch = true, lan = true, relayThrough = null, forceRelay = null, onconn = null }) {
     const k = keysFromSeed(seed)
     this.keyPair = k.keyPair
     this.store = new Corestore(dir, { primaryKey: k.primaryKey, unsafe: true })
     this.swarm = new Hyperswarm({ keyPair: this.keyPair, bootstrap, maxPeers, relayThrough: relayThrough || undefined })
     this.onconn = onconn
     this.conns = [] // step 2: every attempt and accepted connection, with its path and outcome
-    this._watchConnects(lan)
+    this.relayKey = relayThrough
+    this._watchConnects(lan, relayThrough, forceRelay)
     this.allow = null // set to (remotePublicKey) => bool to refuse connections, as Privacy mode does
     this.sketch = new Sketch()
     this.relaySketch = relaySketch
@@ -54,13 +57,18 @@ export class Mesh {
   }
 
   /** Wraps dht.connect so each outgoing attempt is recorded: time to open, path, or the error code it failed with. */
-  _watchConnects (lan) {
+  _watchConnects (lan, relayThrough, forceRelay) {
     const dht = this.swarm.dht
     const connect = dht.connect.bind(dht)
     dht.connect = (publicKey, opts = {}) => {
       const t = Date.now()
       const before = copy({ punches: dht.stats.punches, relaying: dht.stats.relaying })
-      const conn = connect(publicKey, lan ? opts : { ...opts, localConnection: false })
+      let o = lan ? opts : { ...opts, localConnection: false }
+      const forced = !!(relayThrough && forceRelay && !b4a.equals(publicKey, relayThrough) && forceRelay(publicKey)) // never the relay itself
+      // relayThrough plus a refused punch: hyperdht keeps the connection while the relay pairs (connect.js, 6.36).
+      if (forced) o = { ...o, relayThrough, fastOpen: false, holepunch: () => false }
+      const conn = connect(publicKey, o)
+      conn.forcedRelay = forced
       let opened = false
       conn.on('open', () => { opened = true; this._record(conn, 'client', t, before, 'open') })
       // An error after opening is a connection ending (a peer stopping), not a failure to connect.
@@ -82,8 +90,10 @@ export class Mesh {
     const relaying = before ? d(dht.stats.relaying, before.relaying) : null
     let path = null
     if (outcome === 'open') {
+      // Relayed traffic arrives from our own connection to the relay, so its address gives a relayed stream away.
+      const viaRelay = !!this.relayKey && this.conns.some((x) => x.relay && x.remote === (host ? host + ':' + raw.remotePort : null))
       if (isPrivate(host)) path = 'lan'
-      else if (relaying && relaying.successes) path = 'relayed'
+      else if (viaRelay || (relaying && relaying.successes) || conn.forcedRelay) path = 'relayed'
       else if (punches && punches.open && !punches.consistent && !punches.random) path = 'direct'
       else path = dht.firewalled ? 'punched' : 'direct'
     }
@@ -91,6 +101,7 @@ export class Mesh {
       peer: conn.remotePublicKey ? hex(conn.remotePublicKey).slice(0, 8) : null, side, outcome, path,
       ms: t ? Date.now() - t : null, remote: host ? host + ':' + raw.remotePort : null, punches, relaying
     }
+    if (this.relayKey && conn.remotePublicKey && b4a.equals(conn.remotePublicKey, this.relayKey)) r.relay = true // the link to the relay itself
     this.conns.push(r)
     if (this.onconn) this.onconn(r)
   }

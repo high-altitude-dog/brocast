@@ -62,7 +62,7 @@ rpc = new RPC(Bare.IPC, async (req) => {
 })
 
 class Run {
-  constructor ({ seed, stationKey, dirs, profile: prof = 'generous', bootstrap, lan = true, relayThrough, network, hedge: hedgeMode = 'delayed', hedgeMs = 1000 }) {
+  constructor ({ seed, stationKey, dirs, profile: prof = 'generous', bootstrap, lan = true, relayThrough, network, forceRelay, hedge: hedgeMode = 'delayed', hedgeMs = 1000 }) {
     this.hedge = { mode: hedgeMode, afterMs: hedgeMs }
     this.p = profile(prof)
     this.dirs = dirs
@@ -70,7 +70,10 @@ class Run {
     this.stationKey = b4a.from(stationKey, 'hex')
     this.mesh = new Mesh({
       dir: dirs.store, seed: b4a.from(seed, 'hex'), bootstrap: bootstrap?.length ? bootstrap : undefined, maxPeers: this.p.maxPeers,
-      lan, relayThrough: relayThrough ? b4a.from(relayThrough, 'hex') : null, onconn: (r) => this.log({ ev: 'conn', ...r })
+      lan, relayThrough: relayThrough ? b4a.from(relayThrough, 'hex') : null,
+      // Step 2 relay test: phone-to-phone connections only; the station is always reached the normal way.
+      forceRelay: forceRelay ? (k) => !b4a.equals(k, b4a.from(stationKey, 'hex')) : null,
+      onconn: (r) => this.log({ ev: 'conn', ...r })
     })
     this.held = new Set()
     this.inflight = new Map()
@@ -81,7 +84,7 @@ class Run {
     this.byPeer = new Map()
     this.sets = []
     this.phase = 'finding catalog'
-    this.log({ ev: 'start', me: hex(this.mesh.keyPair.publicKey).slice(0, 8), mode: 'share', profile: this.p.name, publicDht: !bootstrap?.length, lan, relay: !!relayThrough, network: network || null, hedge: this.hedge })
+    this.log({ ev: 'start', me: hex(this.mesh.keyPair.publicKey).slice(0, 8), mode: 'share', profile: this.p.name, publicDht: !bootstrap?.length, lan, relay: !!relayThrough, forceRelay: !!forceRelay, network: network || null, hedge: this.hedge })
     this.restartStatus()
     this.arrivalTimer = setInterval(() => this.flushArrivals(), 250)
     this.main().catch((e) => { if (!state.stopping) fail('RUN', e) })

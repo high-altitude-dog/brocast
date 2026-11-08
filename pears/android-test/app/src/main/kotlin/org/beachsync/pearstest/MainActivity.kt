@@ -43,6 +43,7 @@ class MainActivity : Activity() {
     private lateinit var station: EditText
     private lateinit var bootstrap: EditText
     private var relay = "" // step 2: a blind relay's key, from adb only
+    private var forceRelay = false // step 2 relay test: phone-to-phone connections only through the relay
     private lateinit var statusView: TextView
     private var worklet: Worklet? = null
     private var ipc: Ipc? = null
@@ -89,6 +90,7 @@ class MainActivity : Activity() {
         i.getStringExtra("station")?.let { station.setText(it) }
         i.getStringExtra("bootstrap")?.let { bootstrap.setText(it) }
         relay = i.getStringExtra("relay")?.trim() ?: ""
+        forceRelay = i.getBooleanExtra("forceRelay", false)
         if (i.getBooleanExtra("stop", false)) stopRun("adb")
         else if (i.getBooleanExtra("go", false)) startRun()
     }
@@ -137,6 +139,7 @@ class MainActivity : Activity() {
                     if (publicDht) put("lan", false)
                     else { val (host, port) = boot.split(":"); put("bootstrap", JSONArray().put(JSONObject().put("host", host).put("port", port.toInt()))) }
                     if (relay.isNotEmpty()) put("relayThrough", relay)
+                    if (relay.isNotEmpty() && forceRelay) put("forceRelay", true)
                     put("network", net)
                 }
                 .put("phone", JSONObject().put("metered", net == "mobile").put("charging", plugged > 0))) { started ->
