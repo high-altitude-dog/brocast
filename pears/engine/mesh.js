@@ -1,5 +1,5 @@
 // One mesh node, station or listener: a Corestore and a Hyperswarm keyed from one 32-byte seed, plus the listener-count
-// sketch on its own Protomux channel. Bare-compatible: no Node-only modules here.
+// sketch on its own Protomux channel, and each side's Show-my-country flag on another. Bare-compatible: no Node-only modules here.
 import Corestore from 'corestore'
 import Hyperswarm from 'hyperswarm'
 import Protomux from 'protomux'
@@ -28,7 +28,7 @@ function add (w, raw) {
 export const hex = (b) => b4a.toString(b, 'hex')
 
 // Private, CGNAT (100.64/10) or loopback: a connection to one of these did not cross the public internet.
-const isPrivate = (h) => /^(10\.|127\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.|::1|f[cd]|fe80)/.test(h || '')
+export const isPrivate = (h) => /^(10\.|127\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.|::1|f[cd]|fe80)/.test(h || '')
 const copy = (o) => JSON.parse(JSON.stringify(o))
 
 export class Mesh {
@@ -52,6 +52,11 @@ export class Mesh {
     this.sketch = new Sketch()
     this.relaySketch = relaySketch
     this.channels = new Set()
+    // Co-listener countries (hand-off 38): this node's own Show-my-country flag, sent to every peer, and each peer's as it last said.
+    // A peer that never says (an older engine) counts as not shown.
+    this.showCountry = false
+    this.shows = new Map()
+    this.flagChannels = new Set()
     this.closedWire = { rx: 0, tx: 0, packetsRx: 0, packetsTx: 0, retransmits: 0 }
     this.swarm.on('connection', (conn) => this._onconnection(conn))
   }
@@ -118,12 +123,29 @@ export class Mesh {
     conn.on('error', () => {})
     conn.on('close', () => add(this.closedWire, conn.rawStream))
     this.store.replicate(conn)
+    const k = conn.remotePublicKey ? hex(conn.remotePublicKey) : null
+    const fc = Protomux.from(conn).createChannel({
+      protocol: 'brocast/country/1',
+      onopen: () => fc.flagMsg.send(this.showCountry ? 1 : 0),
+      onclose: () => { this.flagChannels.delete(fc); if (k) this.shows.delete(k) }
+    })
+    if (fc) {
+      fc.flagMsg = fc.addMessage({ encoding: c.uint, onmessage: (v) => { if (k) this.shows.set(k, v === 1) } })
+      fc.open()
+      this.flagChannels.add(fc)
+    }
     if (!this.relaySketch) return
     const ch = Protomux.from(conn).createChannel({ protocol: 'brocast/sketch/1', onclose: () => this.channels.delete(ch) })
     if (!ch) return
     ch.sketchMsg = ch.addMessage({ encoding: c.raw, onmessage: (b) => this.sketch.merge(b) })
     ch.open()
     this.channels.add(ch)
+  }
+
+  /** Changes this node's Show-my-country flag and tells every peer at once. */
+  setShowCountry (on) {
+    this.showCountry = !!on
+    for (const ch of this.flagChannels) ch.flagMsg.send(this.showCountry ? 1 : 0)
   }
 
   /** Sends this node's sketch to every peer. Merging is idempotent, so resending is harmless. */

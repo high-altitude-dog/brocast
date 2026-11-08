@@ -43,3 +43,5 @@ Early and in active development. Library playback, GPS and NTP flowtime, the sat
 ## Licence
 
 MIT. See [LICENSE](LICENSE).
+
+The app's IP-to-country table (`android/app/src/main/assets/countries-v4.bin`, built by `pears/tools/country-table.js`) comes from [IP Geolocation by DB-IP](https://db-ip.com), licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).

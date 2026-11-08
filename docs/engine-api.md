@@ -38,6 +38,7 @@
 | `keep` | `{ setId, keep }` | `{}` | A kept set is never cleared from the store. |
 | `sketch` | `{}` | `{ registers, sharers }` | Raw registers (base64, 1024 bytes each), for the heatmap. |
 | `shuffleNym` | `{ nymShuffle }` | `{ nym }` | The host stores the counter. The engine signs a new proof and sends the counter and proof in its hello to peers, who verify them before showing the nym. |
+| `prefs` | `{ showCountry }` | `{}` | Live settings. `showCountry` (hand-off 38) goes to every peer at once on the `brocast/country/1` channel; peers look up this phone's country only while it's on. `start` takes it too, with `countryTable`, the path of the IPv4 table (`pears/tools/country-table.js`, from DB-IP Lite, CC BY 4.0). Each peer's status then carries `country`: an ISO code, `hidden` (not allowed) or `unknown` (relayed, or not in the table). |
 | `subscribe` | `{ hz: 0\|1\|4, arrivals: bool }` | `{}` | The status rate follows what's on screen: 4 on Buffer or Swarm, 1 elsewhere, 0 with the screen off (state changes only). |
 | `suspend` / `resume` | `{}` | `{}` | Suspend stops the swarm and lets the radio sleep. The engine also suspends itself at the high watermark (design §6). |
 | `stop` | `{}` | `{}` | Closes cleanly within 2 s. The host may kill the worklet after that. |

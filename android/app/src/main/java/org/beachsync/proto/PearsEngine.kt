@@ -30,8 +30,13 @@ import kotlin.math.roundToLong
  * Not yet (pears-spike-results.md, "What the main app needs"): the health gate and version slots, the identity wizard's seed in the
  * Keystore (a random seed in the app's private files stands in), and MeshSupply for playing a set before it's whole.
  */
-/** One live peer, from the engine's status. [path] is lan, direct, punched or relayed (null if not yet known). */
-class MeshPeer(val key: String, val station: Boolean, val path: String?, val toYouKbps: Int, val fromYouKbps: Int)
+/**
+ * One live peer, from the engine's status. [path] is lan, direct, punched or relayed (null if not yet known). [country] (hand-off 38) is an
+ * ISO code, `hidden` (the peer doesn't allow it) or `unknown` (relayed, or not in the table); null from an engine that doesn't say.
+ */
+class MeshPeer(val key: String, val station: Boolean, val path: String?, val toYouKbps: Int, val fromYouKbps: Int, val country: String? = null) {
+    val countryCode get() = country?.takeIf { it.length == 2 }
+}
 
 /**
  * First listen and the mesh moments (hand-offs 35 and 36), timed from the engine's phases on its event thread. [stageS] holds each stage's
@@ -46,7 +51,7 @@ class MeshMoments(
 }
 
 /** What the screens show of the mesh, parsed once per status (once a second). Null while the engine isn't running. */
-class MeshView(val nym: String, val listeners: Int, val peers: List<MeshPeer>, val foundNotConnected: Int, val upBytes: Long, val downBytes: Long, val sharing: Boolean, val counted: Boolean = true, val moments: MeshMoments? = null) {
+class MeshView(val nym: String, val listeners: Int, val peers: List<MeshPeer>, val foundNotConnected: Int, val upBytes: Long, val downBytes: Long, val sharing: Boolean, val counted: Boolean = true, val moments: MeshMoments? = null, val countrySource: String? = null) {
     val stations get() = peers.filter { it.station }
     val listenerPeers get() = peers.filter { !it.station }
     /** Other listeners: the estimate counts this phone too unless it's switched out of the count. */
@@ -58,12 +63,13 @@ class MeshView(val nym: String, val listeners: Int, val peers: List<MeshPeer>, v
             val list = sw?.optJSONArray("peers")
             val peers = (0 until (list?.length() ?: 0)).map { i ->
                 val p = list!!.getJSONObject(i)
-                MeshPeer(p.optString("key"), p.optString("role") == "station-seed", p.optString("path").ifEmpty { null }?.takeIf { it != "null" }, p.optInt("toYouKbps"), p.optInt("fromYouKbps"))
+                MeshPeer(p.optString("key"), p.optString("role") == "station-seed", p.optString("path").ifEmpty { null }?.takeIf { it != "null" }, p.optInt("toYouKbps"), p.optInt("fromYouKbps"), p.optString("country").ifEmpty { null })
             }
             val today = s.optJSONObject("ledger")?.optJSONObject("today")
             return MeshView(
                 s.optJSONObject("me")?.optString("nym").orEmpty(), s.optJSONObject("listeners")?.optInt("estimate") ?: 0, peers,
                 sw?.optInt("foundNotConnected") ?: 0, today?.optLong("upBytes") ?: 0L, today?.optLong("downBytes") ?: 0L, sharing, counted, moments,
+                s.optJSONObject("countries")?.optString("source")?.ifEmpty { null },
             )
         }
     }
@@ -75,6 +81,8 @@ object PearsEngine {
         private set
     /** Privacy mode: this phone isn't counted among listeners. Read at each start; a change restarts the engine. */
     @Volatile private var counted = true
+    /** Show my country (hand-off 38): sent to peers at start and live on a change, with no restart. */
+    @Volatile private var showCountry = false
 
     /** The engine's latest status snapshot (API §6), or null before the first. */
     @Volatile var status: JSONObject? = null
@@ -131,6 +139,7 @@ object PearsEngine {
         call(CMD_HELLO, JSONObject().put("api", JSONArray().put(1)).put("host", JSONObject().put("app", "beachsync-proto"))) {
             call(CMD_START, JSONObject()
                 .put("seed", seed(ctx)).put("stationKey", key).put("profile", "balanced").put("share", sharing).put("count", counted)
+                .put("showCountry", showCountry).put("countryTable", countryTable(ctx)?.path)
                 .put("dirs", JSONObject().put("store", store.path).put("music", lib.folder.path))) {
                 call(CMD_SUBSCRIBE, JSONObject().put("hz", 1)) {}
             }
@@ -236,6 +245,24 @@ object PearsEngine {
         }
     }
 
+    /** Show my country, now and at every start. Peers look up this phone's country only while it's on. */
+    fun setShowCountry(on: Boolean) {
+        showCountry = on
+        if (worklet != null) call(CMD_PREFS, JSONObject().put("showCountry", on)) {}
+    }
+
+    /** The IPv4-to-country table (DB-IP Lite, CC BY 4.0), copied from the assets once per app install or update so the engine can read it. */
+    private fun countryTable(ctx: Context): File? = runCatching {
+        val f = File(ctx.filesDir, "countries-v4.bin")
+        val installed = ctx.packageManager.getPackageInfo(ctx.packageName, 0).lastUpdateTime
+        if (!f.exists() || f.lastModified() < installed) {
+            val tmp = File(ctx.filesDir, "countries-v4.bin.tmp")
+            ctx.assets.open("countries-v4.bin").use { input -> tmp.outputStream().use { input.copyTo(it) } }
+            tmp.renameTo(f)
+        }
+        f
+    }.getOrNull()
+
     /** Wi-Fi to mobile or back: the engine restarts, so it never shares on a metered network. */
     private fun watchNetwork() {
         val ctx = app ?: return
@@ -273,6 +300,7 @@ object PearsEngine {
     private const val CMD_SUBSCRIBE = 3
     private const val CMD_STOP = 5
     private const val CMD_BLOCK = 6
+    private const val CMD_PREFS = 7
     private const val EV_STATUS = 100
     private const val EV_BUILT = 102
     private const val EV_WARNING = 103

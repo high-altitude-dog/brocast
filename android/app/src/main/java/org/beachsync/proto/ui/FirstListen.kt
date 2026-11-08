@@ -211,6 +211,7 @@ fun MeshCard(v: MeshView, openSwarm: () -> Unit) {
                     BasicText(label, Modifier.width(76.dp), Tokens.Text.small.style(Ink.textSecondary))
                     BasicText(value, style = Tokens.Text.small.style())
                 }
+                CountriesLine(listeners)
             }
         }
     }

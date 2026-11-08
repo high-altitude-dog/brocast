@@ -86,6 +86,10 @@ class BenchState {
     var idleGps by mutableStateOf<org.beachsync.proto.GpsTime?>(null)
     var localTime by mutableStateOf(true)
     var counted by mutableStateOf(true)
+    /** Show my country to other listeners (hand-off 38): off until the listener says yes. */
+    var showCountry by mutableStateOf(false)
+    /** Now playing may still ask "Show your country to other listeners?": once, after first listen. */
+    var countryOffer by mutableStateOf(false)
     var nudgeMode by mutableStateOf(NudgeMode.AUTO)
     var nudgePeriodS by mutableStateOf<Double?>(null)
     var session by mutableStateOf<Session?>(null)
@@ -105,6 +109,9 @@ interface BenchActions {
     fun setChannel(channel: Int)
     fun setLocalTime(on: Boolean)
     fun setCounted(on: Boolean)
+    fun setShowCountry(on: Boolean)
+    /** The ask-once sheet's answer: either way it isn't asked again. */
+    fun answerCountry(show: Boolean)
     /** Like startOrStop, but playing with the value calibration chose for the output in use: the library, or with [clicks] the per-second tick. */
     fun listen(clicks: Boolean = false)
     fun output(): org.beachsync.proto.AudioOutput

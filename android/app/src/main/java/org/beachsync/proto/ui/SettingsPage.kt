@@ -39,6 +39,7 @@ fun SettingsPage(state: BenchState, actions: BenchActions, back: () -> Unit, ope
         Card {
             SatellitesRow(state.satellites, actions::setSatellites, "GPS time only · your position stays on this phone")
             SwitchRow("Be counted as a listener", "Adds you to the listener estimate · off: you still listen and share", state.counted, actions::setCounted)
+            SwitchRow("Show my country", "Others may see it from your internet address · off by default", state.showCountry, actions::setShowCountry)
             Column(Modifier.fillMaxWidth().heightIn(min = Tokens.Space.touchTarget.dp).clickable(role = Role.Button, onClick = openSatellites), Arrangement.Center) {
                 BasicText("Satellites", style = Tokens.Text.bodyStrong.style())
                 BasicText("Your chip, your sky and what limits timing", style = Tokens.Text.small.style(Ink.textSecondary))

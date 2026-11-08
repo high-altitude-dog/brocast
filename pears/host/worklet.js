@@ -8,14 +8,15 @@ import './globals.js'
 import RPC from 'bare-rpc'
 import b4a from 'b4a'
 import { ENGINE, topic, decodeRecord } from '../engine/index.js'
-import { Mesh, hex } from '../engine/mesh.js'
+import { Mesh, hex, isPrivate } from '../engine/mesh.js'
+import { Countries } from '../engine/countries.js'
 import { profile } from '../engine/policy.js'
 import { SetBuilder, serialOf } from '../engine/builder.js'
 import { hedge } from '../engine/hedge.js'
 import { nymFrom, nymProof, nymText } from '../engine/nym.js'
 import { PACKETS } from '../engine/blocks.js'
 
-const CMD = { hello: 1, start: 2, subscribe: 3, status: 4, stop: 5, block: 6 }
+const CMD = { hello: 1, start: 2, subscribe: 3, status: 4, stop: 5, block: 6, prefs: 7 }
 const EV = { status: 100, built: 102, warning: 103, fatal: 104, catalog: 105 }
 
 const t0 = Date.now()
@@ -58,6 +59,10 @@ rpc = new RPC(Bare.IPC, async (req) => {
       run.got(s, i)
       return req.reply(oneSecond(buf, body.second % run.bs))
     }
+    case CMD.prefs: // settings that change live, without a restart
+      if (!run) refuse('NOT_STARTED', 'start first')
+      if ('showCountry' in body) run.mesh.setShowCountry(body.showCountry)
+      return reply({})
     case CMD.stop:
       if (run) await run.stop()
       reply({})
@@ -78,7 +83,7 @@ function oneSecond (buf, k) {
 }
 
 class Run {
-  constructor ({ seed, stationKey, dirs, profile: prof = 'balanced', lan = true, relayThrough, share = true, count = true }) {
+  constructor ({ seed, stationKey, dirs, profile: prof = 'balanced', lan = true, relayThrough, share = true, count = true, showCountry = false, countryTable = null }) {
     this.p = profile(prof)
     // share: false is receive-only (mobile data without the listener's opt-in): never announced, and each block is cleared once it's in the built
     // file, so there's nothing to upload (step 0's copy and clear: 0 bytes up).
@@ -94,6 +99,8 @@ class Run {
     const pk = this.mesh.keyPair.publicKey
     this.nym = nymText(nymFrom(pk, 0, nymProof(this.mesh.keyPair.secretKey, 0)))
     if (count) this.mesh.sketch.add(pk, 0)
+    this.mesh.setShowCountry(showCountry)
+    try { this.countries = countryTable ? Countries.load(countryTable) : null } catch (e) { this.countries = null; emit(EV.warning, { code: 'COUNTRIES', text: String(e) }) }
     this.gossip = setInterval(() => this.mesh.gossip(), 2000)
     this.rate = { at: now(), byPeer: new Map() } // last snapshot's totals, for kb/s
     this.held = new Set()
@@ -225,21 +232,31 @@ class Run {
     const dt = Math.max(0.25, (t - this.rate.at) / 1000)
     const paths = new Map()
     for (const c of this.mesh.conns) if (c.outcome === 'open' && c.peer) paths.set(c.peer, c.path)
-    const live = new Set([...this.mesh.swarm.connections].map((c) => hex(c.remotePublicKey)))
+    const hosts = new Map([...this.mesh.swarm.connections].map((c) => [hex(c.remotePublicKey), c.rawStream?.remoteHost]))
+    const live = new Set(hosts.keys())
+    // Each peer's country, only if it allows it (hand-off 38): a code, 'hidden', or 'unknown'. A relayed address is the relay's, so it's
+    // never looked up; a same-Wi-Fi peer shares this phone's own public address, as the DHT sees it.
+    const country = (k, path) => {
+      if (!this.mesh.shows.get(k)) return 'hidden'
+      if (path === 'relayed' || !this.countries) return 'unknown'
+      const host = hosts.get(k)
+      return this.countries.lookup(isPrivate(host) ? this.mesh.swarm.dht.host : host) ?? 'unknown'
+    }
     const peers = [...this.byPeer].filter(([k]) => live.has(k)).map(([k, p]) => {
       const was = this.rate.byPeer.get(k) || p
       return {
-        key: k, role: p.station ? 'station-seed' : 'listener', path: paths.get(k.slice(0, 8)) ?? null, rxBytes: p.rx, txBytes: p.tx,
+        key: k, role: p.station ? 'station-seed' : 'listener', path: paths.get(k.slice(0, 8)) ?? null, country: country(k, paths.get(k.slice(0, 8))), rxBytes: p.rx, txBytes: p.tx,
         toYouKbps: Math.round(((p.rx - was.rx) * 8) / 1000 / dt), fromYouKbps: Math.round(((p.tx - was.tx) * 8) / 1000 / dt)
       }
     })
     // Connected peers that haven't sent or asked for a block yet still count, with no traffic.
-    for (const k of live) if (!this.byPeer.has(k)) peers.push({ key: k, role: this.seeds?.has(k) ? 'station-seed' : 'listener', path: paths.get(k.slice(0, 8)) ?? null, rxBytes: 0, txBytes: 0, toYouKbps: 0, fromYouKbps: 0 })
+    for (const k of live) if (!this.byPeer.has(k)) peers.push({ key: k, role: this.seeds?.has(k) ? 'station-seed' : 'listener', path: paths.get(k.slice(0, 8)) ?? null, country: country(k, paths.get(k.slice(0, 8))), rxBytes: 0, txBytes: 0, toYouKbps: 0, fromYouKbps: 0 })
     this.rate = { at: t, byPeer: new Map([...this.byPeer].map(([k, p]) => [k, { rx: p.rx, tx: p.tx }])) }
     return {
       at: { uptimeSec: Math.round(now() / 1000) },
       engine: { version: ENGINE.version, api: 1, wire: ENGINE.wire, storage: ENGINE.storage },
-      me: { publicKey: hex(this.mesh.keyPair.publicKey), nym: this.nym },
+      me: { publicKey: hex(this.mesh.keyPair.publicKey), nym: this.nym, showCountry: this.mesh.showCountry },
+      countries: this.countries ? { source: 'DB-IP ' + this.countries.source } : null,
       listeners: { estimate: this.mesh.sketch.estimate() },
       phase: this.phase,
       sharing: this.share,

@@ -15,6 +15,7 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -114,7 +115,7 @@ private fun loudness(i: Int): Float {
 private val CLOCK_FMT: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm:ss").withZone(ZoneOffset.UTC)
 
 /** One listener on Swarm: [path] is lan, direct, punched or relayed (null while it's still being worked out). */
-private class SwarmPeer(val key: String, val path: String?, val toYouKbps: Int, val fromYouKbps: Int) {
+private class SwarmPeer(val key: String, val path: String?, val toYouKbps: Int, val fromYouKbps: Int, val country: String? = null) {
     val relayed get() = path == "relayed"
     val lan get() = path == "lan"
 }
@@ -138,7 +139,7 @@ fun SwarmScreen(back: () -> Unit) {
     val moments = live?.moments
     val receiveOnly = live != null && !live.sharing
     // Same-Wi-Fi listeners first, so they sit nearest you.
-    val peers = (live?.listenerPeers?.map { SwarmPeer(it.key.take(8), it.path, it.toYouKbps, if (receiveOnly) 0 else it.fromYouKbps) }
+    val peers = (live?.listenerPeers?.map { SwarmPeer(it.key.take(8), it.path, it.toYouKbps, if (receiveOnly) 0 else it.fromYouKbps, it.country) }
         ?: DemoMesh.peers.map { SwarmPeer(it.key, if (it.relayed) "relayed" else "direct", it.toYouKbps, it.fromYouKbps) }).sortedByDescending { it.lan }
     val stationOffline = moments?.stationOfflineSinceMs
     val stationCount = live?.stations?.size?.let { if (it == 0 && stationOffline != null) 1 else it } ?: DemoMesh.STATIONS
@@ -279,6 +280,7 @@ fun SwarmScreen(back: () -> Unit) {
                 else -> StatTile("FROM YOU", "$fromYou kb/s", "to ${peers.count { it.fromYouKbps > 0 }} listeners", Modifier.weight(1f))
             }
         }
+        live?.let { CountriesCard(it.listenerPeers, it.countrySource) }
         Card {
             // Until the engine keeps a daily ledger, the figure runs from the engine's start, so the label says when that was.
             val since = moments?.let { SINCE_CLOCK.format(Instant.ofEpochMilli(it.startedMs).atZone(java.time.ZoneId.systemDefault())) }
@@ -294,9 +296,12 @@ fun SwarmScreen(back: () -> Unit) {
         if (peers.isNotEmpty()) Card {
             BasicText(if (sparse) "LISTENERS" else "BUSIEST LISTENERS", style = Tokens.Text.cardLabel.style())
             for (p in peers.sortedByDescending { it.toYouKbps + it.fromYouKbps }.take(4)) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    BasicText(p.key, style = Tokens.Text.valueSmall.style())
-                    BasicText(pathWords(p.path), style = Tokens.Text.small.style(if (p.lan) Ink.accent else Ink.textSecondary))
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        BasicText(p.key, style = Tokens.Text.valueSmall.style())
+                        BasicText(pathWords(p.path), style = Tokens.Text.small.style(if (p.lan) Ink.accent else Ink.textSecondary))
+                    }
+                    if (live != null) CountryCell(p.country, Modifier.width(76.dp))
                     BasicText(if (live != null) "↓${kBs(p.toYouKbps)}  ↑${if (receiveOnly) "—" else kBs(p.fromYouKbps)}" else "↓${p.toYouKbps}  ↑${p.fromYouKbps} kb/s", style = Tokens.Text.small.style(Ink.textSecondary))
                 }
             }

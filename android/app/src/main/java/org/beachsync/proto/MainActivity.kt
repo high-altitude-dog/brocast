@@ -244,6 +244,19 @@ class MainActivity : ComponentActivity(), BenchActions {
         if (state.library != null) applyStation()
     }
 
+    /** Show my country (hand-off 38): live, without restarting the engine. */
+    override fun setShowCountry(on: Boolean) {
+        state.showCountry = on
+        prefs.edit().putBoolean(KEY_SHOW_COUNTRY, on).apply()
+        PearsEngine.setShowCountry(on)
+    }
+
+    override fun answerCountry(show: Boolean) {
+        state.countryOffer = false
+        prefs.edit().putBoolean(KEY_COUNTRY_ASKED, true).apply()
+        if (show) setShowCountry(true)
+    }
+
     /** Left, Right or Both, also while playing. Headphones always get Both. */
     override fun setChannel(channel: Int) {
         state.channel = channel
@@ -352,6 +365,9 @@ class MainActivity : ComponentActivity(), BenchActions {
         state.satellites = prefs.getBoolean(KEY_SATELLITES, true)
         state.localTime = prefs.getBoolean(KEY_LOCAL_TIME, true)
         state.counted = prefs.getBoolean(KEY_COUNTED, true)
+        state.showCountry = prefs.getBoolean(KEY_SHOW_COUNTRY, false)
+        state.countryOffer = !prefs.getBoolean(KEY_COUNTRY_ASKED, false)
+        PearsEngine.setShowCountry(state.showCountry)
         state.nudgeMode = if (prefs.getBoolean(KEY_NUDGE_MANUAL, false)) NudgeMode.MANUAL else NudgeMode.AUTO
         state.nudgePeriodS = prefs.getFloat(KEY_NUDGE_PERIOD, -1f).let { if (it > 0f) it.toDouble() else null }
     }
@@ -409,6 +425,8 @@ class MainActivity : ComponentActivity(), BenchActions {
         private const val KEY_SATELLITES = "satellites"
         private const val KEY_LOCAL_TIME = "localTime"
         private const val KEY_COUNTED = "counted"
+        private const val KEY_SHOW_COUNTRY = "showCountry"
+        private const val KEY_COUNTRY_ASKED = "countryAsked"
         private const val KEY_CAL = "cal."
         private const val KEY_LAUNCHED = "launched"
         private const val KEY_BT_NAME_ASKED = "btNameAsked"

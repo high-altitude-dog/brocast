@@ -157,6 +157,8 @@ fun NowPlaying(state: BenchState, actions: BenchActions, openLog: () -> Unit, op
         Card { SatellitesRow(state.satellites, actions::setSatellites, "Position stays on this phone · off = Privacy mode") }
     }
     ChannelOverlays(chUi, state, actions)
+    // Asked once, as first listen folds away (hand-off 38).
+    if (state.countryOffer && org.beachsync.proto.PearsEngine.view?.moments?.firstMusicDone == true) CountryAskSheet(actions::answerCountry)
     }
 }
 
