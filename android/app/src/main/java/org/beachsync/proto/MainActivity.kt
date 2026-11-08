@@ -9,6 +9,7 @@ import org.beachsync.proto.ui.PocketGuard
 import org.beachsync.proto.ui.DataSharingScreen
 import org.beachsync.proto.ui.DataSharingAdvancedScreen
 import org.beachsync.proto.ui.DataLogScreen
+import org.beachsync.proto.ui.IdentityWizard
 import android.Manifest
 import android.content.pm.PackageManager
 import android.graphics.Color
@@ -136,7 +137,7 @@ class MainActivity : ComponentActivity(), BenchActions {
             var logLane by remember { mutableStateOf<Lane?>(null) }
             BackHandler(page != home) {
                 if (page == Page.EARCUP) cancelEarcup()
-                page = when (page) { Page.LOG, Page.NUDGE -> from; Page.EARCUP -> Page.CALIBRATION; Page.ADVANCED, Page.DATALOG -> Page.DATA; Page.DATA -> Page.SETTINGS; else -> home }
+                page = when (page) { Page.LOG, Page.NUDGE -> from; Page.EARCUP -> Page.CALIBRATION; Page.ADVANCED, Page.DATALOG -> Page.DATA; Page.DATA, Page.IDENTITY -> Page.SETTINGS; else -> home }
             }
             when (page) {
                 Page.NOW -> NowPlaying(state, this, { logLane = null; from = Page.NOW; page = Page.LOG }, { from = Page.NOW; page = Page.NUDGE }, { page = Page.BENCH }, { page = Page.SETTINGS }, { page = Page.SIGNALS }, { page = Page.CALIBRATION }, { page = Page.SATELLITES }, { page = Page.STEREO }, { page = Page.ARTIST }, { page = Page.SWARM }, { page = Page.BUFFER })
@@ -150,7 +151,8 @@ class MainActivity : ComponentActivity(), BenchActions {
                 Page.SWARM -> SwarmScreen { page = home }
                 Page.BUFFER -> BufferScreen(state, { page = home }) { page = Page.SWARM }
                 Page.SATELLITES -> SatellitesScreen(state, this, { page = home }, { page = Page.SIGNALS })
-                Page.SETTINGS -> SettingsPage(state, this, { page = home }, { page = Page.CALIBRATION }, { page = Page.SATELLITES }, { page = Page.SYNC }, { page = Page.BEAT }, { page = Page.STEREO }, { page = Page.DATA })
+                Page.SETTINGS -> SettingsPage(state, this, { page = home }, { page = Page.CALIBRATION }, { page = Page.SATELLITES }, { page = Page.SYNC }, { page = Page.BEAT }, { page = Page.STEREO }, { page = Page.DATA }, { page = Page.IDENTITY })
+                Page.IDENTITY -> IdentityWizard(!state.satellites) { page = Page.SETTINGS }
                 Page.DATA -> DataSharingScreen({ page = Page.SETTINGS }, { page = Page.DATALOG }, { page = Page.ADVANCED })
                 Page.ADVANCED -> DataSharingAdvancedScreen { page = Page.DATA }
                 Page.DATALOG -> DataLogScreen { page = Page.DATA }
@@ -328,7 +330,7 @@ class MainActivity : ComponentActivity(), BenchActions {
             .apply()
     }
 
-    private enum class Page { NOW, BENCH, LOG, NUDGE, SETTINGS, SIGNALS, CALIBRATION, EARCUP, SATELLITES, SYNC, BEAT, STEREO, ARTIST, SWARM, BUFFER, DATA, ADVANCED, DATALOG }
+    private enum class Page { NOW, BENCH, LOG, NUDGE, SETTINGS, SIGNALS, CALIBRATION, EARCUP, SATELLITES, SYNC, BEAT, STEREO, ARTIST, SWARM, BUFFER, DATA, ADVANCED, DATALOG, IDENTITY }
 
     companion object {
         /** Kept outside the activity, so a test run survives the screen being rebuilt. */

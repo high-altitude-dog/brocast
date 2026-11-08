@@ -16,6 +16,8 @@
     <!-- usesCleartextTraffic: the prototype server speaks plain http on your own network -->
     <application
         android:label="Beach Sync proto"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher"
         android:allowBackup="false"
         android:usesCleartextTraffic="true"
         android:theme="@android:style/Theme.DeviceDefault.NoActionBar">

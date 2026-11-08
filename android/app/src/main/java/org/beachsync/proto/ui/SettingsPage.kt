@@ -25,7 +25,7 @@ import androidx.compose.ui.unit.dp
 
 /** Only the LISTENING section for now: the design's other sections have nothing behind them yet. */
 @Composable
-fun SettingsPage(state: BenchState, actions: BenchActions, back: () -> Unit, openCalibration: () -> Unit, openSatellites: () -> Unit, openSync: () -> Unit, openBeat: () -> Unit, openStereo: () -> Unit, openData: () -> Unit) {
+fun SettingsPage(state: BenchState, actions: BenchActions, back: () -> Unit, openCalibration: () -> Unit, openSatellites: () -> Unit, openSync: () -> Unit, openBeat: () -> Unit, openStereo: () -> Unit, openData: () -> Unit, openIdentity: () -> Unit) {
     rememberTick(SETTINGS_TICK_MS).value    // the output's name can change during a run
     val s = state.session
     Column(
@@ -70,6 +70,13 @@ fun SettingsPage(state: BenchState, actions: BenchActions, back: () -> Unit, ope
                 }
                 Spacer(Modifier.width(10.dp))
                 SatellitesSwitch(state.localTime)
+            }
+        }
+        BasicText("IDENTITY", Modifier.padding(top = 6.dp), Tokens.Text.cardLabel.style())
+        Card {
+            Column(Modifier.fillMaxWidth().heightIn(min = Tokens.Space.touchTarget.dp).clickable(role = Role.Button, onClick = openIdentity), Arrangement.Center) {
+                BasicText("Your identity", style = Tokens.Text.bodyStrong.style())
+                BasicText("${DemoMesh.NYM.lowercase().split(' ').joinToString(" ") { w -> w.replaceFirstChar { it.uppercase() } }} · run the first-run wizard (demo)", style = Tokens.Text.small.style(Ink.textSecondary))
             }
         }
         BasicText("DELIVERY", Modifier.padding(top = 6.dp), Tokens.Text.cardLabel.style())
