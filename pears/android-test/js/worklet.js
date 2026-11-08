@@ -3,7 +3,9 @@
 // events are JSON. Given only the station key, it finds the catalog through the station's DHT record, fetches every
 // block (each verified against the signed tree by Hypercore), and builds each set in music/ with its BLAKE2b check.
 // Nothing is decoded or played. Step 1 only: `start` also takes `bootstrap` (the laptop's own DHT on the Wi-Fi) and
-// `dirs.log`, where one JSON line per event is written in the format tools/report.js reads.
+// `dirs.log`, where one JSON line per event is written in the format tools/report.js reads. Step 2: no `bootstrap` means
+// the public HyperDHT; `lan: false` turns off the LAN shortcut, `relayThrough` names a blind relay, and every
+// connection is logged as a `conn` line with its path (lan, direct, punched, relayed) or the error it failed with.
 import './globals.js'
 import RPC from 'bare-rpc'
 import fs from 'bare-fs'
@@ -12,6 +14,7 @@ import { ENGINE, topic, decodeRecord } from '../../engine/index.js'
 import { Mesh, hex } from '../../engine/mesh.js'
 import { profile } from '../../engine/policy.js'
 import { SetBuilder, serialOf } from '../../engine/builder.js'
+import { hedge } from '../../engine/hedge.js'
 
 // Command and event numbers on the wire (bare-rpc commands are integers). Names as in docs/engine-api.md.
 const CMD = { hello: 1, start: 2, subscribe: 3, status: 4, stop: 5 }
@@ -59,12 +62,19 @@ rpc = new RPC(Bare.IPC, async (req) => {
 })
 
 class Run {
-  constructor ({ seed, stationKey, dirs, profile: prof = 'generous', bootstrap }) {
+  constructor ({ seed, stationKey, dirs, profile: prof = 'generous', bootstrap, lan = true, relayThrough, network, forceRelay, hedge: hedgeMode = 'delayed', hedgeMs = 1000 }) {
+    this.hedge = { mode: hedgeMode, afterMs: hedgeMs }
     this.p = profile(prof)
     this.dirs = dirs
     this.out = dirs.log ? fs.openSync(dirs.log, 'w') : null
     this.stationKey = b4a.from(stationKey, 'hex')
-    this.mesh = new Mesh({ dir: dirs.store, seed: b4a.from(seed, 'hex'), bootstrap, maxPeers: this.p.maxPeers })
+    this.mesh = new Mesh({
+      dir: dirs.store, seed: b4a.from(seed, 'hex'), bootstrap: bootstrap?.length ? bootstrap : undefined, maxPeers: this.p.maxPeers,
+      lan, relayThrough: relayThrough ? b4a.from(relayThrough, 'hex') : null,
+      // Step 2 relay test: phone-to-phone connections only; the station is always reached the normal way.
+      forceRelay: forceRelay ? (k) => !b4a.equals(k, b4a.from(stationKey, 'hex')) : null,
+      onconn: (r) => this.log({ ev: 'conn', ...r })
+    })
     this.held = new Set()
     this.inflight = new Map()
     this.audio = 0
@@ -74,7 +84,7 @@ class Run {
     this.byPeer = new Map()
     this.sets = []
     this.phase = 'finding catalog'
-    this.log({ ev: 'start', me: hex(this.mesh.keyPair.publicKey).slice(0, 8), mode: 'share', profile: this.p.name })
+    this.log({ ev: 'start', me: hex(this.mesh.keyPair.publicKey).slice(0, 8), mode: 'share', profile: this.p.name, publicDht: !bootstrap?.length, lan, relay: !!relayThrough, forceRelay: !!forceRelay, network: network || null, hedge: this.hedge })
     this.restartStatus()
     this.arrivalTimer = setInterval(() => this.flushArrivals(), 250)
     this.main().catch((e) => { if (!state.stopping) fail('RUN', e) })
@@ -90,7 +100,7 @@ class Run {
       if (!r) await new Promise((resolve) => setTimeout(resolve, 1000))
     }
     if (state.stopping) return
-    this.log({ ev: 'record', seq: r.seq })
+    this.log({ ev: 'record', seq: r.seq, nat: this.mesh.nat() })
     const catalogKey = b4a.from(decodeRecord(r.value).catalog, 'hex')
     this.catalog = this.mesh.store.get({ key: catalogKey })
     await this.catalog.ready()
@@ -107,6 +117,7 @@ class Run {
     for (const [n, it] of ed.items.entries()) {
       const core = this.mesh.store.get({ key: b4a.from(it.core, 'hex') })
       await core.ready()
+      hedge(core, this.hedge) // duplicate blocks: re-request from a second peer only after hedgeMs in flight
       const s = { n, it, blocks: it.blocks, core, got: 0 }
       s.builder = new SetBuilder({ music: this.dirs.music, id: it.id, blocks: it.blocks, serial: serialOf(core.key), sha: it.blake2b })
       core.on('download', (index, bytes, from) => {
@@ -190,13 +201,14 @@ class Run {
   /** A subset of the status snapshot of docs/engine-api.md §6, with a `step1` block for the measurements. */
   snapshot () {
     const wire = this.mesh.wire()
-    const stats = { dataRx: 0, requestTx: 0, cancelTx: 0 }
+    const stats = { dataRx: 0, requestTx: 0, cancelTx: 0, hotswaps: 0 }
     for (const s of this.sets) {
       const st = s.core.replicator?.stats
       if (!st) continue
       stats.dataRx += st.wireData.rx
       stats.requestTx += st.wireRequest.tx
       stats.cancelTx += st.wireCancel.tx
+      stats.hotswaps += st.hotswaps
     }
     const held = this.held.size
     return {
@@ -234,7 +246,7 @@ class Run {
     this.log({
       ev: 'end', why, held: snap.step1.held, total: snap.step1.total, audio: this.audio, wire: snap.step1.wire, stats: snap.step1.stats,
       firstMs: this.firstMs, allMs: this.allMs, conns: [...this.mesh.swarm.connections].map((c) => hex(c.remotePublicKey).slice(0, 8)),
-      built: this.sets.filter((s) => s.builder.done).length, bursts: 0, late: 0, rssMB: 0, cpuMs: 0, sketch: 0
+      nat: this.mesh.nat(), built: this.sets.filter((s) => s.builder.done).length, bursts: 0, late: 0, rssMB: 0, cpuMs: 0, sketch: 0
     })
     emit(EV.status, snap)
     await Promise.race([this.mesh.close(), new Promise((resolve) => setTimeout(resolve, 1500))]) // the API's 2 s limit

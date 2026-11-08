@@ -20,7 +20,8 @@ const bootstrap = process.env.BOOTSTRAP ? JSON.parse(process.env.BOOTSTRAP) : un
 const capBytes = arg('cloud-cap-bytes') ? Number(arg('cloud-cap-bytes')) : null
 
 if (!fs.existsSync(seedFile)) fs.writeFileSync(seedFile, crypto.randomBytes(32), { mode: 0o600, flag: 'wx' })
-const mesh = new Mesh({ dir, seed: fs.readFileSync(seedFile), bootstrap })
+// Step 2: every connection to the station, with its path, printed as `CONN {json}`.
+const mesh = new Mesh({ dir, seed: fs.readFileSync(seedFile), bootstrap, onconn: (r) => console.log('CONN', JSON.stringify(r)) })
 const store = mesh.store.namespace('blocks-' + blockSeconds)
 
 const items = []
@@ -75,13 +76,14 @@ if (capBytes) {
   for (const it of items) store.get({ key: Buffer.from(it.core, 'hex') }).on('upload', () => guard.check())
 }
 console.log('READY', hex(catalog.key), hex(mesh.keyPair.publicKey))
+console.log('NAT', JSON.stringify(mesh.nat()))
 // Auto-stop (user, 7 Nov): every seed server stops itself after --minutes, 10 by default, so none is left running.
 const minutes = Number(arg('minutes', 10))
 setTimeout(() => { console.log(`AUTOSTOP after ${minutes} min`); process.kill(process.pid, 'SIGTERM') }, minutes * 60e3)
 
 process.on('SIGTERM', async () => {
   clearInterval(gossip)
-  const summary = { uploads: Object.fromEntries(uploads), uploaded: [...uploads.values()].reduce((a, b) => a + b, 0), wire: mesh.wire(), sketch: mesh.sketch.estimate() }
+  const summary = { nat: mesh.nat(), uploads: Object.fromEntries(uploads), uploaded: [...uploads.values()].reduce((a, b) => a + b, 0), wire: mesh.wire(), sketch: mesh.sketch.estimate() }
   console.log('SUMMARY', JSON.stringify(summary))
   await mesh.close()
   process.exit(0)

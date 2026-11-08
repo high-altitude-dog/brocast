@@ -42,6 +42,8 @@ class MainActivity : Activity() {
 
     private lateinit var station: EditText
     private lateinit var bootstrap: EditText
+    private var relay = "" // step 2: a blind relay's key, from adb only
+    private var forceRelay = false // step 2 relay test: phone-to-phone connections only through the relay
     private lateinit var statusView: TextView
     private var worklet: Worklet? = null
     private var ipc: Ipc? = null
@@ -87,6 +89,8 @@ class MainActivity : Activity() {
     private fun handle(i: Intent) {
         i.getStringExtra("station")?.let { station.setText(it) }
         i.getStringExtra("bootstrap")?.let { bootstrap.setText(it) }
+        relay = i.getStringExtra("relay")?.trim() ?: ""
+        forceRelay = i.getBooleanExtra("forceRelay", false)
         if (i.getBooleanExtra("stop", false)) stopRun("adb")
         else if (i.getBooleanExtra("go", false)) startRun()
     }
@@ -120,13 +124,25 @@ class MainActivity : Activity() {
         rpc = rp
         scope.launch(kotlinx.coroutines.Dispatchers.IO) { io.data.collect { rp.feed(it) } }
         val seed = ByteArray(32).also { SecureRandom().nextBytes(it) }.joinToString("") { "%02x".format(it) }
-        val (host, port) = boot.split(":")
+        // Step 2: a blank bootstrap (or "-") means the public HyperDHT, with the LAN shortcut off.
+        val publicDht = boot.isEmpty() || boot == "-"
+        val net = getSystemService(android.net.ConnectivityManager::class.java).let { cm ->
+            cm.getNetworkCapabilities(cm.activeNetwork)?.let { c -> when {
+                c.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) -> "wifi"
+                c.hasTransport(android.net.NetworkCapabilities.TRANSPORT_CELLULAR) -> "mobile"
+                else -> "other" } } ?: "none" }
         call(CMD_HELLO, JSONObject().put("api", JSONArray().put(1)).put("host", JSONObject().put("app", "pearstest/0.1"))) { hello ->
             call(CMD_START, JSONObject()
                 .put("seed", seed).put("stationKey", key).put("profile", "generous")
                 .put("dirs", JSONObject().put("store", store.path).put("music", music.path).put("log", File(filesDir, "run.jsonl").path))
-                .put("bootstrap", JSONArray().put(JSONObject().put("host", host).put("port", port.toInt())))
-                .put("phone", JSONObject().put("metered", false).put("charging", plugged > 0))) { started ->
+                .apply {
+                    if (publicDht) put("lan", false)
+                    else { val (host, port) = boot.split(":"); put("bootstrap", JSONArray().put(JSONObject().put("host", host).put("port", port.toInt()))) }
+                    if (relay.isNotEmpty()) put("relayThrough", relay)
+                    if (relay.isNotEmpty() && forceRelay) put("forceRelay", true)
+                    put("network", net)
+                }
+                .put("phone", JSONObject().put("metered", net == "mobile").put("charging", plugged > 0))) { started ->
                 show("engine ${hello.optJSONObject("engine")}\nme ${started.optString("publicKey").take(16)}…")
                 call(CMD_SUBSCRIBE, JSONObject().put("hz", 1).put("arrivals", true)) {}
             }

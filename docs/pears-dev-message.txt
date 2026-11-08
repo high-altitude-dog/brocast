@@ -1,0 +1,11 @@
+Hi, we're building a P2P music app on Hypercore, Hyperswarm and bare-kit-kotlin 0.2.2 (Android). It fetches pre-recorded sets by key from a station and from other phones. Versions: hypercore 11.40.3, hyperswarm 4.17.2, hyperdht 6.36.0, corestore from npm on 7 Nov. Four questions, with measurements:
+
+1. Duplicate blocks from hotswap. We fetch with core.get(i) and keep about 4 blocks (~300 KB) in flight. With two sources, 27-68% of the data received is duplicate blocks: 55-68% on phones over Wi-Fi and LTE, 27-37% on a laptop testnet. stats.hotswaps matches the extra exactly. Our reading: a peer with fewer than max(16, maxInflight/2) requests in flight hotswaps every in-flight block, so with a small window the second peer always re-requests, and the cancel arrives after a 72 KB block is already sent. We now replace replicator._updateHotswap so a block is hedged only after it has been in flight for 1 s. Duplicates drop to 1.1%, and a frozen peer still loses its blocks within about 1.25 s. Is there, or could there be, a supported option for this, such as a hotswap delay, a per-core off switch, or a threshold based on actual inflight? On metered mobile data the duplicates cost users money.
+
+2. Connection stats. A connection that hole-punches in round 1 (both NATs consistent) leaves dht.stats.punches untouched. Only round-2 probes count. Could the stream say how it connected (direct, punched, relayed, LAN)?
+
+3. First lookup. On the public DHT, mutableGet on the station key and then finding the catalog core's peers takes about 7.5 s on a phone, against under 1 s on a LAN testnet. Any recommended settings or caching to cut a listener's first start?
+
+4. Relays and Android packaging. Are there blind relays you recommend for a mobile-heavy app, or should we always run our own? And could bare-kit-kotlin ship libc++_shared.so, which udx-native's prebuild needs, or should add-ons link libc++ statically?
+
+Happy to share the test scripts. Thanks!

@@ -1,6 +1,6 @@
 // Step 1: checks the sets a phone built against the laptop's. For each set it rebuilds the file from the station's own
 // cores (the same canonical Ogg the phones build) and compares bytes and BLAKE2b with the phone's copy.
-// Run after the station has stopped (Corestore holds a lock). Usage: node tools/verify.js <dir of pulled .opus files>...
+// Run after the station has stopped (Corestore holds a lock). Usage: [STATION=net-station] node tools/verify.js <dir of pulled .opus files>...
 import fs from 'node:fs'
 import path from 'node:path'
 import Corestore from 'corestore'
@@ -10,8 +10,9 @@ import { buildOgg, serialOf, blake2b } from '../engine/builder.js'
 
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..')
 const work = path.join(root, 'work')
-const seed = fs.readFileSync(path.join(work, 'lan-station-seed'))
-const store = new Corestore(path.join(work, 'lan-station'), { primaryKey: keysFromSeed(seed).primaryKey, unsafe: true })
+const name = process.env.STATION || 'lan-station' // step 2: STATION=net-station
+const seed = fs.readFileSync(path.join(work, name + '-seed'))
+const store = new Corestore(path.join(work, name), { primaryKey: keysFromSeed(seed).primaryKey, unsafe: true })
 const bs = Number(process.env.BLOCK_SECONDS || 4)
 const ns = store.namespace('blocks-' + bs)
 const catalog = ns.get({ name: 'catalog' })
