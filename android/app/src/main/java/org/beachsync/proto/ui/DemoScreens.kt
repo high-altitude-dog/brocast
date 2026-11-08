@@ -149,6 +149,7 @@ fun SwarmScreen(back: () -> Unit) {
     val relayed = peers.count { it.relayed } + (live?.stations?.count { it.path == "relayed" } ?: 0)
     val toYou = peers.sumOf { it.toYouKbps }
     val fromYou = peers.sumOf { it.fromYouKbps }
+    val lonely = live != null && peers.isEmpty() && live.stations.isEmpty() && stationOffline == null   // nothing connected yet
     var capSheet by remember { mutableStateOf(false) }
     Box(Modifier.fillMaxSize()) {
     Column(
@@ -162,6 +163,7 @@ fun SwarmScreen(back: () -> Unit) {
         val (chip, chipColor) = when {
             live == null -> "● Sharing · ${peers.count { it.fromYouKbps > 0 }} listeners" to Ink.accent
             receiveOnly -> "● RECEIVE-ONLY" to Ink.textSecondary
+            lonely -> "○ LOOKING" to Ink.textSecondary
             peers.isEmpty() -> "● RECEIVING" to Ink.accent
             else -> "● SHARING" to Ink.accent
         }
@@ -236,8 +238,9 @@ fun SwarmScreen(back: () -> Unit) {
                 else -> null
             }
             if (peers.isEmpty()) Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                BasicText(if (stationOffline != null) "The station is offline, and no other listeners are connected." else "You're the first listener here.", style = Tokens.Text.bodyStrong.style())
-                BasicText("As others join, music starts coming from them too and the station has less to send. The picture fills in by itself.", style = Tokens.Text.small.style(Ink.textSecondary).copy(textAlign = androidx.compose.ui.text.style.TextAlign.Center))
+                BasicText(if (stationOffline != null) "The station is offline, and no other listeners are connected." else if (lonely) "Not connected yet." else "You're the first listener here.", style = Tokens.Text.bodyStrong.style())
+                if (lonely) BasicText("Looking for the station and other listeners. What's already on this phone plays on.", style = Tokens.Text.small.style(Ink.textSecondary).copy(textAlign = androidx.compose.ui.text.style.TextAlign.Center))
+                else BasicText("As others join, music starts coming from them too and the station has less to send. The picture fills in by itself.", style = Tokens.Text.small.style(Ink.textSecondary).copy(textAlign = androidx.compose.ui.text.style.TextAlign.Center))
             }
             sentence?.let { BasicText(it, style = Tokens.Text.body.style()) }
             if (moments?.allRelayed == true) BasicText("All links go through relays on this network. Music and sync are fine; starting can be slower.", style = Tokens.Text.small.style(Ink.textSecondary))
@@ -284,7 +287,8 @@ fun SwarmScreen(back: () -> Unit) {
             val hours = mb / 72.0   // 160 kb/s Opus is about 72 MB an hour
             if (since != null) {
                 BasicText("$mb MB", style = Tokens.Text.value.style())
-                BasicText("About ${musicTimeText(mb.toDouble())} of listening for other people since Brocast started at $since.", style = Tokens.Text.small.style(Ink.textSecondary))
+                if (mb == 0) BasicText("Nothing passed on yet since Brocast started at $since.", style = Tokens.Text.small.style(Ink.textSecondary))
+                else BasicText("About ${musicTimeText(mb.toDouble())} of listening for other people since Brocast started at $since.", style = Tokens.Text.small.style(Ink.textSecondary))
             } else BasicText("$mb MB · about ${"%.1f".format(hours)} h of listening for others", style = Tokens.Text.body.style())
         }
         if (peers.isNotEmpty()) Card {
