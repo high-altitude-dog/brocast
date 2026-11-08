@@ -1,26 +1,16 @@
 // Step 0 runner: a local HyperDHT testnet (nothing reaches the public DHT), one station, and listeners per scenario.
 // Usage: node tools/run.js [scenario ...]   Results: work/<scenario>/*.jsonl, then node tools/report.js
-import { spawn, execFileSync } from 'node:child_process'
+import { spawn } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 import createTestnet from 'hyperdht/testnet.js'
+import { makeLibrary } from './library.js'
 
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..')
 const work = path.join(root, 'work')
 const library = path.join(work, 'audio')
-fs.mkdirSync(library, { recursive: true })
 
-// Three 6-minute sets of stereo pink noise, at the station's settings: 160 kbps VBR Opus, 20 ms frames.
-// Made here and only ever sent as Opus blocks, so no raw audio crosses any network.
-for (const n of [1, 2, 3]) {
-  const f = path.join(library, `set${n}.opus`)
-  if (fs.existsSync(f)) continue
-  execFileSync('nice', ['-n', '19', 'ffmpeg', '-nostdin', '-v', 'error', '-y',
-    '-f', 'lavfi', '-i', `anoisesrc=color=pink:amplitude=0.25:duration=360:seed=${n}`,
-    '-f', 'lavfi', '-i', `anoisesrc=color=pink:amplitude=0.25:duration=360:seed=${n + 10}`,
-    '-filter_complex', 'amerge=inputs=2', '-ar', '48000', '-c:a', 'libopus', '-b:a', '160k', '-vbr', 'on',
-    '-frame_duration', '20', '-page_duration', '1000000', '-f', 'ogg', f])
-}
+makeLibrary(library)
 
 const L = (name, o = {}) => ({ name, mode: 'share', profile: 'generous', delay: 0, until: 'all', wall: 120, speed: 1, wmScale: 1, ...o })
 const SCENARIOS = {

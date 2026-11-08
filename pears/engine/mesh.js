@@ -16,6 +16,15 @@ export function keysFromSeed (seed) {
   }
 }
 
+function add (w, raw) {
+  if (!raw) return
+  w.rx += raw.bytesReceived || 0
+  w.tx += raw.bytesTransmitted || 0
+  w.packetsRx += raw.packetsReceived || 0
+  w.packetsTx += raw.packetsTransmitted || 0
+  w.retransmits += raw.retransmits || 0
+}
+
 export const hex = (b) => b4a.toString(b, 'hex')
 
 export class Mesh {
@@ -28,17 +37,14 @@ export class Mesh {
     this.sketch = new Sketch()
     this.relaySketch = relaySketch
     this.channels = new Set()
-    this.closedWire = { rx: 0, tx: 0 }
+    this.closedWire = { rx: 0, tx: 0, packetsRx: 0, packetsTx: 0, retransmits: 0 }
     this.swarm.on('connection', (conn) => this._onconnection(conn))
   }
 
   _onconnection (conn) {
     if (this.allow && !this.allow(conn.remotePublicKey)) return conn.destroy()
     conn.on('error', () => {})
-    conn.on('close', () => {
-      this.closedWire.rx += conn.rawStream?.bytesReceived || 0
-      this.closedWire.tx += conn.rawStream?.bytesTransmitted || 0
-    })
+    conn.on('close', () => add(this.closedWire, conn.rawStream))
     this.store.replicate(conn)
     if (!this.relaySketch) return
     const ch = Protomux.from(conn).createChannel({ protocol: 'brocast/sketch/1', onclose: () => this.channels.delete(ch) })
@@ -53,15 +59,14 @@ export class Mesh {
     for (const ch of this.channels) ch.sketchMsg.send(this.sketch.r)
   }
 
-  /** Bytes on the wire, every connection, both ways, including handshakes, proofs and the DHT stream framing. */
+  /**
+   * Bytes on the wire, every connection, both ways, including handshakes, proofs and the DHT stream framing, with UDX
+   * packet counts and this side's retransmissions (step 1: to explain the swarm wire overhead).
+   */
   wire () {
-    let rx = this.closedWire.rx
-    let tx = this.closedWire.tx
-    for (const conn of this.swarm.connections) {
-      rx += conn.rawStream?.bytesReceived || 0
-      tx += conn.rawStream?.bytesTransmitted || 0
-    }
-    return { rx, tx }
+    const w = { ...this.closedWire }
+    for (const conn of this.swarm.connections) add(w, conn.rawStream)
+    return w
   }
 
   async close () {
