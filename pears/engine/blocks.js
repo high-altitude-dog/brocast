@@ -1,7 +1,7 @@
 // An Ogg Opus file as 1 s blocks, the same bytes the server's OpusBlocks and the phone's OpusFile make:
 // 50 packets of 20 ms, each a little-endian 2-byte length and its bytes. A longer block is that many 1 s blocks joined.
 // Only compressed audio ever leaves this function, so nothing raw reaches the swarm.
-import fs from 'node:fs'
+import fs from '#fs'
 
 export const PACKETS = 50
 export const FORMAT = 'opus-20ms-1s'

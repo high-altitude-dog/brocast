@@ -5,8 +5,8 @@
 //
 // While a set is incomplete its file grows in <music>/.building/ (user, 7 Nov). Only a whole, checked file is renamed
 // into <music>/, so the music folder never holds a part-built set. A rename on the same disk is atomic.
-import fs from 'node:fs'
-import path from 'node:path'
+import fs from '#fs'
+import path from '#path'
 import sodium from 'sodium-universal'
 
 const TABLE = new Uint32Array(256)

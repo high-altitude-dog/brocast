@@ -8,6 +8,10 @@
   },
   "dependencies": {
     "b4a": "1.9.0",
+    "bare-buffer": "3.7.1",
+    "bare-fs": "4.8.4",
+    "bare-path": "3.1.2",
+    "bare-rpc": "1.5.0",
     "compact-encoding": "3.6.0",
     "corestore": "7.16.1",
     "hypercore-crypto": "3.7.0",
@@ -15,5 +19,19 @@
     "hyperswarm": "4.17.2",
     "protomux": "3.13.0",
     "sodium-universal": "5.0.1"
+  },
+  "devDependencies": {
+    "bare-link": "4.2.0",
+    "bare-pack": "3.0.2"
+  },
+  "imports": {
+    "#fs": {
+      "bare": "bare-fs",
+      "default": "fs"
+    },
+    "#path": {
+      "bare": "bare-path",
+      "default": "path"
+    }
   }
 }
