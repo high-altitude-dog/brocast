@@ -50,4 +50,4 @@
 ## Open questions
 
 1. For the Pears developers: why does Hypercore 11 request one block from several peers on a LAN, and how do we stop cancelled data still arriving (55% extra on the receiver)? Can bare-kit-kotlin ship `libc++_shared.so`, or should addons link libc++ statically?
-2. User: is the battery upper bound enough for step 1, or should the app integrate current over the fetch window and run again?
+2. Decided (user, 7 Nov): the battery upper bound is enough for step 1. Battery is measured properly in step 4 (seeding while playing, 10+ min, current integrated over the run), which is what Auto mode's thresholds need. Fix the duplicate blocks before step 4.
