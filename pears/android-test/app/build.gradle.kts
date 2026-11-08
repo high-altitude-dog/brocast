@@ -44,7 +44,7 @@ val fetchLibcxx by tasks.registering(Exec::class) {
     val out = file("src/main/libcxx/arm64-v8a/libc++_shared.so")
     onlyIf { !out.exists() }
     doFirst { out.parentFile.mkdirs() }
-    commandLine("python3", "-I", "fetch_from_zip.py", "https://dl.google.com/android/repository/android-ndk-r27c-linux.zip",
+    commandLine("python3", "-I", rootDir.resolve("fetch_from_zip.py").path, "https://dl.google.com/android/repository/android-ndk-r27c-linux.zip",
         "sysroot/usr/lib/aarch64-linux-android/libc++_shared.so", out.path)
 }
 tasks.named("preBuild") { dependsOn(packEngine, linkAddons, fetchLibcxx) }

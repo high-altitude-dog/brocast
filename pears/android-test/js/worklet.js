@@ -3,7 +3,9 @@
 // events are JSON. Given only the station key, it finds the catalog through the station's DHT record, fetches every
 // block (each verified against the signed tree by Hypercore), and builds each set in music/ with its BLAKE2b check.
 // Nothing is decoded or played. Step 1 only: `start` also takes `bootstrap` (the laptop's own DHT on the Wi-Fi) and
-// `dirs.log`, where one JSON line per event is written in the format tools/report.js reads.
+// `dirs.log`, where one JSON line per event is written in the format tools/report.js reads. Step 2: no `bootstrap` means
+// the public HyperDHT; `lan: false` turns off the LAN shortcut, `relayThrough` names a blind relay, and every
+// connection is logged as a `conn` line with its path (lan, direct, punched, relayed) or the error it failed with.
 import './globals.js'
 import RPC from 'bare-rpc'
 import fs from 'bare-fs'
@@ -59,12 +61,15 @@ rpc = new RPC(Bare.IPC, async (req) => {
 })
 
 class Run {
-  constructor ({ seed, stationKey, dirs, profile: prof = 'generous', bootstrap }) {
+  constructor ({ seed, stationKey, dirs, profile: prof = 'generous', bootstrap, lan = true, relayThrough, network }) {
     this.p = profile(prof)
     this.dirs = dirs
     this.out = dirs.log ? fs.openSync(dirs.log, 'w') : null
     this.stationKey = b4a.from(stationKey, 'hex')
-    this.mesh = new Mesh({ dir: dirs.store, seed: b4a.from(seed, 'hex'), bootstrap, maxPeers: this.p.maxPeers })
+    this.mesh = new Mesh({
+      dir: dirs.store, seed: b4a.from(seed, 'hex'), bootstrap: bootstrap?.length ? bootstrap : undefined, maxPeers: this.p.maxPeers,
+      lan, relayThrough: relayThrough ? b4a.from(relayThrough, 'hex') : null, onconn: (r) => this.log({ ev: 'conn', ...r })
+    })
     this.held = new Set()
     this.inflight = new Map()
     this.audio = 0
@@ -74,7 +79,7 @@ class Run {
     this.byPeer = new Map()
     this.sets = []
     this.phase = 'finding catalog'
-    this.log({ ev: 'start', me: hex(this.mesh.keyPair.publicKey).slice(0, 8), mode: 'share', profile: this.p.name })
+    this.log({ ev: 'start', me: hex(this.mesh.keyPair.publicKey).slice(0, 8), mode: 'share', profile: this.p.name, publicDht: !bootstrap?.length, lan, relay: !!relayThrough, network: network || null })
     this.restartStatus()
     this.arrivalTimer = setInterval(() => this.flushArrivals(), 250)
     this.main().catch((e) => { if (!state.stopping) fail('RUN', e) })
@@ -90,7 +95,7 @@ class Run {
       if (!r) await new Promise((resolve) => setTimeout(resolve, 1000))
     }
     if (state.stopping) return
-    this.log({ ev: 'record', seq: r.seq })
+    this.log({ ev: 'record', seq: r.seq, nat: this.mesh.nat() })
     const catalogKey = b4a.from(decodeRecord(r.value).catalog, 'hex')
     this.catalog = this.mesh.store.get({ key: catalogKey })
     await this.catalog.ready()
@@ -234,7 +239,7 @@ class Run {
     this.log({
       ev: 'end', why, held: snap.step1.held, total: snap.step1.total, audio: this.audio, wire: snap.step1.wire, stats: snap.step1.stats,
       firstMs: this.firstMs, allMs: this.allMs, conns: [...this.mesh.swarm.connections].map((c) => hex(c.remotePublicKey).slice(0, 8)),
-      built: this.sets.filter((s) => s.builder.done).length, bursts: 0, late: 0, rssMB: 0, cpuMs: 0, sketch: 0
+      nat: this.mesh.nat(), built: this.sets.filter((s) => s.builder.done).length, bursts: 0, late: 0, rssMB: 0, cpuMs: 0, sketch: 0
     })
     emit(EV.status, snap)
     await Promise.race([this.mesh.close(), new Promise((resolve) => setTimeout(resolve, 1500))]) // the API's 2 s limit
