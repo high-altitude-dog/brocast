@@ -121,13 +121,26 @@ class Run {
     this.mesh.swarm.flush().then(found)
     this.phase = 'getting the set list'
     await this.catalog.update({ wait: true })
+    await this.readEdition()
+    // A newer edition (new sets, a new list) is read as soon as it arrives, from the station or any peer that has it.
+    this.catalog.on('append', () => this.readEdition().catch((e) => fail('CATALOG', e)))
+    this.window = Math.max(2, Math.round(16 / this.bs)) // in flight by bytes, about 300 KB
+    this.pump = setInterval(() => this.fetchMore(), 50)
+    this.fetchMore()
+  }
+
+  /** The newest edition: sends its library list to the app and adds any set not seen before. */
+  async readEdition () {
     const ed = JSON.parse(b4a.toString(await this.catalog.get(this.catalog.length - 1)))
+    if (ed.edition === this.edition) return
     this.edition = ed.edition
     this.seeds = new Set(ed.seeds)
     this.bs = ed.block_seconds
     // The station's library list, as the server's library.json, so the app's timeline is the same whichever way the sets arrive.
     emit(EV.catalog, { edition: ed.edition, library: ed.library ?? null })
-    for (const [n, it] of ed.items.entries()) {
+    for (const it of ed.items) {
+      if (this.byId.has(it.id)) continue
+      const n = this.sets.length
       const core = this.mesh.store.get({ key: b4a.from(it.core, 'hex') })
       await core.ready()
       hedge(core, { mode: 'delayed', afterMs: 1000 }) // duplicate blocks: a second peer is asked only after 1 s in flight
@@ -141,10 +154,7 @@ class Run {
     // Sets already on the phone (from the server, before the mesh) aren't fetched again.
     this.todo = this.sets.filter((s) => !s.builder.done)
     this.total = this.todo.reduce((a, s) => a + s.blocks, 0)
-    this.phase = this.total ? 'fetching' : 'all sets held'
-    this.window = Math.max(2, Math.round(16 / this.bs)) // in flight by bytes, about 300 KB
-    this.pump = setInterval(() => this.fetchMore(), 50)
-    this.fetchMore()
+    this.phase = this.held.size < this.total ? 'fetching' : 'all sets held'
   }
 
   peer (conn) {
