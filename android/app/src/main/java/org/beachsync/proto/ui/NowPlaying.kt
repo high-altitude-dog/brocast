@@ -460,7 +460,8 @@ private fun SourceGlyph(gps: org.beachsync.proto.GpsTime?, boot: Long, open: () 
     val sats = gps?.sats.orEmpty()
     val words = when (kind) {
         "GPS" -> "GPS · ${sats.count { it.used }} of ${sats.size}"
-        "HOLD" -> "HOLDING · ${((boot - gps!!.lastBoot) / 1_000_000_000L).coerceAtLeast(0)} s"
+        // Age of the last GPS fix: from this run's last sample, or the fit's own anchor when it was restored at app start (HoldStore).
+        "HOLD" -> "HOLDING · ${((boot - (gps!!.lastBoot.takeIf { it > 0 } ?: FlowTime.gps?.boot0 ?: boot)) / 1_000_000_000L).coerceAtLeast(0)} s"
         "NTP" -> "NTP"
         else -> "NTP · getting time"
     }
