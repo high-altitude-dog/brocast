@@ -1,4 +1,4 @@
-# UI spec (hand-off 35)
+# UI spec (hand-off 36)
 
 Field names come from Claude Code's "Fields that exist today" table in `feedback.md`, as of 1 Nov 2026. If one has been renamed since, use the new name.
 
@@ -590,7 +590,7 @@ Your 2 Nov notes (`ui/SyncScope.kt`). From Settings › Sync view. For checking 
 | Readout | Flowtime `21:33:07.382` (34 px mono), source and its error |
 | Dial (300 px) | **Outer disc:** white sweeps clockwise from 12 o'clock once per flowtime second, accent hand, 10 ticks (100 ms each, 12 o'clock heavier). **Inner disc:** accent sweeps once per beat, following tempo, beat number in the middle. With no steady beat it shows `—` and waits at 12. |
 | Dial choice | Seconds, Beats, Both (default) |
-| Flash and click at 0 | On by default: screen white 2 frames and a 10 ms click at each second's 12 o'clock (click pitch as the test card). Never more than once a second here. |
+| Flash and click at 0 | On by default: screen white 2 frames and a 5 ms tick at each second's 12 o'clock (test card pitches). The tick plays only when nothing else is playing; with music on, the music is the sound (built 8 Nov). |
 | Nudges | Two boxes side by side, −10 −1 +1 +10. **Screen:** moves only the picture. **Audio:** amber border, `Changes what you hear. Not saved.` |
 | Reading | `This phone, by your ears: 6 ms behind` (from the audio nudge's sign), Keep as calibration, Reset |
 
@@ -602,7 +602,7 @@ Your 2 Nov notes (`ui/SyncScope.kt`). From Settings › Sync view. For checking 
 | Keep as calibration | Sheet: lag 182 → 188 ms, marked "adjusted by ear", with a caution. |
 | No flashing on | Flash off and locked; the dial and click carry on. (The test card asks to turn No flashing off; Sync view doesn't.) |
 | Getting time | `NTP · getting time`, dial waits at 12. Never "No clock yet". |
-| Seeing a gap? | Both phones' refresh rates and frame times; a gap under one frame of the slower screen may be the screens, not the sound; trust the clicks; link to the camera test card. |
+| Seeing a gap? | This phone's refresh rate and frame time, and `In its header` for the other phone (built 8 Nov: no link between phones); a gap under one frame of the slower screen may be the screens, not the sound; trust the clicks; link to the camera test card. |
 
 ## Outputs and headphones' names
 
@@ -624,8 +624,8 @@ From the Pears step 1 and 2 results (8 Nov): finding a station by key takes abou
 | Element | Shows |
 |---|---|
 | Card | Station tile, name, its key words; a ring with the elapsed time (`4.1 s · usually 7 to 8 s`). |
-| Stages | `Finding the station` → `Getting the set list` → `First music arrived` (5 s ready, verified). Each ticks with its time; the current one spins; later ones are dim. |
-| Done | The card folds into Now playing; event log: `Started Beach Sync Radio in 7.4 s`. |
+| Stages | `Finding the station` → `Getting the set list` → `First music arrived` (5 s ready, verified; playback starts here) → `Rest of the sets` (background, `41 of 66 MB`, usually 30 to 70 s on home Wi-Fi). Each ticks with its time; the current one spins; later ones are dim. Engine states: finding station, getting the set list, fetching, all sets held. |
+| Playing, rest still coming | The card folds into Now playing at stage 3; stage 4 carries on in Buffer. Event log: `Started Beach Sync Radio in 7.4 s`, then `All sets held · 52 s`. |
 | From memory | Cached record and set list tick at once (0.1 s, 0.3 s); only music is fetched, about 1 to 2 s. |
 | Over 20 s | Amber box `Taking longer than usual · 23 s`, what's stuck, that the station's servers are being tried; Keep trying, Pick another station, What's happening? |
 | Can't find it | After 60 s with no record: `Can't find Beach Sync Radio right now.` plus causes; keeps looking in the background and says when it appears. |
@@ -643,6 +643,22 @@ From the Pears step 1 and 2 results (8 Nov): finding a station by key takes abou
 | Data in real terms | All data figures are data used (music + ~17% proofs and connections), with music time at 160 kbps: 500 MB ≈ 6 h, 50 MB ≈ 35 min, 10 MB ≈ 7 min. Battery stays "typical phone" until step 4. |
 
 **Also changed:** Data and sharing (mobile: `uses up to 500 MB of data a day, about 6 h of music`; column `≈ 6 h of music`), the mobile cap sheet (`≈ 35 min of music a day. Real data…`), the network-switch toast (`about 4½ h of music`), Advanced's mobile limit help, the Data log (duplicates `29 MB · 1.9%`, asked of another after 1 s, usually 1–4%), Block provenance (`Asked` field; an "Asked twice" route example: `asked twice · first sender slow`), the station page (key words `tide · comet · basalt · ember` above the hex key), and Stations states (Key renewed: old and new key words, signed by the old key, followed automatically; and a key change not signed by the old key, treated as unlisted in red).
+
+## Swarm with real numbers
+
+![](screens/swarm-sparse.png)
+
+The live mesh (8 Nov) is one station and zero to two listeners. These are the normal states for now.
+
+| State | Shows |
+|---|---|
+| Only the station so far | Status `RECEIVING`. Station and you, larger and close together, one link; stats `1 · the station`, `41 kB/s · all from the station`, `— · no one to pass to`; centred `You're the first listener here.` and one line on what happens as others join. No empty orbit of grey dots. |
+| You and one other | Status `SHARING`. Station, you, `3f9a`, links both ways; one line under the picture: `3f9a is also listening, directly connected.` |
+| Same Wi-Fi | Path `lan`: the peer filled (accent 15%) with a small Wi-Fi mark, placed nearest you, link labelled `same Wi-Fi · 2 ms`. List path reads `same Wi-Fi`. Legend: same Wi-Fi, direct or hole-punched (solid), relayed (dashed). |
+| Receive-only on mobile data | Status `RECEIVE-ONLY` with a **grey** dot (the user's rule, not a fault); links only inward; a row `Receive-only on mobile data · Nothing goes out, so it costs you only what you hear. Share on mobile data…` opens the Share-on-mobile-data sheet with its cap. FROM YOU `— · receive-only`. Data and sharing's mobile column says `Receive-only · never shares unless you allow it`. |
+| Listener count wording | 0 others: `just you`; 1: `you and 1 other`; 2–9: `you and 4 others` (exact); 10–999: `≈ 12 listening`; 1,000+: `≈ 1.2 M listening`. `≈` only when it's an estimate. Header and Swarm alike. |
+| Passed on | Until a daily ledger exists: `PASSED ON SINCE 09:14` (the app's start time), not "since the app started". Goal stays "today" (the Data log needs the same ledger). |
+| Privacy proposal | Settings › Listening: `Use satellites` (GPS time only) and a separate `Be counted as a listener` (default on). Privacy mode (parked) would turn both off later. **For the user to decide.** |
 
 ## Badge states
 
