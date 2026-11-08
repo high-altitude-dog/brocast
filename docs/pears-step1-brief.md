@@ -59,7 +59,7 @@ Step 1 of the agreed order (spike results, design note §1–§13): **the Pears 
 - **Public repo:** no server address, login, key names or server key, and no private keys or artist names in any file (`brocast-public-repo`). Test keypairs are generated at runtime and kept out of git.
 - **Branding:** no Pears branding, and nothing that implies endorsement. The user is in touch with the Pears developers.
 - **Phones:**
-  - Pixel 10 Pro `5A161FDCH00197` and Galaxy A16 `R5CX93ZA1TN`, over adb.
+  - Pixel 10 Pro `<pixel-serial>` and Galaxy A16 `<galaxy-serial>`, over adb.
   - If adb says "unauthorized", ask the user to accept the prompt.
   - The main app (`org.beachsync.proto`) is installed on both phones and may be analysing beats in the background: don't uninstall it or clear its data.
 
