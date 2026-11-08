@@ -413,3 +413,18 @@ Differs from the design:
 - Can't-find copy: "this card ticks on when it appears" in place of "tells you when it appears" (no notice is built).
 - Exact counts under 10 come from the listener sketch (1024 registers; collisions are negligible at that size).
 - Not built: station key words and key renewal (need the h33 screens), the Engine row and update lines (no update mechanism), the new-identity sheet (not offered).
+
+## 8 Nov: upload page redesign, running order and announcing changes (user request)
+
+The user wants to reorder the sets (later tracks) on the upload page and announce the change to every listener, plus a redesign of the whole page. Please design: the page (desktop browser, dark, reached only through an SSH tunnel, no login), the reorder flow, and what listeners see on the phone.
+
+What exists (`server/brocast_admin.py`, one page): upload form (file, title, artist, set name) with progress and transcode status; the set list (status, size, on-air reel, delete); the artist registry (photo, crop, focus point, aliases, matching to confirm); a disk-room check ("needs 1.2 GB, the shared disk must keep 3 GB free").
+
+How a change reaches phones, which the design must respect:
+- Order is upload order today. Reordering adds a stored order; nothing moves until it's published.
+- Every change is a new edition with a start time at least 10 min ahead (`LIBRARY_NOTICE_S`), so all phones switch together and have time to fetch. Phones get it from the server or the Pears catalog.
+- An edition starts its first set at its start time, so the switch cuts whatever is playing. Code can instead put the start on the next set boundary at least 10 min ahead. The operator could choose: next boundary (default?) or a set time.
+- Pending until it starts: the page should show the queued order, when it takes effect, and allow cancel or edit before then.
+- Announcement: an edition can carry a short operator message, and each phone knows the switch time in advance. Open for you: where it shows (Now playing line, event log, banner, notification), a countdown, and what happens for listeners offline at the time (they pick it up on reconnect).
+- "Tracks": sets have no per-track cue lists yet, so the first version reorders sets only. Design track order as later.
+- Disk: show free space and what an upload will need before it starts.

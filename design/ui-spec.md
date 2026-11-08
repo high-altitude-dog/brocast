@@ -1,4 +1,4 @@
-# UI spec (hand-off 36)
+# UI spec (hand-off 40)
 
 Field names come from Claude Code's "Fields that exist today" table in `feedback.md`, as of 1 Nov 2026. If one has been renamed since, use the new name.
 
@@ -38,12 +38,13 @@ Field names come from Claude Code's "Fields that exist today" table in `feedback
 | Time-source pictogram | **Satellites:** a mini constellation: the sky squashed into a small ellipse, one dot per satellite in view, lit in accent for each one in use, the ones in use joined by faint lines (the same shortest-path pattern as the Satellites screen), no labels; then `GPS · 10 of 14`. Tapping it opens Satellites. **Hold:** an accent hourglass beside the same sky gone dark, `HOLDING · 41 s`. **NTP:** a cell tower with radio waves, `NTP · stratum 1` (Privacy mode shows this one). **First second:** the tower with dashed waves, `NTP · getting time`, until the first fit (never a 'no time' state). | `FlowTime.chosen`, `GpsTime.used`, `seen`, `lastBoot`, `NtpClient.stratum`; per-satellite positions **later** (until then, place dots evenly) | Updates once a second | partly |
 | Precision ring | A glow whose width shows the sync error on the budget's log scale; its figure is on the bottom bezel | Sync error | | now |
 | Beat counter (user, 7 Nov) | A 44 px strip **under the clock**: `BAR 212` left, four beat cells, `BPM 124` right (mono). Beat 1's cell is wider and keeps an accent outline. The current beat's cell is filled accent, with a dark line inside it filling as the beat's phase runs to the next beat; beats already played this bar stay faintly lit. No flash on beat 1 by default; **Settings › Screen › Flash on each new bar** (off by default, user 7 Nov) lights the strip's border in accent for 120 ms on beat 1, never while No flashing is on. Beats change when the sound **reaches your ears** (flowtime plus output lag), so every phone in a crowd lights beat 1 together. States: Working out the beats (dashed cells, `BEATS 62%`), No steady beat (`—`, dashed), Tempo change (new BPM in accent for one bar), New set (bar 1). | `SetBeats`: bar from set start, beat 1–4, bpm, beat phase; per set, after download | Tap opens Buffer. Reduced motion: no phase line, no flash, the cell steps. Reduced level: updates on the beat only. Minimal: hidden. | now (after analysis) |
+| Mesh card (user, 8 Nov) | Under the Auto row, above the three tiles: `MESH` and a status (`SHARING` / `RECEIVING` / `RECEIVE-ONLY` grey / `FROM LISTENERS` / `STARTING`). A 104 × 62 live map (you centred, station top-left as a square, listeners around, same-Wi-Fi filled, blocks moving in and out) and three lines: Connected (`12 · 3 relayed`, or `2 · station + 3f9a`), In (`1.8 MB/s 64% listeners`), Passed on (`1.2 GB today`, or `86 MB since 09:14`). Station offline: accent border and tint, station dashed, `all listeners`. Tap opens Swarm. Never names the engine or library. Reduced: numbers without moving blocks. Minimal: hidden. Board now 1030 tall (scrolls). | Live mesh: peers, paths, rates, passed on | Opens Swarm | now |
 | Play control and sync badge | A 52 px round button left of the badge: **Stop** (a white square, outlined) while playing; **Play** (an accent-filled circle with a dark triangle) when stopped; dashed and disabled while the set due now is downloading. The badge shows words, the ± figure and the source. | See Badge states | Play starts in sync at once. Tapping the badge opens the error budget detail. | now |
 | Latest event | Time, lane mark and name, and the event text, **directly under the badge**. The text wraps onto as many lines as it needs, with no ellipsis, and the row grows (the user's decision, 2 Nov). | `EventLog.latest()` | Tapping opens the Event log. A banner elsewhere links to its own event. | now |
 | Sync card (replaces the error budget, user's request 3 Nov) | **Headline:** `You hear it within ±3.0 ms of everyone's clock` (the badge figure, accent). **Window:** a signed log line from 1 s earlier to 1 s later around the Brocast clock (marks at 1, 10, 100 ms and 1 s each side, knee at 100 µs; `0` at the centre) (a white tick, `BROCAST CLOCK`); an accent band shows where this phone's sound most likely is (centred on the held gap, here 200 µs later, half-width √(clock² + delay estimate²)); a dot marks the centre; dashed lines at ±5 ms mark a typical event limit, labelled `EARLIER` and `LATER`. **What makes up the ±:** one bar split by each part's share of the total (squared), output delay estimate in amber, clock in accent, then one sentence naming the largest part and what would tighten it (`Mostly your headphones' delay estimate (±2.8 ms). Clock ±400 µs. An earcup test can tighten it.`). The output word follows the output in use. | Badge figure; `errAt`; Calibration ±; `NudgeControl.gapAt` | The whole card opens Time signals for the detail. | partly |
 | Gap row | The rate nudge row: mode chip, the gap value, then two small lines (`Dragging · Catching-up, 1.40 s` and `pitch +0.014%`; Rushing with Slowing-down shows `pitch −0.014%`) | `NudgeControl.gapAt`, `mode`, `secondsLeft`, `state.rate` | Opens Nudge control. The 60 s gap trace has left this screen to make room for the track; history belongs on Nudge control, **later**. | now |
 | Tiles | SOURCE, the output tile (`HEADPHONES`, `SPEAKER`, `PORTABLE SPEAKER` or `CAR AUDIO` by the output in use, with lag and the device's reported name), AHEAD (how much is downloaded ahead, in hours and minutes) | `FlowTime.chosen`, `GpsTime`, `Settings.lagMs`, download state (**later**) | SOURCE opens Time signals; HEADPHONES opens Calibration; AHEAD opens Buffer | partly |
-| Use satellites | A full-width row with a switch, never locked, one tap from the main screen. Shows `Position stays on this phone · off = Privacy mode`. | `GpsTime.active` | Off: the badge becomes Privacy mode. On: asks for location permission if needed; if refused, it returns to off. | now |
+| Use satellites | A full-width row with a switch, never locked, one tap from the main screen. Shows `GPS time only · your position stays on this phone`. | `GpsTime.active` | Off: the badge becomes Privacy mode. On: asks for location permission if needed; if refused, it returns to off. | now |
 
 ## Settings
 
@@ -589,7 +590,7 @@ Your 2 Nov notes (`ui/SyncScope.kt`). From Settings › Sync view. For checking 
 | Header | Back, `L · 120 Hz` (this phone's channel and refresh rate) |
 | Readout | Flowtime `21:33:07.382` (34 px mono), source and its error |
 | Dial (300 px) | **Outer disc:** white sweeps clockwise from 12 o'clock once per flowtime second, accent hand, 10 ticks (100 ms each, 12 o'clock heavier). **Inner disc:** accent sweeps once per beat, following tempo, beat number in the middle. With no steady beat it shows `—` and waits at 12. |
-| Dial choice | Seconds, Beats, Both (default) |
+| Dial choice | Seconds, Beats, Both (default), Line (full-screen line mode, below) |
 | Flash and click at 0 | On by default: screen white 2 frames and a 5 ms tick at each second's 12 o'clock (test card pitches). The tick plays only when nothing else is playing; with music on, the music is the sound (built 8 Nov). |
 | Nudges | Two boxes side by side, −10 −1 +1 +10. **Screen:** moves only the picture. **Audio:** amber border, `Changes what you hear. Not saved.` |
 | Reading | `This phone, by your ears: 6 ms behind` (from the audio nudge's sign), Keep as calibration, Reset |
@@ -659,6 +660,59 @@ The live mesh (8 Nov) is one station and zero to two listeners. These are the no
 | Listener count wording | 0 others: `just you`; 1: `you and 1 other`; 2–9: `you and 4 others` (exact); 10–999: `≈ 12 listening`; 1,000+: `≈ 1.2 M listening`. `≈` only when it's an estimate. Header and Swarm alike. |
 | Passed on | Until a daily ledger exists: `PASSED ON SINCE 09:14` (the app's start time), not "since the app started". Goal stays "today" (the Data log needs the same ledger). |
 | Privacy proposal | Settings › Listening: `Use satellites` (GPS time only) and a separate `Be counted as a listener` (default on). Privacy mode (parked) would turn both off later. **For the user to decide.** |
+
+## Mesh card states
+
+![](screens/home-mesh.png)
+
+Busy station, you and one other, only the station so far, receive-only on mobile data, station offline (replaces the separate banner from Mesh moments), starting (stage 2 of 4, elapsed).
+
+**Settings › Listening (user, 8 Nov: split):** `Use satellites` now reads `GPS time only · your position stays on this phone` and no longer affects being counted. New row under it: `Be counted as a listener` (default on) `Adds you to the listener estimate · off: you still listen and share`. Privacy mode (parked) would later turn both off.
+
+## Co-listener countries
+
+![](screens/countries.png)
+
+User, 8 Nov: show which countries co-listeners are in, **from IP addresses**, each phone opting in, **off until asked once**.
+
+| Element | Shows |
+|---|---|
+| Swarm card `WHERE YOUR CO-LISTENERS ARE` | Under the stats: one row per country (ISO code chip, English name, bar, count), most first; a same-Wi-Fi note in accent; footer counts `3 not shown`, `1 unknown · relayed`; one line on where it comes from and that a VPN shows the VPN's country. Always "of the N listeners this phone is connected to". |
+| Swarm listener list | New COUNTRY column: code chip, or `not shown` / `unknown` in muted mono. |
+| Mesh card on Now playing | Fourth line `Countries` with up to five code chips. |
+| Asked once | At the end of first listen: `Show your country to other listeners?` (what's shared: country from the address they already see; nothing more precise; VPN note; what Off means). `Show my country` / `Not now`. |
+| Settings › Listening | `Show my country` (off by default) `Others may see it from your internet address · off by default`. |
+
+| Rule | Detail |
+|---|---|
+| Consent | A phone's announcement carries its Show-my-country flag; others look it up only if set. |
+| Lookup | On the phone, from a country table shipped with the app and updated over the mesh. No address goes to an outside service. |
+| Relayed | The address is the relay's: `unknown`, never guessed; counted, not listed by country. |
+| Scope | Only connected listeners; never a station-wide claim. |
+| Few listeners | No minimum: countries show however few listeners are connected (user, 8 Nov). |
+
+## Sync view · line mode
+
+| Screen | States |
+|---|---|
+| ![](screens/sync-line.png) | ![](screens/sync-line-states.png) |
+
+User, 8 Nov. Full screen, black. On each tick a 4 px white line leaves a dashed accent **start mark** and moves down at **0.2 mm per ms** (physical, from the screen's density; 10 ms = 2 mm) for 100 mm (500 ms), then waits at the end line for the next tick. Two phones lined up by their start marks show their time gap as a height gap; the phone behind has the higher line.
+
+| Element | Shows |
+|---|---|
+| Top | Label (L/R/A/B as the test card), `BEAT 3 · 124 BPM`, `0.2 mm per ms · 10 ms = 2 mm`, `screen nudge 0 ms` |
+| Start mark | Dashed accent across the screen, `START · align here` |
+| Rulers | Both edges, every 10 ms (2 mm), longer at 50, labelled every 100 ms (0–500) |
+| Line | 4 px white, `+232 ms` above it; a faint trail of the last 3 frames (25%, 12%, 6%) so frame steps (1.7 mm at 120 Hz, 3.3 mm at 60 Hz) don't read as gaps |
+| End line | Grey at 100 mm, `500 ms · 100 mm · waits here for the next beat` |
+| Bottom | `Hold 2 s to leave · tap for controls` |
+
+| State | Shows |
+|---|---|
+| Controls (tap) | Tick: Each beat / Each second. **This phone's screen lag** −10 −1 +1 +10, value in amber when not 0; moves only this phone's line, never the sound; `Save +8 ms for this phone`, Reset. Saved per phone and applied to the dial too. |
+| Card check | First time, and from controls: lay a bank or ID card (85.6 mm) along the screen from the start mark and drag the end mark to its far edge; `Reported 420 dpi · measured 428 dpi · +1.9%`; Use 428 dpi. Saved per phone. |
+| No flashing | Doesn't apply: the line moves but never flashes. |
 
 ## Badge states
 
