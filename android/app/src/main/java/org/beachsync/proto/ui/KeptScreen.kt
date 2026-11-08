@@ -90,7 +90,7 @@ private fun mb(b: Long) = if (b >= 1_000_000_000) "%.2f GB".format(b / 1e9) else
 private val DAY = SimpleDateFormat("d MMM", Locale.UK)
 
 @Composable
-fun KeptScreen(state: BenchState, back: () -> Unit, openArtist: () -> Unit) {
+fun KeptScreen(state: BenchState, back: () -> Unit, openArtist: (String) -> Unit) {
     val lib = state.library
     val items = lib?.editions?.flatMap { it.items }?.distinctBy { it.id }.orEmpty()
     val kept = items.filter { lib!!.file(it.id).exists() }
@@ -200,7 +200,7 @@ private fun TempoMap(kept: List<LibraryItem>, infos: Map<String, KeptInfo>, lo: 
 }
 
 @Composable
-private fun KeptCard(lib: LibraryStore, item: LibraryItem, info: KeptInfo?, playing: Boolean, inside: Boolean, expanded: Boolean, toggle: () -> Unit, openArtist: () -> Unit) {
+private fun KeptCard(lib: LibraryStore, item: LibraryItem, info: KeptInfo?, playing: Boolean, inside: Boolean, expanded: Boolean, toggle: () -> Unit, openArtist: (String) -> Unit) {
     val shape = RoundedCornerShape(Tokens.Radius.card.dp)
     val working = SetBeatAnalyser.current()?.working?.takeIf { it.first == item.title }?.second
     val bpm = when {
@@ -216,7 +216,7 @@ private fun KeptCard(lib: LibraryStore, item: LibraryItem, info: KeptInfo?, play
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            ArtistThumb(lib, item, openArtist)
+            ArtistThumb(lib, item) { openArtist(item.id) }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 BasicText(item.title, style = Tokens.Text.bodyStrong.style().copy(fontSize = 17.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)

@@ -83,12 +83,16 @@ internal fun ArtistThumb(lib: LibraryStore?, item: LibraryItem?, open: () -> Uni
     }
 }
 
-/** Full-screen artist photo (hand-off 16): the photo on black, a close button, and a caption over a dark gradient. Tap anywhere to close. */
+/**
+ * Full-screen artist photo (hand-off 16): the photo on black, a close button, and a caption over a dark gradient. Tap anywhere to close.
+ * Shows the set tapped on Kept ([itemId]), else the one playing now.
+ */
 @Composable
-fun ArtistPhotoScreen(state: BenchState, back: () -> Unit) {
+fun ArtistPhotoScreen(state: BenchState, itemId: String? = null, back: () -> Unit) {
     val boot = org.beachsync.proto.Session.nowBoot()
     val lib = state.library
-    val item = nowPlayingItem(lib, boot)
+    val playing = nowPlayingItem(lib, boot)
+    val item = itemId?.let { id -> lib?.editions?.asSequence()?.flatMap { it.items.asSequence() }?.firstOrNull { it.id == id } } ?: playing
     val photo = rememberPhoto(item?.let { lib?.photo(it.id, "9x16") }, 1440)
     Box(Modifier.fillMaxSize().background(Color.Black).clickable(onClick = back)) {
         if (photo != null) Image(photo, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
@@ -100,7 +104,7 @@ fun ArtistPhotoScreen(state: BenchState, back: () -> Unit) {
             Alignment.Center,
         ) { BasicText("×", style = Tokens.Text.screenTitle.style(Color.White)) }
         Column(Modifier.align(Alignment.BottomStart).fillMaxWidth().safeDrawingPadding().padding(20.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            BasicText("NOW PLAYING", style = Tokens.Text.eyebrow.style(Color.White.copy(alpha = 0.7f)))
+            if (item?.id == playing?.id) BasicText("NOW PLAYING", style = Tokens.Text.eyebrow.style(Color.White.copy(alpha = 0.7f)))
             BasicText(item?.artist?.ifEmpty { null } ?: item?.title ?: "", style = Tokens.Text.screenTitle.style(Color.White).copy(fontSize = 30.sp), maxLines = 2, overflow = TextOverflow.Ellipsis)
             if (item?.artist?.isNotEmpty() == true) BasicText(item.title, style = Tokens.Text.body.style(Color.White.copy(alpha = 0.8f)), maxLines = 2, overflow = TextOverflow.Ellipsis)
         }

@@ -78,7 +78,7 @@ private val SECOND_NS = 1_000_000_000L
 private val READOUT = DateTimeFormatter.ofPattern("HH:mm:ss")
 
 @Composable
-fun SyncScope(state: BenchState, actions: BenchActions, back: () -> Unit, openTestCard: () -> Unit) {
+fun SyncScope(state: BenchState, actions: BenchActions, back: () -> Unit, openLine: () -> Unit = {}, openTestCard: () -> Unit) {
     val view = LocalView.current
     DisposableEffect(Unit) { view.keepScreenOn = true; onDispose { view.keepScreenOn = false } }
     var mode by remember { mutableIntStateOf(2) }   // Seconds, Beats, Both
@@ -92,7 +92,7 @@ fun SyncScope(state: BenchState, actions: BenchActions, back: () -> Unit, openTe
         while (true) withFrameNanos {
             frame = Session.nowBoot()
             if (flashLeft > 0) flashLeft--
-            val utc = FlowTime.fit()?.utcAt(frame)?.minus(Math.round(screenMs * 1e6))
+            val utc = FlowTime.fit()?.utcAt(frame)?.plus(Math.round((ScreenPrefs.screenLagMs - screenMs) * 1e6))
             if (utc != null) {
                 val second = Math.floorDiv(utc, SECOND_NS)
                 if (lastSecond != Long.MIN_VALUE && second != lastSecond && clickOn && !ScreenPrefs.noFlashing) flashLeft = 2
@@ -128,7 +128,7 @@ fun SyncScope(state: BenchState, actions: BenchActions, back: () -> Unit, openTe
 
     val s = state.session
     val fit = FlowTime.fit()
-    val utc = fit?.utcAt(frame)?.minus(Math.round(screenMs * 1e6))
+    val utc = fit?.utcAt(frame)?.plus(Math.round((ScreenPrefs.screenLagMs - screenMs) * 1e6))   // this phone's saved screen lag (hand-off 39), then the nudge
     val refresh = view.display?.refreshRate ?: 60f
     val nudge = s?.diagnosticOffsetMs ?: 0.0
     val beat = rememberBeat(state, s, utc, mode != 0)
@@ -141,7 +141,7 @@ fun SyncScope(state: BenchState, actions: BenchActions, back: () -> Unit, openTe
             Readout(utc, fit?.errAt(frame), state.localTime)
             Dial(mode, utc, beat)
             Legend(mode, beat)
-            Choice(listOf("Seconds", "Beats", "Both"), mode, { mode = it })
+            Choice(listOf("Seconds", "Beats", "Both", "Line"), mode, { if (it == 3) openLine() else mode = it })
             SwitchRow(
                 "Flash and click at 0",
                 when {
@@ -168,10 +168,10 @@ fun SyncScope(state: BenchState, actions: BenchActions, back: () -> Unit, openTe
 }
 
 /** Where the music is in its beat: from the set's own grid, worked out after download, or the live tracker until that's ready. */
-private class BeatNow(val frac: Double, val number: Int, val bpm: Double)
+internal class BeatNow(val frac: Double, val number: Int, val bpm: Double)
 
 @Composable
-private fun rememberBeat(state: BenchState, s: Session?, utc: Long?, wanted: Boolean): BeatNow? {
+internal fun rememberBeat(state: BenchState, s: Session?, utc: Long?, wanted: Boolean): BeatNow? {
     val stream = s?.stream
     val track = remember(stream, wanted) { if (wanted) stream?.let { BeatTrack(it) } else null }
     DisposableEffect(track) { track?.start(); onDispose { track?.stopNow() } }

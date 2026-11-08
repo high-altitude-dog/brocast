@@ -6,6 +6,7 @@ import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.os.SystemClock
 import org.beachsync.proto.ui.PocketGuard
+import org.beachsync.proto.ui.SyncLineScreen
 import org.beachsync.proto.ui.DataSharingScreen
 import org.beachsync.proto.ui.DataSharingAdvancedScreen
 import org.beachsync.proto.ui.DataLogScreen
@@ -144,18 +145,19 @@ class MainActivity : ComponentActivity(), BenchActions {
             var cardSetup by remember { mutableStateOf<org.beachsync.proto.ui.TestCardSetup?>(null) }
             BackHandler(page != home) {
                 if (page == Page.EARCUP) cancelEarcup()
-                page = when (page) { Page.LOG, Page.NUDGE -> from; Page.EARCUP -> Page.CALIBRATION; Page.ADVANCED, Page.DATALOG -> Page.DATA; Page.DATA, Page.IDENTITY, Page.CARD_SETUP -> Page.SETTINGS; Page.CARD -> Page.CARD_SETUP; Page.ARTIST -> if (artistFrom == Page.KEPT) Page.KEPT else home; else -> home }
+                page = when (page) { Page.LOG, Page.NUDGE -> from; Page.EARCUP -> Page.CALIBRATION; Page.ADVANCED, Page.DATALOG -> Page.DATA; Page.SYNC_LINE -> Page.SYNC; Page.DATA, Page.IDENTITY, Page.CARD_SETUP -> Page.SETTINGS; Page.CARD -> Page.CARD_SETUP; Page.ARTIST -> if (artistFrom == Page.KEPT) Page.KEPT else home; else -> home }
             }
             when (page) {
                 Page.NOW -> NowPlaying(state, this, { logLane = null; from = Page.NOW; page = Page.LOG }, { from = Page.NOW; page = Page.NUDGE }, { page = Page.BENCH }, { page = Page.SETTINGS }, { page = Page.SIGNALS }, { page = Page.CALIBRATION }, { page = Page.SATELLITES }, { page = Page.STEREO }, { page = Page.ARTIST }, { page = Page.SWARM }, { page = Page.BUFFER }) { page = Page.KEPT }
-                Page.KEPT -> KeptScreen(state, { page = home }) { artistFrom = Page.KEPT; page = Page.ARTIST }
+                Page.KEPT -> KeptScreen(state, { page = home }) { id -> artistFrom = Page.KEPT; artistItem = id; page = Page.ARTIST }
                 Page.CALIBRATION -> CalibrationPage(state, this, { page = home }, { resetEarcup(); page = Page.EARCUP })
                 Page.EARCUP -> EarcupPage(state, this) { page = Page.CALIBRATION }
                 Page.SIGNALS -> TimeSignalsScreen(state, this, { page = Page.SATELLITES }) { page = home }
-                Page.SYNC -> SyncScope(state, this, { page = Page.SETTINGS }) { page = Page.CARD_SETUP }
+                Page.SYNC -> SyncScope(state, this, { page = Page.SETTINGS }, { page = Page.SYNC_LINE }) { page = Page.CARD_SETUP }
+                Page.SYNC_LINE -> SyncLineScreen(state) { page = Page.SYNC }
                 Page.BEAT -> BeatSyncScope(state) { page = Page.SETTINGS }
                 Page.STEREO -> StereoScreen(state, this) { page = home }
-                Page.ARTIST -> ArtistPhotoScreen(state) { page = if (artistFrom == Page.KEPT) Page.KEPT else home; artistFrom = home }
+                Page.ARTIST -> ArtistPhotoScreen(state, if (artistFrom == Page.KEPT) artistItem else null) { page = if (artistFrom == Page.KEPT) Page.KEPT else home; artistFrom = home }
                 Page.SWARM -> SwarmScreen { page = home }
                 Page.BUFFER -> BufferScreen(state, { page = home }) { page = Page.SWARM }
                 Page.SATELLITES -> SatellitesScreen(state, this, { page = home }, { page = Page.SIGNALS })
@@ -379,7 +381,7 @@ class MainActivity : ComponentActivity(), BenchActions {
         if (state.library != null) applyStation()
     }
 
-    private enum class Page { NOW, BENCH, LOG, NUDGE, SETTINGS, SIGNALS, CALIBRATION, EARCUP, SATELLITES, SYNC, BEAT, STEREO, ARTIST, SWARM, BUFFER, DATA, ADVANCED, DATALOG, IDENTITY, KEPT, CARD_SETUP, CARD }
+    private enum class Page { NOW, BENCH, LOG, NUDGE, SETTINGS, SIGNALS, CALIBRATION, EARCUP, SATELLITES, SYNC, SYNC_LINE, BEAT, STEREO, ARTIST, SWARM, BUFFER, DATA, ADVANCED, DATALOG, IDENTITY, KEPT, CARD_SETUP, CARD }
 
     companion object {
         /** Kept outside the activity, so a test run survives the screen being rebuilt. */

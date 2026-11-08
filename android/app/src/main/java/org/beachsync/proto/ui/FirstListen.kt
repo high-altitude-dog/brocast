@@ -126,21 +126,92 @@ fun FirstListenCard(m: MeshMoments, openSwarm: () -> Unit) {
 
 private val SINCE: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
 
+private fun rate(kbps: Int) = if (kbps >= 8000) "%.1f MB/s".format(kbps / 8000.0) else "${(kbps + 4) / 8} kB/s"
+
 /**
- * The station offline while listeners carry it (hand-off 35): calm and a little proud, accent not amber, in place of the latest-event row.
- * After 10 min it adds the time it began.
+ * The Mesh card on Now playing (hand-off 37): status, a small live map, and Connected, In and Passed on. Tap opens Swarm. With the station
+ * offline it takes the accent border and tint, in place of the banner Mesh moments had. Shown only while the engine runs.
  */
 @Composable
-fun PlayingFromListeners(v: MeshView, sinceMs: Long, openSwarm: () -> Unit) {
-    val n = v.others
-    val carrying = if (n == 1) "1 other listener is carrying it" else "$n other listeners are carrying it"
-    val since = if (System.currentTimeMillis() - sinceMs >= 10 * 60_000L) " since ${SINCE.format(Instant.ofEpochMilli(sinceMs).atZone(ZoneId.systemDefault()))}" else ""
+fun MeshCard(v: MeshView, openSwarm: () -> Unit) {
+    val phase by rememberInfiniteTransition(label = "meshcard").animateFloat(0f, 1f, infiniteRepeatable(tween(1800, easing = LinearEasing), RepeatMode.Restart), label = "t")
+    val m = v.moments
+    val offline = m?.stationOfflineSinceMs != null
+    val listeners = v.listenerPeers
+    val starting = m != null && !m.firstMusicDone
+    val (status, statusColor) = when {
+        starting -> "STARTING" to Ink.accent
+        offline -> "FROM LISTENERS" to Ink.accent
+        !v.sharing -> "RECEIVE-ONLY" to Ink.textSecondary
+        listeners.isNotEmpty() -> "SHARING" to Ink.accent
+        else -> "RECEIVING" to Ink.accent
+    }
+    val total = v.stations.size + listeners.size
+    val relayed = v.peers.count { it.path == "relayed" }
+    val connected = when {
+        starting -> "stage ${m!!.stageS.indexOfFirst { it == null } + 1} of 4 · ${"%.1f".format(m.elapsedS)} s"
+        offline -> "${listeners.size} · all listeners"
+        total == 0 -> "0 · looking"
+        listeners.isEmpty() -> "$total · the station"
+        listeners.size <= 2 -> "$total · " + (if (v.stations.isNotEmpty()) "station + " else "") + listeners.joinToString(" and ") { it.key.take(4) }
+        else -> "$total · $relayed relayed"
+    }
+    val inKbps = v.peers.sumOf { it.toYouKbps }
+    val fromListeners = listeners.sumOf { it.toYouKbps }
+    val inLine = when {
+        inKbps == 0 -> "—"
+        fromListeners == 0 -> "${rate(inKbps)}  from the station"
+        else -> "${rate(inKbps)}  ${100 * fromListeners / inKbps}% listeners"
+    }
+    val passed = "${v.upBytes / 1_000_000L} MB" + (m?.let { " since " + SINCE.format(Instant.ofEpochMilli(it.startedMs).atZone(ZoneId.systemDefault())) } ?: " today")
+    val shape = RoundedCornerShape(Tokens.Radius.card.dp)
     Column(
-        Modifier.fillMaxWidth().background(Ink.accent.copy(alpha = 0.12f), RoundedCornerShape(Tokens.Radius.card.dp))
-            .border(1.dp, Ink.accent, RoundedCornerShape(Tokens.Radius.card.dp)).clickable(role = Role.Button, onClick = openSwarm).padding(12.dp),
-        verticalArrangement = Arrangement.spacedBy(2.dp),
+        Modifier.fillMaxWidth().background(if (offline) Ink.accent.copy(alpha = 0.10f) else Ink.surface, shape)
+            .border(if (offline) 1.dp else Tokens.Stroke.card.dp, if (offline) Ink.accent else Ink.border, shape)
+            .clickable(role = Role.Button, onClick = openSwarm).padding(12.dp)
+            .semantics { contentDescription = "Mesh, $status. Connected $connected. In $inLine. Passed on $passed. Opens Swarm." },
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        BasicText("Playing from listeners$since", style = Tokens.Text.bodyStrong.style(Ink.accent))
-        BasicText("The station is offline. $carrying, in sync.", style = Tokens.Text.small.style())
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            BasicText("MESH", Modifier.weight(1f), Tokens.Text.cardLabel.style())
+            BasicText("● $status", style = Tokens.Text.cardLabel.style(statusColor))
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Canvas(Modifier.size(104.dp, 62.dp)) {
+                val me = Offset(size.width / 2, size.height / 2 + 4.dp.toPx())
+                val st = Offset(10.dp.toPx(), 9.dp.toPx())
+                fun moving(from: Offset, to: Offset, k: Int) {
+                    val t = (phase + k * 0.23f) % 1f
+                    val p = Offset(from.x + (to.x - from.x) * t, from.y + (to.y - from.y) * t)
+                    drawCircle(Ink.accent.copy(alpha = if (t < 0.2f) t / 0.2f else if (t > 0.8f) (1 - t) / 0.2f else 1f), 1.8.dp.toPx(), p)
+                }
+                val dash = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(3.dp.toPx(), 2.dp.toPx()))
+                if (v.stations.isNotEmpty() || offline) {
+                    drawLine(if (offline) Ink.faint else Ink.textSecondary, st, me, 1.dp.toPx(), pathEffect = if (offline) dash else null)
+                    val sq = 9.dp.toPx()
+                    if (offline) drawRect(Ink.textSecondary, Offset(st.x - sq / 2, st.y - sq / 2), Size(sq, sq), style = Stroke(1.dp.toPx(), pathEffect = dash))
+                    else { drawRect(Ink.text, Offset(st.x - sq / 2, st.y - sq / 2), Size(sq, sq)); if (v.stations.any { it.toYouKbps > 0 }) moving(st, me, 0) }
+                }
+                listeners.take(8).forEachIndexed { i, p ->
+                    val a = Math.toRadians(-20.0 + i * 360.0 / maxOf(1, minOf(8, listeners.size)))
+                    val near = if (p.path == "lan") 0.6f else 1f
+                    val pos = Offset(me.x + 38.dp.toPx() * near * Math.cos(a).toFloat(), me.y + 22.dp.toPx() * near * Math.sin(a).toFloat())
+                    drawLine(Ink.textSecondary, pos, me, 1.dp.toPx(), pathEffect = if (p.path == "relayed") dash else null)
+                    if (p.path == "lan") drawCircle(Ink.accent.copy(alpha = 0.35f), 4.dp.toPx(), pos)
+                    drawCircle(Ink.textSecondary, 4.dp.toPx(), pos, style = Stroke(1.dp.toPx()))
+                    if (p.toYouKbps > 0) moving(pos, me, i + 1)
+                    if (p.fromYouKbps > 0) moving(me, pos, i + 5)
+                }
+                drawCircle(Ink.accent.copy(alpha = 0.2f), 9.dp.toPx(), me)
+                drawCircle(Ink.accent, 5.dp.toPx(), me)
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                for ((label, value) in listOf("Connected" to connected, "In" to inLine, "Passed on" to passed)) Row {
+                    BasicText(label, Modifier.width(76.dp), Tokens.Text.small.style(Ink.textSecondary))
+                    BasicText(value, style = Tokens.Text.small.style())
+                }
+            }
+        }
     }
 }

@@ -142,10 +142,10 @@ fun NowPlaying(state: BenchState, actions: BenchActions, openLog: () -> Unit, op
             PlayStopButton(s != null, lockedByDownload, listen)
             SyncBadge(s, boot, lagUncNs, if (s != null && dueMissing) lib.partPct.coerceAtLeast(0) else if (lockedByDownload) (lib?.partPct ?: -1).coerceAtLeast(0) else null, Modifier.weight(1f))
         }
-        val offlineSince = mesh?.moments?.stationOfflineSinceMs
-        if (mesh != null && offlineSince != null) PlayingFromListeners(mesh, offlineSince, openSwarm) else EventRow(state.eventLog, SECOND_MS, openLog)
+        EventRow(state.eventLog, SECOND_MS, openLog)
         SyncCard(s, boot, lagUncNs, out.kind.label.lowercase(), out.external, openSignals)
         NudgeRow(state, openNudge, SECOND_MS)
+        mesh?.let { MeshCard(it, openSwarm) }
         Row(Modifier.fillMaxWidth().height(IntrinsicTile), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             val gpsNow = s?.gps ?: state.idleGps
             val gold = when (gpsNow?.gold) { true -> "Gold · "; false -> "Silver · "; null -> "" }
