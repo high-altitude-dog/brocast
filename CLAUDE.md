@@ -75,7 +75,7 @@ To keep tokens low:
 
 | Path | What it is |
 |---|---|
-| `android/` | The app: Kotlin, package `org.beachsync.proto`. AGP 8.7.3, Kotlin 2.0.21, Gradle 8.11.1, compileSdk/targetSdk 35, minSdk 31. Jetpack Compose (and the AndroidX it needs) is allowed for screens only; the rest stays free of AndroidX. |
+| `android/` | The app: Kotlin, package `org.beachsync.proto`. AGP 8.7.3, Kotlin 2.4.20 (bare-kit-kotlin needs 2.3 or later), Gradle 8.11.1, compileSdk 36, targetSdk 35, minSdk 31, arm64 only. Jetpack Compose (and the AndroidX it needs) is allowed for screens only; the rest stays free of AndroidX. |
 | `android/.../ui/` | Compose screens. `Theme.kt` uses `Tokens`, generated from `design/tokens.json` by the `generateTokens` Gradle task on every build; never copy token values by hand. The app opens on `NowPlaying.kt`; holding the station name, or a launch from the test scripts, opens `TestBench.kt`. `SettingsPage.kt` and `DetailScreens.kt` (Time signals, Stream gap, Event log) are built from the design, with parts that have no data left out. |
 | `android/.../Flow.kt` | `ClockFit`, `FlowTime` (source choice, with 20%-better-for-10-s hysteresis), line fits, `GpsFitter`, `NtpFitter` |
 | `android/.../Renderer.kt` | Tick and stream rendering, and the PI rate nudge that tracks the audio clock (±0.1% at most, jump if more than 20 ms out) |
@@ -93,6 +93,7 @@ To keep tokens low:
 | `android/.../SessionService.kt` | The foreground service that keeps a run alive off screen, with a plain notice and a Stop button. Never touches the audio thread. The designed media notification isn't built yet. |
 | `android/.../Events.kt` | The plain event log: detects changes in the app's counters on a low-priority thread, never the audio thread. Plain Kotlin, tested in `simtest/`. |
 | `android/.../MainActivity.kt` | The screen |
+| `android/.../PearsEngine.kt`, `Rpc.kt` | The Pears engine (`pears/host/worklet.js`, packed by the build; needs `npm install` in `pears/` once) in a bare-kit worklet. With a station key (bench, or `--es station <hex>`), it fetches the library over the mesh into `LibraryStore`'s folder instead of from the server. Receive-only on metered networks. |
 | `server/beachsync_server.py` | The stream server (stdlib only). `--clicks` or `--source FILE` (needs ffmpeg). `--library DIR` plays what the upload page has put on air. Serves `/manifest.json`, `/seg/<n>.opus`, `/library.json`, `/file/<id>.opus` and `/on_air.opus`. Every transfer is compressed: no raw audio ever crosses a network. |
 | `server/brocast_admin.py` | The upload page for test sets (stdlib, needs ffmpeg). No password, so only ever behind an SSH tunnel. `server/test_library.py` tests it with the stream server. |
 | `server/dht/`, `server/Dockerfile.dht` | Reach the server by its ed25519 public key over HyperDHT: `gateway.js` on the server, `connect.js` as a test client. The key locates the server, so it stays out of this repo, like its address. |

@@ -2,3 +2,7 @@ local.properties
 .gradle/
 build/
 app/build/
+# Made by the build from pears/ (bare-pack and bare-link)
+app/src/main/assets/engine.bundle
+app/src/main/addons/
+app/src/main/libcxx/

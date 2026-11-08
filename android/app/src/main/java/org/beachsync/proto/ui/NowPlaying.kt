@@ -138,7 +138,7 @@ fun NowPlaying(state: BenchState, actions: BenchActions, openLog: () -> Unit, op
         BeatCounter(state, openBuffer)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Top) {
             PlayStopButton(s != null, lockedByDownload, listen)
-            SyncBadge(s, boot, lagUncNs, if (s != null && dueMissing) (lib?.partPct ?: -1).coerceAtLeast(0) else if (lockedByDownload) (lib?.partPct ?: -1).coerceAtLeast(0) else null, Modifier.weight(1f))
+            SyncBadge(s, boot, lagUncNs, if (s != null && dueMissing) lib.partPct.coerceAtLeast(0) else if (lockedByDownload) (lib?.partPct ?: -1).coerceAtLeast(0) else null, Modifier.weight(1f))
         }
         EventRow(state.eventLog, SECOND_MS, openLog)
         SyncCard(s, boot, lagUncNs, out.kind.label.lowercase(), out.external, openSignals)
@@ -446,7 +446,7 @@ private fun SourceGlyph(gps: org.beachsync.proto.GpsTime?, boot: Long, open: () 
     val onGps = FlowTime.chosen == Source.GPS && gps != null && gps.active
     val kind = when {
         FlowTime.fit() == null -> "WAIT"   // the first second or two after the app opens, before internet time answers
-        onGps && boot - gps!!.lastBoot <= 3_000_000_000L -> "GPS"
+        onGps && boot - gps.lastBoot <= 3_000_000_000L -> "GPS"
         onGps -> "HOLD"
         else -> "NTP"
     }

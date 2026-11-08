@@ -99,7 +99,7 @@ fun BeatSyncScope(state: BenchState, back: () -> Unit) {
                     } + (org.beachsync.proto.SetBeatAnalyser.current()?.working?.let { (title, pct) -> if (setBeat == null) "\nFinding the beats and bars in $title: $pct%" else "" } ?: ""),
                     style = Tokens.Text.small.style(Ink.textSecondary),
                 )
-                ClockLine(s!!, frame)
+                ClockLine(s, frame)
                 Card {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         BasicText("Flash on the beat", Modifier.weight(1f), Tokens.Text.body.style())

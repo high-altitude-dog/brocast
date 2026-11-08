@@ -90,13 +90,13 @@ fun TestCardScreen(state: BenchState, actions: BenchActions, setup: TestCardSetu
         // The display's fastest mode at its current size, held for the test, so the flash length doesn't change under us.
         val d = activity?.display
         val fastest = d?.supportedModes?.filter { it.physicalWidth == d.mode.physicalWidth && it.physicalHeight == d.mode.physicalHeight }?.maxByOrNull { it.refreshRate }
-        w?.attributes = w?.attributes?.apply { screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_FULL; fastest?.let { preferredDisplayModeId = it.modeId } }
+        w?.let { it.attributes = it.attributes.apply { screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_FULL; fastest?.let { preferredDisplayModeId = it.modeId } } }
         w?.insetsController?.hide(WindowInsets.Type.systemBars())
         val wasNoFlashing = ScreenPrefs.noFlashing
         if (wasNoFlashing) ScreenPrefs.set(ctx, noFlashing = false)
         actions.setChannel(setup.channel)
         onDispose {
-            w?.attributes = w?.attributes?.apply { screenBrightness = oldBrightness ?: WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE; preferredDisplayModeId = oldMode }
+            w?.let { it.attributes = it.attributes.apply { screenBrightness = oldBrightness ?: WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE; preferredDisplayModeId = oldMode } }
             w?.insetsController?.show(WindowInsets.Type.systemBars())
             if (wasNoFlashing) ScreenPrefs.set(ctx, noFlashing = true)
         }

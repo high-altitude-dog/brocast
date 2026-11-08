@@ -94,6 +94,8 @@ class BenchState {
     var library by mutableStateOf<org.beachsync.proto.LibraryStore?>(null)
     /** Now playing may still offer "Show your headphones' name?" (hand-off 34): not at first launch, and only once. */
     var headphonesNameOffer by mutableStateOf(false)
+    /** A station's key: the library comes over the Pears mesh. Blank: from the server. */
+    var stationKey by mutableStateOf("")
 }
 
 interface BenchActions {
@@ -159,6 +161,12 @@ fun TestBench(state: BenchState, actions: BenchActions, openLog: (Lane?) -> Unit
                     Spacer(Modifier.width(10.dp))
                     Field(state.url, !running, KeyboardType.Uri, Modifier.weight(1f), Tokens.Text.valueSmall.style()) { state.url = it }
                 }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    BasicText("Station key", Modifier.width(92.dp), Tokens.Text.body.style(Ink.textSecondary))
+                    Spacer(Modifier.width(10.dp))
+                    Field(state.stationKey, !running, KeyboardType.Ascii, Modifier.weight(1f), Tokens.Text.valueSmall.style()) { state.stationKey = it }
+                }
+                BasicText(meshLine(), style = Tokens.Text.small.style(Ink.textSecondary))
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     UnitField("TICK PITCH", state.pitch, "Hz", !running, Modifier.weight(1f)) { state.pitch = it }
                     UnitField("HEADPHONE LAG", state.lag, "ms", !running, Modifier.weight(1f)) { state.lag = it }
@@ -535,4 +543,15 @@ private fun StatusGrid(state: BenchState, openLog: (Lane?) -> Unit) {
             }
         }
     }
+}
+
+/** One line on the mesh, for the bench: blank key, the engine's phase and peers, or what stopped it. Applied when Run is pressed. */
+private fun meshLine(): String {
+    val e = org.beachsync.proto.PearsEngine
+    e.error?.let { return "Mesh: $it" }
+    val s = e.status ?: return if (e.running) "Mesh: starting" else "Mesh off: the library comes from the server"
+    val sw = s.optJSONObject("swarm")
+    val lib = s.optJSONObject("library")
+    return "Mesh: ${s.optString("phase")} · ${sw?.optInt("connected") ?: 0} peers · ${lib?.optInt("held")}/${lib?.optInt("total")} blocks" +
+        (if (e.sharing) " · sharing" else " · receive-only (metered)")
 }

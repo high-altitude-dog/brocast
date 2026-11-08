@@ -211,7 +211,7 @@ private fun Sky(sats: List<Sat>, picked: String?, pick: (String?) -> Unit) {
                     val r = size.width / 2f - 28.dp.toPx()
                     val hit = sats.minByOrNull { hypot(skyAt(it, c, r).x - tap.x, skyAt(it, c, r).y - tap.y) }
                     val near = hit != null && hypot(skyAt(hit, c, r).x - tap.x, skyAt(hit, c, r).y - tap.y) <= 22.dp.toPx()
-                    pick(if (near) hit!!.label else null)
+                    pick(if (near) hit.label else null)
                 }
             },
     ) {

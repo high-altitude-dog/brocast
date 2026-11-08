@@ -117,8 +117,8 @@ class MainActivity : ComponentActivity(), BenchActions {
         if (result[Manifest.permission.ACCESS_FINE_LOCATION] == true) satellitesInRun(true) else satellitesOff()
     }
 
-    override fun onCreate(saved: Bundle?) {
-        super.onCreate(saved)
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
         onRunStopped = runStopped
         org.beachsync.proto.ui.ScreenPrefs.load(this)
         // The app is always dark, so the bars' icons stay light whatever the phone's own theme is.
@@ -131,7 +131,7 @@ class MainActivity : ComponentActivity(), BenchActions {
         load()
         state.session = session
         val testScript = intent?.hasExtra("tickPattern") == true || (intent?.hasExtra("soloSlot") == true && intent?.hasExtra("library") != true)
-        if (!testScript) state.library = LibraryStore.begin(this, state.url.trim())
+        if (!testScript) applyStation()
         state.eventLog = eventLog
         setContent {
             val fromTestScript = intent?.hasExtra("tickPattern") == true || intent?.hasExtra("soloSlot") == true
@@ -330,6 +330,9 @@ class MainActivity : ComponentActivity(), BenchActions {
 
     private fun load() {
         state.url = prefs.getString(KEY_URL, "http://192.168.1.10:8080") ?: ""
+        // A station's key fetches the library over the Pears mesh instead of from the server. adb: am start ... --es station <64 hex digits>, or "-" for the server.
+        state.stationKey = intent?.getStringExtra("station")?.let { if (it == "-") "" else it } ?: prefs.getString(KEY_STATION, "") ?: ""
+        prefs.edit().putString(KEY_STATION, state.stationKey).apply()
         state.stream = prefs.getBoolean(KEY_STREAM, false)
         state.policy = when (prefs.getString(KEY_POLICY, "AUTO")) { "GPS" -> Policy.GPS_ONLY; "NTP" -> Policy.NTP_ONLY; else -> Policy.AUTO }
         state.channel = Renderer.BOTH   // Stereo at every app start (hand-off 18); a change lasts until the app restarts
@@ -341,15 +344,28 @@ class MainActivity : ComponentActivity(), BenchActions {
         state.nudgePeriodS = prefs.getFloat(KEY_NUDGE_PERIOD, -1f).let { if (it > 0f) it.toDouble() else null }
     }
 
+    /** The library's source: the station's key over the mesh, or the server. Only acts on a change. */
+    private fun applyStation() {
+        val key = state.stationKey.trim().lowercase()
+        if (state.library != null && key == appliedStation) return
+        appliedStation = key
+        val lib = LibraryStore.begin(this, state.url.trim(), key)
+        state.library = lib
+        PearsEngine.use(this, key, lib)
+    }
+    private var appliedStation: String? = null
+
     private fun save() {
         prefs.edit()
             .putString(KEY_URL, state.url.trim())
+            .putString(KEY_STATION, state.stationKey.trim())
             .putBoolean(KEY_STREAM, state.stream)
             .putString(KEY_POLICY, when (state.policy) { Policy.GPS_ONLY -> "GPS"; Policy.NTP_ONLY -> "NTP"; Policy.AUTO -> "AUTO" })
             .putString(KEY_PITCH, state.pitch)
             .putString(KEY_LAG, state.lag)
             .putString(KEY_CHANNEL, when (state.channel) { Renderer.LEFT -> "LEFT"; Renderer.RIGHT -> "RIGHT"; else -> "BOTH" })
             .apply()
+        if (state.library != null) applyStation()
     }
 
     private enum class Page { NOW, BENCH, LOG, NUDGE, SETTINGS, SIGNALS, CALIBRATION, EARCUP, SATELLITES, SYNC, BEAT, STEREO, ARTIST, SWARM, BUFFER, DATA, ADVANCED, DATALOG, IDENTITY, KEPT, CARD_SETUP, CARD }
@@ -371,6 +387,7 @@ class MainActivity : ComponentActivity(), BenchActions {
         }
 
         private const val KEY_URL = "url"
+        private const val KEY_STATION = "station"
         private const val KEY_STREAM = "stream"
         private const val KEY_POLICY = "policy"
         private const val KEY_PITCH = "pitch"

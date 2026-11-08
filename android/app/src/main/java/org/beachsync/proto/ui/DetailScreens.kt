@@ -232,7 +232,7 @@ fun StreamGapScreen(state: BenchState, actions: BenchActions, back: () -> Unit) 
     val closing = n != null && n.state.closing && gap != 0L
     val manual = state.nudgeMode == NudgeMode.MANUAL
     val period = if (n != null && gap != 0L) n.effectivePeriodS(abs(gap)) else state.nudgePeriodS ?: NudgeControl.RECOMMENDED_S
-    val rate = if (closing) n!!.state.rate else if (gap != 0L) gap / (period * 1e9) else 0.0   // signed: positive speeds the audio up
+    val rate = if (closing) n.state.rate else if (gap != 0L) gap / (period * 1e9) else 0.0   // signed: positive speeds the audio up
     Screen {
         ScreenHeader("Stream gap", back)
         Card {
@@ -279,7 +279,7 @@ fun StreamGapScreen(state: BenchState, actions: BenchActions, back: () -> Unit) 
                 Tokens.Text.body.style(Ink.accent),
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                InsetTile("TIME LEFT", if (gap == 0L) "—" else "%.1f s".format(Locale.ROOT, if (closing) n!!.secondsLeft(boot) else period), "", Modifier.weight(1f))
+                InsetTile("TIME LEFT", if (gap == 0L) "—" else "%.1f s".format(Locale.ROOT, if (closing) n.secondsLeft(boot) else period), "", Modifier.weight(1f))
                 InsetTile("PITCH CHANGE", if (rate == 0.0) "—" else fmtPitch(rate), if (rate == 0.0) "" else "%.1f ¢".format(Locale.ROOT, abs(1200 * log2(1 + rate))), Modifier.weight(1f))
             }
             if (gap != 0L) Preview(gap, period)

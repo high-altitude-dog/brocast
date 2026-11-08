@@ -8,7 +8,7 @@ plugins {
 
 android {
     namespace = "org.beachsync.proto"
-    compileSdk = 35
+    compileSdk = 36   // bare-kit-kotlin needs it; targetSdk stays 35
 
     defaultConfig {
         applicationId = "org.beachsync.proto"
@@ -16,7 +16,12 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "0.1"
+        ndk { abiFilters += "arm64-v8a" }   // the engine's native add-ons are built for arm64 only; every test phone is arm64
     }
+
+    // The Pears engine's native add-ons and the C++ runtime they need, made by the tasks below.
+    sourceSets["main"].jniLibs.srcDirs("src/main/addons", "src/main/libcxx")
+    packaging { jniLibs { useLegacyPackaging = false } }
 
     buildTypes {
         release {
@@ -31,11 +36,39 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    kotlinOptions { jvmTarget = "17" }
     buildFeatures { compose = true }
 }
 
+kotlin { compilerOptions { jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17) } }
+
+/*
+ * The Pears engine (pears/engine) in a bare-kit worklet: pears/host/worklet.js packed into one bundle, its native add-ons
+ * linked for arm64, before every build. Needs `npm install` in pears/ once. As in pears/android-test (step 1).
+ */
+val pears = rootDir.parentFile.resolve("pears")
+val appDir = projectDir
+val packEngine by tasks.registering(Exec::class) {
+    workingDir = pears
+    commandLine("nice", "node_modules/.bin/bare-pack", "--preset", "android", "--out", appDir.resolve("src/main/assets/engine.bundle").path, "host/worklet.js")
+}
+val linkAddons by tasks.registering(Exec::class) {
+    workingDir = pears
+    commandLine("nice", "node_modules/.bin/bare-link", "--host", "android-arm64", "--out", appDir.resolve("src/main/addons").path, "host/worklet.js")
+}
+// udx-native needs the NDK's C++ runtime, which bare-kit doesn't ship: one 1.8 MB file from NDK r27c, fetched by range request.
+val fetchLibcxx by tasks.registering(Exec::class) {
+    val out = file("src/main/libcxx/arm64-v8a/libc++_shared.so")
+    onlyIf { !out.exists() }
+    doFirst { out.parentFile.mkdirs() }
+    commandLine("python3", "-I", rootDir.resolve("fetch_from_zip.py").path, "https://dl.google.com/android/repository/android-ndk-r27c-linux.zip",
+        "sysroot/usr/lib/aarch64-linux-android/libc++_shared.so", out.path)
+}
+tasks.named("preBuild") { dependsOn(packEngine, linkAddons, fetchLibcxx) }
+
 dependencies {
+    // The engine host. Not used by the timing code.
+    implementation("com.github.holepunchto.bare-kit-kotlin:bare-kit-kotlin-android:v0.2.2")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0")
     // Compose is for screens only: the timing code must not depend on it.
     implementation(platform("androidx.compose:compose-bom:2024.12.01"))
     implementation("androidx.compose.foundation:foundation")

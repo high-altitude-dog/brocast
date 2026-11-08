@@ -1,6 +1,7 @@
 // The station's seed server for step 0: puts each Opus set in its own core as blocks of N seconds, publishes the
 // catalog, and serves. Prints `READY <catalog key> <station key>`, then a JSON summary on SIGTERM.
 // Usage: node tools/station.js --dir D --seed-file F --library DIR --block-seconds N  (BOOTSTRAP env: JSON host/port list)
+// With --library-json FILE (the server's library.json for those sets), the catalog carries it, so the app's timeline comes over the mesh too.
 import fs from 'node:fs'
 import path from 'node:path'
 import crypto from 'hypercore-crypto'
@@ -15,6 +16,7 @@ const dir = arg('dir')
 const seedFile = arg('seed-file')
 const library = arg('library')
 const blockSeconds = Number(arg('block-seconds', 4)) // 4 s is the step 0 recommendation
+const libraryJson = arg('library-json') ? JSON.parse(fs.readFileSync(arg('library-json'), 'utf8')) : null
 const bootstrap = process.env.BOOTSTRAP ? JSON.parse(process.env.BOOTSTRAP) : undefined
 // A seed on egress-billed cloud (cost class 3) runs with a cap: 1 GB a month for now (user, 7 Nov).
 const capBytes = arg('cloud-cap-bytes') ? Number(arg('cloud-cap-bytes')) : null
@@ -41,9 +43,13 @@ for (const name of fs.readdirSync(library).filter((f) => f.endsWith('.opus')).so
 
 const catalog = store.get({ name: 'catalog' })
 await catalog.ready()
-if (catalog.length === 0) {
+// A new edition whenever the sets or the library list change; phones always read the newest.
+const last = catalog.length ? JSON.parse(await catalog.get(catalog.length - 1)) : null
+const same = last && JSON.stringify(last.items) === JSON.stringify(items) && JSON.stringify(last.library ?? null) === JSON.stringify(libraryJson)
+if (!same) {
   await catalog.append(Buffer.from(JSON.stringify({
-    edition: 1, start_ns: 0, block_format: FORMAT, block_seconds: blockSeconds, seeds: [hex(mesh.keyPair.publicKey)], items
+    edition: catalog.length + 1, start_ns: 0, block_format: FORMAT, block_seconds: blockSeconds, seeds: [hex(mesh.keyPair.publicKey)], items,
+    ...(libraryJson ? { library: libraryJson } : {})
   })))
 }
 

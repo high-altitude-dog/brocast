@@ -37,6 +37,37 @@ class LibraryStore private constructor(ctx: Context) : Thread("library") {
 
     fun file(id: String) = File(dir, "$id.opus")
 
+    /** Where the sets live. The Pears engine builds into it too, through `.building/`, so a set appears whole or not at all. */
+    val folder: File get() = dir
+
+    /** A station's key when the library comes over the Pears mesh ([PearsEngine]): then nothing is fetched from the server. Blank means the server. */
+    @Volatile var meshKey = ""
+
+    /** The station's library list from its catalog: the same format as the server's library.json. */
+    fun fromMesh(text: String) {
+        read(text)
+        val temp = File(dir, "library.json.tmp")
+        temp.writeText(text)
+        temp.renameTo(listFile)
+        summarise(null)
+    }
+
+    /** A set finished building over the mesh. */
+    fun meshBuilt() = summarise(null)
+
+    /** The engine's status: how much of the set being built has arrived, for the DOWNLOADING badge. */
+    fun meshProgress(status: JSONObject) {
+        val sets = status.optJSONObject("library")?.optJSONArray("sets") ?: return
+        val building = (0 until sets.length()).map { sets.getJSONObject(it) }.firstOrNull { it.optString("state") == "building" }
+        partPct = building?.optInt("pct", 0) ?: -1
+        if (building == null) summarise(null)
+        else {
+            val ed = editionAt(editions, System.currentTimeMillis() * 1_000_000L)
+            val have = ed?.items?.count { file(it.id).exists() } ?: 0
+            status.optString("phase").let { phase -> this.status = if (phase == "fetching") "Downloading ${have + 1} of ${ed?.items?.size ?: "?"} over the mesh · $partPct%" else "Mesh: $phase" }
+        }
+    }
+
     /** The artist photo for a track, copied here by hand for now (the photos stay out of the repo). It may not exist. */
     /** Artists from the server's registry: name and photo version, and which artists each set is by. */
     @Volatile var artists: Map<String, Pair<String, Long>> = emptyMap()
@@ -90,6 +121,7 @@ class LibraryStore private constructor(ctx: Context) : Thread("library") {
     override fun run() {
         Process.setThreadPriority(Process.THREAD_PRIORITY_BACKGROUND)
         while (going) {
+            if (meshKey.isNotEmpty()) { try { sleep(RETRY_MS) } catch (_: InterruptedException) { }; continue }   // PearsEngine fetches instead
             val done = try { refresh(); sync() } catch (e: Exception) { Log.w("BeachSync", "Library: $e"); summarise(e.message); false }
             try { sleep(if (done) REFRESH_MS else RETRY_MS) } catch (_: InterruptedException) { }
         }
@@ -231,9 +263,10 @@ class LibraryStore private constructor(ctx: Context) : Thread("library") {
 
         /** Starts or redirects the downloads. Safe to call more than once. */
         @Synchronized
-        fun begin(ctx: Context, url: String): LibraryStore {
+        fun begin(ctx: Context, url: String, meshKey: String = ""): LibraryStore {
             val s = get(ctx)
             s.url = url
+            s.meshKey = meshKey.trim().lowercase()
             if (!s.isAlive) s.start() else s.interrupt()
             SetBeatAnalyser.begin(s)
             return s

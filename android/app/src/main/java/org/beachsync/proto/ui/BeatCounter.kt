@@ -98,7 +98,7 @@ private fun BeatCell(i: Int, p: org.beachsync.proto.SetBeats.Pos?, modifier: Mod
                     drawRoundRect(Ink.accent, cornerRadius = cr)
                     // The beat's phase: how far to the next beat.
                     val y = size.height - 6.dp.toPx(); val x0 = 6.dp.toPx()
-                    drawLine(Ink.bg, Offset(x0, y), Offset(x0 + (size.width - 2 * x0) * p!!.beatFrac.toFloat(), y), 2.dp.toPx(), StrokeCap.Round)
+                    drawLine(Ink.bg, Offset(x0, y), Offset(x0 + (size.width - 2 * x0) * p.beatFrac.toFloat(), y), 2.dp.toPx(), StrokeCap.Round)
                 }
                 played -> { drawRoundRect(Ink.accent.copy(alpha = 0.22f), cornerRadius = cr); drawRoundRect(Ink.accent.copy(alpha = 0.45f), cornerRadius = cr, style = Stroke(1.dp.toPx())) }
                 else -> drawRoundRect(if (i == 0) Ink.accent else Ink.grid, cornerRadius = cr, style = Stroke(1.dp.toPx()))

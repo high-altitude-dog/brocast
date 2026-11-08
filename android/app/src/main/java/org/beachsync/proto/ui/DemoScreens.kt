@@ -281,6 +281,6 @@ fun BufferScreen(state: BenchState, back: () -> Unit, openSwarm: () -> Unit) {
             }
         }
     }
-    picked?.let { BlockProvenanceSheet(it, utc, item?.id?.toString() ?: "set") { picked = null } }
+    picked?.let { BlockProvenanceSheet(it, utc, item?.id ?: "set") { picked = null } }
     }
 }
