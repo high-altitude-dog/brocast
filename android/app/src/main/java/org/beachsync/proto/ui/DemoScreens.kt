@@ -215,7 +215,7 @@ fun SwarmScreen(back: () -> Unit) {
             }
             peers.forEachIndexed { i, p ->
                 val a = if (sparse) Math.toRadians(if (connected == 1) 20.0 else if (i == 0) 20.0 else 160.0) else Math.toRadians(-90.0 + 15.0 + i * (330.0 / connected))
-                val near = if (p.lan) 0.72f else 1f
+                val near = if (p.lan && !sparse) 0.72f else 1f
                 val pos = Offset(me.x + rx * near * cos(a).toFloat(), me.y + ry * near * sin(a).toFloat())
                 lane(pos, me, 3.dp.toPx(), p.toYouKbps > 0, p.relayed, true, i, node + 3.dp.toPx())           // inner lane: to you
                 if (!receiveOnly) lane(me, pos, -3.dp.toPx(), p.fromYouKbps > 0, p.relayed, false, i + 5, 24.dp.toPx()) // outer lane: from you
@@ -223,7 +223,7 @@ fun SwarmScreen(back: () -> Unit) {
                 drawCircle(if (p.lan) Ink.accent else Ink.textSecondary, node, pos, style = Stroke(1.5.dp.toPx()))
                 if (p.lan) wifiMark(pos, node * 0.55f)
                 label(p.key.take(4), pos.x, pos.y + node + 13.dp.toPx(), 9f, Ink.textSecondary)
-                if (p.lan) label("same Wi-Fi", (pos.x + me.x) / 2, (pos.y + me.y) / 2 - 8.dp.toPx(), 9f, Ink.accent)
+                if (p.lan) label("same Wi-Fi", pos.x, pos.y - node - 6.dp.toPx(), 9f, Ink.accent)   // above the peer, clear of your halo
             }
             drawCircle(Ink.accent.copy(alpha = 0.18f), (if (sparse) 30 else 24).dp.toPx(), me)
             drawCircle(Ink.accent, (if (sparse) 15 else 12).dp.toPx(), me)
