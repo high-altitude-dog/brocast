@@ -57,7 +57,7 @@ fun BeatCounter(state: BenchState, open: () -> Unit) {
         if (seen.bpm != 0 && abs(bpm - seen.bpm) >= 2) seen.accentBar = p.bar
         seen.bpm = bpm
     }
-    val flash = p != null && p.beatInBar == 0 && p.sinceBeatSamples < 0.12 * 48000
+    val flash = ScreenPrefs.flashBar && p != null && p.beatInBar == 0 && p.sinceBeatSamples < 0.12 * 48000   // a setting, off by default (hand-offs 27, 29)
     val shape = RoundedCornerShape(Tokens.Radius.card.dp)
     val working = SetBeatAnalyser.current()?.working?.takeIf { it.first == item.title }?.second ?: 0
     Row(

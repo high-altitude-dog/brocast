@@ -10,6 +10,7 @@ import org.beachsync.proto.ui.DataSharingScreen
 import org.beachsync.proto.ui.DataSharingAdvancedScreen
 import org.beachsync.proto.ui.DataLogScreen
 import org.beachsync.proto.ui.IdentityWizard
+import org.beachsync.proto.ui.KeptScreen
 import android.Manifest
 import android.content.pm.PackageManager
 import android.graphics.Color
@@ -120,6 +121,7 @@ class MainActivity : ComponentActivity(), BenchActions {
     override fun onCreate(saved: Bundle?) {
         super.onCreate(saved)
         onRunStopped = runStopped
+        org.beachsync.proto.ui.ScreenPrefs.load(this)
         // The app is always dark, so the bars' icons stay light whatever the phone's own theme is.
         enableEdgeToEdge(SystemBarStyle.dark(Color.TRANSPARENT), SystemBarStyle.dark(Color.TRANSPARENT))
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -135,19 +137,21 @@ class MainActivity : ComponentActivity(), BenchActions {
             var page by remember { mutableStateOf(home) }
             var from by remember { mutableStateOf(home) }   // where the event log and nudge screens go back to
             var logLane by remember { mutableStateOf<Lane?>(null) }
+            var artistFrom by remember { mutableStateOf(home) }
             BackHandler(page != home) {
                 if (page == Page.EARCUP) cancelEarcup()
-                page = when (page) { Page.LOG, Page.NUDGE -> from; Page.EARCUP -> Page.CALIBRATION; Page.ADVANCED, Page.DATALOG -> Page.DATA; Page.DATA, Page.IDENTITY -> Page.SETTINGS; else -> home }
+                page = when (page) { Page.LOG, Page.NUDGE -> from; Page.EARCUP -> Page.CALIBRATION; Page.ADVANCED, Page.DATALOG -> Page.DATA; Page.DATA, Page.IDENTITY -> Page.SETTINGS; Page.ARTIST -> if (artistFrom == Page.KEPT) Page.KEPT else home; else -> home }
             }
             when (page) {
-                Page.NOW -> NowPlaying(state, this, { logLane = null; from = Page.NOW; page = Page.LOG }, { from = Page.NOW; page = Page.NUDGE }, { page = Page.BENCH }, { page = Page.SETTINGS }, { page = Page.SIGNALS }, { page = Page.CALIBRATION }, { page = Page.SATELLITES }, { page = Page.STEREO }, { page = Page.ARTIST }, { page = Page.SWARM }, { page = Page.BUFFER })
+                Page.NOW -> NowPlaying(state, this, { logLane = null; from = Page.NOW; page = Page.LOG }, { from = Page.NOW; page = Page.NUDGE }, { page = Page.BENCH }, { page = Page.SETTINGS }, { page = Page.SIGNALS }, { page = Page.CALIBRATION }, { page = Page.SATELLITES }, { page = Page.STEREO }, { page = Page.ARTIST }, { page = Page.SWARM }, { page = Page.BUFFER }) { page = Page.KEPT }
+                Page.KEPT -> KeptScreen(state, { page = home }) { artistFrom = Page.KEPT; page = Page.ARTIST }
                 Page.CALIBRATION -> CalibrationPage(state, this, { page = home }, { resetEarcup(); page = Page.EARCUP })
                 Page.EARCUP -> EarcupPage(state, this) { page = Page.CALIBRATION }
                 Page.SIGNALS -> TimeSignalsScreen(state, this, { page = Page.SATELLITES }) { page = home }
                 Page.SYNC -> SyncScope(state) { page = Page.SETTINGS }
                 Page.BEAT -> BeatSyncScope(state) { page = Page.SETTINGS }
                 Page.STEREO -> StereoScreen(state, this) { page = home }
-                Page.ARTIST -> ArtistPhotoScreen(state) { page = home }
+                Page.ARTIST -> ArtistPhotoScreen(state) { page = if (artistFrom == Page.KEPT) Page.KEPT else home; artistFrom = home }
                 Page.SWARM -> SwarmScreen { page = home }
                 Page.BUFFER -> BufferScreen(state, { page = home }) { page = Page.SWARM }
                 Page.SATELLITES -> SatellitesScreen(state, this, { page = home }, { page = Page.SIGNALS })
@@ -330,7 +334,7 @@ class MainActivity : ComponentActivity(), BenchActions {
             .apply()
     }
 
-    private enum class Page { NOW, BENCH, LOG, NUDGE, SETTINGS, SIGNALS, CALIBRATION, EARCUP, SATELLITES, SYNC, BEAT, STEREO, ARTIST, SWARM, BUFFER, DATA, ADVANCED, DATALOG, IDENTITY }
+    private enum class Page { NOW, BENCH, LOG, NUDGE, SETTINGS, SIGNALS, CALIBRATION, EARCUP, SATELLITES, SYNC, BEAT, STEREO, ARTIST, SWARM, BUFFER, DATA, ADVANCED, DATALOG, IDENTITY, KEPT }
 
     companion object {
         /** Kept outside the activity, so a test run survives the screen being rebuilt. */

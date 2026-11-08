@@ -19,6 +19,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -70,6 +71,15 @@ fun SettingsPage(state: BenchState, actions: BenchActions, back: () -> Unit, ope
                 }
                 Spacer(Modifier.width(10.dp))
                 SatellitesSwitch(state.localTime)
+            }
+        }
+        val ctx = androidx.compose.ui.platform.LocalContext.current
+        androidx.compose.runtime.LaunchedEffect(Unit) { ScreenPrefs.load(ctx) }
+        BasicText("SCREEN", Modifier.padding(top = 6.dp), Tokens.Text.cardLabel.style())
+        Card {
+            SwitchRow("No flashing", "Nothing on screen ever flashes, whatever else is set", ScreenPrefs.noFlashing) { ScreenPrefs.set(ctx, noFlashing = it) }
+            Column(Modifier.alpha(if (ScreenPrefs.noFlashing) 0.4f else 1f)) {
+                SwitchRow("Flash on each new bar", if (ScreenPrefs.noFlashing) "Off while No flashing is on" else "The beat counter's border flashes on beat 1", ScreenPrefs.flashBar) { if (!ScreenPrefs.noFlashing) ScreenPrefs.set(ctx, barFlash = it) }
             }
         }
         BasicText("IDENTITY", Modifier.padding(top = 6.dp), Tokens.Text.cardLabel.style())

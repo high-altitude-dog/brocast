@@ -92,7 +92,7 @@ private fun rememberSecondTick(): State<Long> = produceState(Session.nowBoot()) 
 private fun logScale(ns: Double) = if (ns.isNaN() || ns <= 0.0) 0f else ((log10(ns) - 3.0) / 4.0).coerceIn(0.0, 1.0).toFloat()
 
 @Composable
-fun NowPlaying(state: BenchState, actions: BenchActions, openLog: () -> Unit, openNudge: () -> Unit, openBench: () -> Unit, openSettings: () -> Unit, openSignals: () -> Unit, openCalibration: () -> Unit, openSatellites: () -> Unit, openStereo: () -> Unit, openArtist: () -> Unit, openSwarm: () -> Unit, openBuffer: () -> Unit) {
+fun NowPlaying(state: BenchState, actions: BenchActions, openLog: () -> Unit, openNudge: () -> Unit, openBench: () -> Unit, openSettings: () -> Unit, openSignals: () -> Unit, openCalibration: () -> Unit, openSatellites: () -> Unit, openStereo: () -> Unit, openArtist: () -> Unit, openSwarm: () -> Unit, openBuffer: () -> Unit, openKept: () -> Unit = {}) {
     val boot by rememberSecondTick()
     val s = state.session
     val listen = {
@@ -129,7 +129,7 @@ fun NowPlaying(state: BenchState, actions: BenchActions, openLog: () -> Unit, op
                 else playing?.first?.artist?.ifEmpty { null }?.let { BasicText(it, style = Tokens.Text.small.style(Ink.textSecondary).copy(fontSize = 13.sp), maxLines = 1, overflow = TextOverflow.Ellipsis) }
             }
             ChannelChip(chUi, state.channel, actions.output().kind == org.beachsync.proto.OutputKind.HEADPHONES)
-            KeptBadge()
+            KeptBadge(openKept)
         }
         ChannelHint(chUi)
         LibraryLine(state.library)
@@ -160,11 +160,11 @@ private val IntrinsicTile = 84.dp
 
 /** In the beta everything is kept, so this shows that and can't be turned off. It deliberately has no tap action. */
 @Composable
-private fun KeptBadge() {
+private fun KeptBadge(open: () -> Unit) {
     val shape = RoundedCornerShape(Tokens.Radius.pill.dp)
     Row(
-        Modifier.height(Tokens.Space.touchTarget.dp).border(Tokens.Stroke.card.dp, Ink.border, shape).padding(horizontal = 14.dp)
-            .semantics { contentDescription = "Kept. Every set stays on this phone, and this can't be turned off in the beta." },
+        Modifier.height(Tokens.Space.touchTarget.dp).border(Tokens.Stroke.card.dp, Ink.border, shape).clickable(role = Role.Button, onClick = open).padding(horizontal = 14.dp)
+            .semantics { contentDescription = "Kept. Every set stays on this phone in the beta. Opens Kept." },
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Canvas(Modifier.size(width = 10.dp, height = 14.dp)) {
