@@ -12,6 +12,7 @@ import { Mesh, hex } from '../engine/mesh.js'
 import { profile } from '../engine/policy.js'
 import { SetBuilder, serialOf } from '../engine/builder.js'
 import { hedge } from '../engine/hedge.js'
+import { nymFrom, nymProof, nymText } from '../engine/nym.js'
 
 const CMD = { hello: 1, start: 2, subscribe: 3, status: 4, stop: 5 }
 const EV = { status: 100, built: 102, warning: 103, fatal: 104, catalog: 105 }
@@ -57,7 +58,7 @@ rpc = new RPC(Bare.IPC, async (req) => {
 })
 
 class Run {
-  constructor ({ seed, stationKey, dirs, profile: prof = 'balanced', lan = true, relayThrough, share = true }) {
+  constructor ({ seed, stationKey, dirs, profile: prof = 'balanced', lan = true, relayThrough, share = true, count = true }) {
     this.p = profile(prof)
     // share: false is receive-only (mobile data without the listener's opt-in): never announced, and each block is cleared once it's in the built
     // file, so there's nothing to upload (step 0's copy and clear: 0 bytes up).
@@ -68,6 +69,13 @@ class Run {
       dir: dirs.store, seed: b4a.from(seed, 'hex'), maxPeers: this.p.maxPeers, lan,
       relayThrough: relayThrough ? b4a.from(relayThrough, 'hex') : null
     })
+    // The nym, from this phone's own signature (shuffle 0 until the wizard can shuffle), and the listener count: this phone joins the
+    // gossiped sketch unless counting is off (Privacy mode), and passes on what it hears either way.
+    const pk = this.mesh.keyPair.publicKey
+    this.nym = nymText(nymFrom(pk, 0, nymProof(this.mesh.keyPair.secretKey, 0)))
+    if (count) this.mesh.sketch.add(pk, 0)
+    this.gossip = setInterval(() => this.mesh.gossip(), 2000)
+    this.rate = { at: now(), byPeer: new Map() } // last snapshot's totals, for kb/s
     this.held = new Set()
     this.inflight = new Map()
     this.byPeer = new Map()
@@ -168,17 +176,34 @@ class Run {
   /** A subset of the status snapshot of docs/engine-api.md §6. */
   snapshot () {
     const wire = this.mesh.wire()
+    // kb/s per peer since the last snapshot, and each connection's path from its latest open record.
+    const t = now()
+    const dt = Math.max(0.25, (t - this.rate.at) / 1000)
+    const paths = new Map()
+    for (const c of this.mesh.conns) if (c.outcome === 'open' && c.peer) paths.set(c.peer, c.path)
+    const live = new Set([...this.mesh.swarm.connections].map((c) => hex(c.remotePublicKey)))
+    const peers = [...this.byPeer].filter(([k]) => live.has(k)).map(([k, p]) => {
+      const was = this.rate.byPeer.get(k) || p
+      return {
+        key: k, role: p.station ? 'station-seed' : 'listener', path: paths.get(k.slice(0, 8)) ?? null, rxBytes: p.rx, txBytes: p.tx,
+        toYouKbps: Math.round(((p.rx - was.rx) * 8) / 1000 / dt), fromYouKbps: Math.round(((p.tx - was.tx) * 8) / 1000 / dt)
+      }
+    })
+    // Connected peers that haven't sent or asked for a block yet still count, with no traffic.
+    for (const k of live) if (!this.byPeer.has(k)) peers.push({ key: k, role: this.seeds?.has(k) ? 'station-seed' : 'listener', path: paths.get(k.slice(0, 8)) ?? null, rxBytes: 0, txBytes: 0, toYouKbps: 0, fromYouKbps: 0 })
+    this.rate = { at: t, byPeer: new Map([...this.byPeer].map(([k, p]) => [k, { rx: p.rx, tx: p.tx }])) }
     return {
       at: { uptimeSec: Math.round(now() / 1000) },
       engine: { version: ENGINE.version, api: 1, wire: ENGINE.wire, storage: ENGINE.storage },
-      me: { publicKey: hex(this.mesh.keyPair.publicKey) },
+      me: { publicKey: hex(this.mesh.keyPair.publicKey), nym: this.nym },
+      listeners: { estimate: this.mesh.sketch.estimate() },
       phase: this.phase,
       sharing: this.share,
       profile: { chosen: this.p.name, effective: this.p.name },
       swarm: {
         connected: this.mesh.swarm.connections.size,
         foundNotConnected: Math.max(0, this.mesh.swarm.peers.size - this.mesh.swarm.connections.size),
-        peers: [...this.byPeer].map(([k, p]) => ({ key: k, role: p.station ? 'station-seed' : 'listener', rxBytes: p.rx, txBytes: p.tx }))
+        peers
       },
       library: {
         edition: this.edition ?? null,
@@ -195,6 +220,7 @@ class Run {
     state.stopping = true
     clearInterval(this.pump)
     clearInterval(this.statusTimer)
+    clearInterval(this.gossip)
     for (const s of this.sets) { while (s.builder.busy) await new Promise((resolve) => setTimeout(resolve, 20)) }
     await Promise.race([this.mesh.close(), new Promise((resolve) => setTimeout(resolve, 1500))]) // the API's 2 s limit
   }

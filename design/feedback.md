@@ -387,3 +387,16 @@ Measured: `docs/pears-step1-results.md`, `docs/pears-step2-results.md`. Suggesti
 3. **Earbuds or headphones:** Bluetooth's device class can't tell them apart, so the earbuds picture is chosen from the name the device reports (buds, pods, ear).
 4. **Codec** comes from a system call reached by reflection. If Android blocks it on a phone, the tile shows the name alone.
 5. **Without the permission,** the name isn't used at all, so every Bluetooth output shares one saved lag, as the spec says.
+
+## 8 Nov: live mesh numbers are in. Design ideas from real data
+
+The engine now runs in the app when a station key is set. The nym, the listener estimate, Swarm (peers, stations, connection path, kb/s) and "passed on" are live. Demo values and the DEMO banner show only when the engine is off. Ideas for you; the user decides:
+
+1. **A sparse swarm is the normal case for now:** one station and zero to two listeners, not twelve. Swarm needs an empty or near-empty state ("Only the station so far", or "Just you and the station") that still looks deliberate.
+2. **Small listener counts:** "≈ 2 listening" reads oddly. Below about 10, maybe "you and 1 other", with `≈` only once the estimate is fuzzy.
+3. **Receive-only on mobile data is live:** the engine never shares on a metered network (the user's rule). Swarm says `● Receive-only · on mobile data`. A designed state and the opt-in control (Share on mobile data, with its cap) are needed where a listener would look for them.
+4. **Connection path is known per peer:** lan, direct, punched or relayed. Swarm could mark same-Wi-Fi (lan) peers differently. They're the cheapest and fastest, and good showcase material.
+5. **"Passed on today" is really "since the app started":** there's no daily ledger yet. The screen says "since the app started" for now. Should the design keep "today" (needs a ledger), or say since start?
+6. **Privacy mode is tied to the Satellites switch** ("off = Privacy mode"), and it now also stops this phone being counted among listeners. Should Privacy mode be its own switch? Satellites off for GPS reasons isn't the same choice as not being counted.
+7. **Station key entry is on the test bench only.** The station directory (hand-off 33) is the listener's way in; until it's built, testers paste a 64-digit key.
+8. **First download over the mesh took 30 to 70 s** for 66 MB on home Wi-Fi. The first-listen stages from hand-off 35 match what the engine reports: `finding station` → `getting the set list` → `fetching` → `all sets held`.

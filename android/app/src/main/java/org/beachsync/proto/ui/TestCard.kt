@@ -72,7 +72,7 @@ fun TestCardSetupScreen(state: BenchState, actions: BenchActions, back: () -> Un
         }
         Row { PillButton("Start test card", true) {
             val c = listOf(Renderer.LEFT, Renderer.BOTH, Renderer.RIGHT)[channel]
-            start(TestCardSetup(if (label == 4) DemoMesh.NYM else labels[label], c, flashOn, click && flashOn == 2))
+            start(TestCardSetup(if (label == 4) (org.beachsync.proto.PearsEngine.view?.nym?.ifEmpty { null } ?: DemoMesh.NYM) else labels[label], c, flashOn, click && flashOn == 2))
         } }
     }
 }
@@ -174,7 +174,7 @@ fun TestCardScreen(state: BenchState, actions: BenchActions, setup: TestCardSetu
     ) {
         BasicText("${listOf("STEREO", "LEFT", "RIGHT")[setup.channel]}${if (setup.click) " · CLICK ${if (setup.channel == Renderer.RIGHT) 3 else 2} kHz" else ""}",
             Modifier.align(Alignment.TopStart).padding(16.dp), Tokens.Text.valueSmall.style(fg.copy(alpha = 0.4f)).copy(fontSize = 11.sp))
-        BasicText(sync ?: "${DemoMesh.NYM.lowercase()}", Modifier.align(Alignment.TopEnd).padding(16.dp),
+        BasicText(sync ?: (org.beachsync.proto.PearsEngine.view?.nym?.ifEmpty { null } ?: DemoMesh.NYM).lowercase(), Modifier.align(Alignment.TopEnd).padding(16.dp),
             Tokens.Text.valueSmall.style(if (sync != null) Ink.warn else fg.copy(alpha = 0.4f)).copy(fontSize = 11.sp))
         Column(Modifier.fillMaxSize().padding(top = 40.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             BasicText(setup.label, style = Tokens.Text.screenTitle.style(fg).copy(fontSize = if (setup.label.length <= 2) 240.sp else 40.sp, fontWeight = FontWeight.Bold))

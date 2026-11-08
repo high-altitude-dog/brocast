@@ -231,6 +231,7 @@ class MainActivity : ComponentActivity(), BenchActions {
         state.satellites = on
         prefs.edit().putBoolean(KEY_SATELLITES, on).apply()
         if (on && !hasLocation()) askForSwitch.launch(locationPermissions) else satellitesInRun(on)
+        if (state.library != null) applyStation()
     }
 
     /** Left, Right or Both, also while playing. Headphones always get Both. */
@@ -254,6 +255,7 @@ class MainActivity : ComponentActivity(), BenchActions {
     private fun satellitesOff() {
         state.satellites = false
         prefs.edit().putBoolean(KEY_SATELLITES, false).apply()
+        if (state.library != null) applyStation()
     }
 
     override fun setNudgeMode(mode: NudgeMode) {
@@ -347,11 +349,12 @@ class MainActivity : ComponentActivity(), BenchActions {
     /** The library's source: the station's key over the mesh, or the server. Only acts on a change. */
     private fun applyStation() {
         val key = state.stationKey.trim().lowercase()
-        if (state.library != null && key == appliedStation) return
-        appliedStation = key
+        val privacy = !state.satellites   // Satellites off is Privacy mode: this phone isn't counted among listeners
+        if (state.library != null && "$key/$privacy" == appliedStation) return
+        appliedStation = "$key/$privacy"
         val lib = LibraryStore.begin(this, state.url.trim(), key)
         state.library = lib
-        PearsEngine.use(this, key, lib)
+        PearsEngine.use(this, key, lib, privacy)
     }
     private var appliedStation: String? = null
 

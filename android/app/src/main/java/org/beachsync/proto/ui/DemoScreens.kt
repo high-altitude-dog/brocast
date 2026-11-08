@@ -113,13 +113,20 @@ private fun loudness(i: Int): Float {
 
 private val CLOCK_FMT: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm:ss").withZone(ZoneOffset.UTC)
 
-/** Swarm (demo data): you in the middle, the station on top, listeners round the edge, blocks riding each lane. */
+/**
+ * Swarm: you in the middle, station seeds on top, listeners round the edge, blocks riding each lane. Live from the Pears engine when it's running
+ * (a station key is set), else demo data under a banner.
+ */
 @Composable
 fun SwarmScreen(back: () -> Unit) {
     val phase by rememberInfiniteTransition(label = "swarm").animateFloat(0f, 1f, infiniteRepeatable(tween(1800, easing = LinearEasing), RepeatMode.Restart), label = "t")
-    val peers = DemoMesh.peers
+    val live = org.beachsync.proto.PearsEngine.view
+    val peers = live?.listenerPeers?.map { DemoMesh.Peer(it.key.take(8), it.path == "relayed", it.toYouKbps, it.fromYouKbps) } ?: DemoMesh.peers
+    val stationCount = live?.stations?.size ?: DemoMesh.STATIONS
+    val stationKbps = live?.stations?.sumOf { it.toYouKbps } ?: 0
+    val foundCount = live?.foundNotConnected ?: DemoMesh.FOUND_NOT_CONNECTED
     val connected = peers.size
-    val relayed = peers.count { it.relayed }
+    val relayed = peers.count { it.relayed } + (live?.stations?.count { it.path == "relayed" } ?: 0)
     val toYou = peers.sumOf { it.toYouKbps }
     val fromYou = peers.sumOf { it.fromYouKbps }
     Column(
@@ -128,9 +135,12 @@ fun SwarmScreen(back: () -> Unit) {
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         ScreenHeader("Swarm", back)
-        DemoBanner()
-        BasicText("● Sharing · ${peers.count { it.fromYouKbps > 0 }} listeners", style = Tokens.Text.bodyStrong.style(Ink.accent))
-        Canvas(Modifier.fillMaxWidth().height(330.dp).semantics { contentDescription = "The swarm: you in the centre, $connected listeners round you and ${DemoMesh.STATIONS} station servers above. Demo data." }) {
+        if (live == null) DemoBanner()
+        BasicText(
+            if (live != null && !live.sharing) "● Receive-only · on mobile data" else "● Sharing · ${peers.count { it.fromYouKbps > 0 }} listeners",
+            style = Tokens.Text.bodyStrong.style(Ink.accent),
+        )
+        Canvas(Modifier.fillMaxWidth().height(330.dp).semantics { contentDescription = "The swarm: you in the centre, $connected listeners round you and $stationCount station servers above." + if (live == null) " Demo data." else "" }) {
             val me = Offset(size.width / 2f, 190.dp.toPx())
             val rx = size.width * 0.40f; val ry = 100.dp.toPx()
             fun lane(from: Offset, to: Offset, perp: Float, active: Boolean, relayed: Boolean, filled: Boolean, k: Int) {
@@ -154,14 +164,15 @@ fun SwarmScreen(back: () -> Unit) {
                 }
             }
             // Station seed servers on top: only a lane to you, because phones never upload to the station.
-            for (i in 0 until DemoMesh.STATIONS) {
-                val s = Offset(size.width * (0.35f + 0.30f * i), 28.dp.toPx())
-                lane(s, me, 0f, true, false, true, i)
+            for (i in 0 until stationCount) {
+                val s = Offset(size.width * (if (stationCount == 1) 0.5f else 0.35f + 0.30f * i / (stationCount - 1)), 28.dp.toPx())
+                val st = live?.stations?.getOrNull(i)
+                lane(s, me, 0f, st == null || st.toYouKbps > 0, st?.path == "relayed", true, i)
                 drawRect(Ink.text, Offset(s.x - 9.dp.toPx(), s.y - 9.dp.toPx()), Size(18.dp.toPx(), 18.dp.toPx()))
                 label("STATION", s.x, s.y - 14.dp.toPx(), 9f, Ink.textSecondary)
             }
             // Found but not connected: grey dots on an outer ring.
-            for (i in 0 until DemoMesh.FOUND_NOT_CONNECTED) {
+            for (i in 0 until minOf(foundCount, 12)) {
                 val a = Math.toRadians(200.0 + i * 28.0)
                 drawCircle(Ink.faint, 3.dp.toPx(), Offset(me.x + (rx + 26.dp.toPx()) * cos(a).toFloat(), me.y + (ry + 26.dp.toPx()) * sin(a).toFloat() * 0.95f))
             }
@@ -178,14 +189,16 @@ fun SwarmScreen(back: () -> Unit) {
             label("YOU", me.x, me.y + 30.dp.toPx(), 9f, Ink.text)
         }
         Row(Modifier.fillMaxWidth().height(88.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            StatTile("CONNECTED", "$connected", "$relayed relayed", Modifier.weight(1f))
-            StatTile("TO YOU", "${toYou} kb/s", "${(100 * peers.count { it.toYouKbps > 0 } / connected)}% from listeners", Modifier.weight(1f))
+            StatTile("CONNECTED", "${connected + (if (live != null) stationCount else 0)}", "$relayed relayed", Modifier.weight(1f))
+            val all = toYou + stationKbps
+            StatTile("TO YOU", "$all kb/s", if (all == 0) "nothing arriving" else "${100 * toYou / all}% from listeners", Modifier.weight(1f))
             StatTile("FROM YOU", "${fromYou} kb/s", "to ${peers.count { it.fromYouKbps > 0 }} listeners", Modifier.weight(1f))
         }
         Card {
             BasicText("PASSED ON TODAY", style = Tokens.Text.cardLabel.style())
-            val hours = DemoMesh.SENT_TODAY_MB / 72.0
-            BasicText("${DemoMesh.SENT_TODAY_MB} MB · about ${"%.1f".format(hours)} h of listening for others", style = Tokens.Text.body.style())
+            val mb = live?.let { (it.upBytes / 1_000_000L).toInt() } ?: DemoMesh.SENT_TODAY_MB
+            val hours = mb / 72.0   // 160 kb/s Opus is about 72 MB an hour
+            BasicText("$mb MB · about ${"%.1f".format(hours)} h of listening for others" + if (live != null) " · since the app started" else "", style = Tokens.Text.body.style())
         }
         Card {
             BasicText("BUSIEST LISTENERS", style = Tokens.Text.cardLabel.style())

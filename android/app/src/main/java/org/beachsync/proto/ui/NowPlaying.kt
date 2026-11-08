@@ -211,14 +211,18 @@ private fun PlayStopButton(playing: Boolean, disabled: Boolean, onClick: () -> U
 /** Holding the station name opens the test bench: the developer way in, with nothing on screen for listeners to trip over. */
 @Composable
 private fun Masthead(s: Session?, openBench: () -> Unit, openSwarm: () -> Unit, openSettings: () -> Unit, openSignals: () -> Unit, openCalibration: () -> Unit) {
+    // Live from the Pears engine when a station key is set; demo values otherwise.
+    val live = org.beachsync.proto.PearsEngine.view
+    val nym = live?.nym?.ifEmpty { null } ?: DemoMesh.NYM
+    val listening = live?.let { approxCount(it.listeners) } ?: DemoMesh.LISTENING
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Column(
-            Modifier.weight(1f).pointerInput(Unit) { detectTapGestures(onLongPress = { openBench() }, onTap = { openSwarm() }) }.semantics { contentDescription = "${DemoMesh.NYM}, ${DemoMesh.LISTENING} listening, demo data. Tap for the swarm; hold to open the test bench." },
+            Modifier.weight(1f).pointerInput(Unit) { detectTapGestures(onLongPress = { openBench() }, onTap = { openSwarm() }) }.semantics { contentDescription = "$nym, $listening listening${if (live == null) ", demo data" else ""}. Tap for the swarm; hold to open the test bench." },
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             // The design wants your nym and "N listeners linked" here, opening Swarm. Neither exists yet (see design/feedback.md), so only the name stays. D lives on the Test bench.
-            BasicText(DemoMesh.NYM, style = Tokens.Text.eyebrow.style())
-            BasicText("● ${DemoMesh.LISTENING} listening · demo", style = Tokens.Text.small.style(Ink.accent))
+            BasicText(nym, style = Tokens.Text.eyebrow.style())
+            BasicText("● $listening listening" + if (live == null) " · demo" else "", style = Tokens.Text.small.style(Ink.accent))
         }
         // Archive isn't built, so its button is dimmed and does nothing.
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -515,4 +519,11 @@ private fun StereoChip(channel: Int, headphones: Boolean, open: () -> Unit) {
     val word = if (channel == org.beachsync.proto.Renderer.LEFT) "L LEFT" else "R RIGHT"
     val shape = RoundedCornerShape(Tokens.Radius.pill.dp)
     BasicText(word, Modifier.padding(end = 8.dp).height(Tokens.Space.touchTarget.dp).border(Tokens.Stroke.card.dp, Ink.accent, shape).clickable(role = Role.Button, onClick = open).padding(horizontal = 12.dp).wrapContentHeight(Alignment.CenterVertically), Tokens.Text.bodyStrong.style(Ink.accent))
+}
+
+/** The mesh's listener estimate, always with ≈ (hand-off 21): ≈ 12, ≈ 3.4 k, ≈ 1.2 M. */
+internal fun approxCount(n: Int): String = "≈ " + when {
+    n < 1000 -> "$n"
+    n < 1_000_000 -> "%.1f k".format(java.util.Locale.ROOT, n / 1e3)
+    else -> "%.1f M".format(java.util.Locale.ROOT, n / 1e6)
 }

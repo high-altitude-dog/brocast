@@ -92,7 +92,7 @@ fun SettingsPage(state: BenchState, actions: BenchActions, back: () -> Unit, ope
         Card {
             Column(Modifier.fillMaxWidth().heightIn(min = Tokens.Space.touchTarget.dp).clickable(role = Role.Button, onClick = openIdentity), Arrangement.Center) {
                 BasicText("Your identity", style = Tokens.Text.bodyStrong.style())
-                BasicText("${DemoMesh.NYM.lowercase().split(' ').joinToString(" ") { w -> w.replaceFirstChar { it.uppercase() } }} · run the first-run wizard (demo)", style = Tokens.Text.small.style(Ink.textSecondary))
+                BasicText("${(org.beachsync.proto.PearsEngine.view?.nym?.ifEmpty { null } ?: DemoMesh.NYM).lowercase().split(' ').joinToString(" ") { w -> w.replaceFirstChar { it.uppercase() } }} · run the first-run wizard (demo)", style = Tokens.Text.small.style(Ink.textSecondary))
             }
         }
         BasicText("DELIVERY", Modifier.padding(top = 6.dp), Tokens.Text.cardLabel.style())
