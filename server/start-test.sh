@@ -4,7 +4,8 @@
 # the timer. The login stays out of this public repo: set BROCAST_SSH, for example "-i ~/.ssh/<key> <user>@<server-ip>".
 set -eu
 MINUTES="${1:-10}"
-: "${BROCAST_SSH:?set BROCAST_SSH to the ssh arguments for the test server}"
+[ -f "$HOME/.config/brocast.env" ] && . "$HOME/.config/brocast.env"
+: "${BROCAST_SSH:?set BROCAST_SSH in ~/.config/brocast.env}"
 # shellcheck disable=SC2086
 ssh $BROCAST_SSH "set -e
   [ -f ~/brocast-autostop.pid ] && kill \$(cat ~/brocast-autostop.pid) 2>/dev/null || true
