@@ -365,3 +365,17 @@ The user asked Claude Code to ask you for help with these screens. The flow and 
 
 The same wizard is needed on the desktop seeder and its browser control page, using mouse and keyboard timing instead of touch. Data the engine provides: `makeSeed`'s `report` (engine API). No Pears name or logo.
 - **Addition to the identity wizard (user, 7 Nov): use as many of the phone's sensors as possible.** The "gathering" step will have many more sources, often 15 to 25 per phone: every hardware sensor (motion, magnetic, pressure, light, proximity, and more), battery noise, CPU jitter, GNSS raw data if satellites are on, and opt-in camera dark-frame and microphone noise with their own permission prompts. Each ticks in by name with its byte count. A sensor with no noise is listed as dropped, which is a nice honest detail. The list differs on every phone, so the screen needs to fit any number. Details: `docs/keys.md`, "Phone sensors".
+
+## 8 Nov: design ideas and requirements from the Pears steps 1 and 2 results
+
+Measured: `docs/pears-step1-results.md`, `docs/pears-step2-results.md`. Suggestions for Claude Desktop; the user decides.
+
+1. **First start is slow over the internet.** Finding a station by key takes about 7.5 s on the public network (under 1 s on a LAN). Please design a first-listen state with visible stages: `Finding the station` → `Getting the set list` → `First music arrived`, and what shows if it takes over 20 s. Later starts can be faster from a cached record.
+2. **"Station offline, playing from listeners".** The unplug demo is the showcase moment (step 0 on the laptop: a newcomer built every set from listeners alone). Now playing and Swarm need a calm, proud state for it, not an error.
+3. **Relayed connections are real, and slower.** Most links hole-punch directly (0.6–0.8 s), and a relay was needed only when forced (2.2 s to open). Swarm and Block provenance already draw relayed links dashed. Please add what a listener sees when *every* path is relayed. Is it worth saying at all?
+4. **Data estimates should include overhead.** 18.7 MB of music cost 21.8 MB of mobile data after the duplicate fix (about 17% more; 33.5 MB before the fix). Data and sharing, the mobile cap sheet and the Data log should quote real data, not music size. "≈ minutes of music per cap" may read better than MB.
+5. **Re-asked blocks.** A block that's slow from one listener is now asked of another after 1 s. Block provenance could show `asked twice · first sender slow` as a quiet detail. Duplicates in the Data log should now be about 1–4%.
+6. **One identity per phone, kept.** Test runs with a fresh identity each time left stale announcements that cost connection attempts. The real app keeps one key (the wizard). If a "new identity" option is ever offered, warn that peers will treat the phone as a stranger for a while.
+7. **Engine updates over the mesh** (spike design §11): states for `Engine updated`, `Update rolled back (health check failed)` and `Waiting to update until the music stops`. Probably only in Settings and the event log.
+8. **Battery is still unmeasured.** Step 4 measures it. Until then, Auto's battery thresholds and the Advanced cost card should look provisional (`typical phone` wording), as they do now.
+9. **Station keys.** With a station directory (hand-off 33), a listener trusts a station by its key. Consider a short fingerprint (like the nym) on the station page, and what a key change looks like: a station that rotates its key must not look like an impostor, and an impostor must not look like the station.

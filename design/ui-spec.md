@@ -1,4 +1,4 @@
-# UI spec (hand-off 34)
+# UI spec (hand-off 35)
 
 Field names come from Claude Code's "Fields that exist today" table in `feedback.md`, as of 1 Nov 2026. If one has been renamed since, use the new name.
 
@@ -614,6 +614,35 @@ Your 2 Nov notes (`ui/SyncScope.kt`). From Settings › Sync view. For checking 
 | Output tile on Now playing | 12 px icon before the heading (`SPEAKER`, `HEADPHONES`, `USB-C`, `BLUETOOTH`, `OUTPUT`), the output's lag, and the device's name (plus codec for Bluetooth: `Sony WH-1000XM5 · LDAC`). Amber `Not calibrated` when that output has no lag yet. Without permission: `Bluetooth · name?`. |
 | First Bluetooth headphones | Once, on Now playing (never at first launch): `Show your headphones' name?` with what it's for and what it isn't (doesn't look for other devices, not used to find listeners); Continue → Android's Nearby devices prompt; Not now. |
 | Not allowed | Tile `Bluetooth · name?` opens Calibration, row `Show headphones' name` asks again; after a second refusal it opens app settings. Without the name, all Bluetooth headphones share one lag. |
+
+## First listen
+
+![](screens/first-listen.png)
+
+From the Pears step 1 and 2 results (8 Nov): finding a station by key takes about 7.5 s on the public network, under 1 s on a LAN.
+
+| Element | Shows |
+|---|---|
+| Card | Station tile, name, its key words; a ring with the elapsed time (`4.1 s · usually 7 to 8 s`). |
+| Stages | `Finding the station` → `Getting the set list` → `First music arrived` (5 s ready, verified). Each ticks with its time; the current one spins; later ones are dim. |
+| Done | The card folds into Now playing; event log: `Started Beach Sync Radio in 7.4 s`. |
+| From memory | Cached record and set list tick at once (0.1 s, 0.3 s); only music is fetched, about 1 to 2 s. |
+| Over 20 s | Amber box `Taking longer than usual · 23 s`, what's stuck, that the station's servers are being tried; Keep trying, Pick another station, What's happening? |
+| Can't find it | After 60 s with no record: `Can't find Beach Sync Radio right now.` plus causes; keeps looking in the background and says when it appears. |
+
+## Mesh moments
+
+![](screens/mesh-moments.png)
+
+| Moment | Shows |
+|---|---|
+| Station offline, playing from listeners | Now playing: accent (not amber) banner `Playing from listeners · The station is offline. 41 other listeners are carrying it, in sync.`, in place of the latest-event row; adds `since 21:02` after 10 min. Swarm: station as a dashed outline, `offline · 14 min`. Back: event log `The station is back. Listeners carried it for 14 min.` No toast. |
+| Every link relayed | Swarm only, all links dashed, one quiet line: `All links go through relays on this network. Music and sync are fine; starting can be slower.` Not on Now playing. |
+| Engine updates | Settings › About row `Engine`: `Up to date · checked 3 min ago`, `Update ready · waiting until the music stops` (amber), `Rolled back to 2.4.1 · the new version failed its check` (amber). Event log lines for updated, waiting and rolled back. Never mid-set, never a pop-up. |
+| New identity (only if ever offered) | Warning sheet: new name and key, other phones treat it as a stranger for a while, music/settings/calibration stay, old name back only with its 24 words. `Make a new identity` in red outline; `Keep mine` primary. |
+| Data in real terms | All data figures are data used (music + ~17% proofs and connections), with music time at 160 kbps: 500 MB ≈ 6 h, 50 MB ≈ 35 min, 10 MB ≈ 7 min. Battery stays "typical phone" until step 4. |
+
+**Also changed:** Data and sharing (mobile: `uses up to 500 MB of data a day, about 6 h of music`; column `≈ 6 h of music`), the mobile cap sheet (`≈ 35 min of music a day. Real data…`), the network-switch toast (`about 4½ h of music`), Advanced's mobile limit help, the Data log (duplicates `29 MB · 1.9%`, asked of another after 1 s, usually 1–4%), Block provenance (`Asked` field; an "Asked twice" route example: `asked twice · first sender slow`), the station page (key words `tide · comet · basalt · ember` above the hex key), and Stations states (Key renewed: old and new key words, signed by the old key, followed automatically; and a key change not signed by the old key, treated as unlisted in red).
 
 ## Badge states
 
