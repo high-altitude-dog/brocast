@@ -1,4 +1,4 @@
-# UI spec (hand-off 31)
+# UI spec (hand-off 33)
 
 Field names come from Claude Code's "Fields that exist today" table in `feedback.md`, as of 1 Nov 2026. If one has been renamed since, use the new name.
 
@@ -537,6 +537,44 @@ User, 7 Nov: a full-screen card filmed by a third phone (slow motion if it can) 
 | No flashing setting | Stays on unless turned off for this test; it turns itself back on when the card closes. |
 | Screen | Full brightness, kept on, system bars hidden. Taps do nothing; hold 2 s (a ring fills) to leave. |
 | Out of sync | The corner shows `OUT OF SYNC ±41 ms` in amber; the card keeps going so the video records it. |
+
+## Stations
+
+| Directory | Station page | States |
+|---|---|---|
+| ![](screens/stations.png) | ![](screens/station-page.png) | ![](screens/station-states.png) |
+
+Your 13:48 ASK; design §11a: every station is a public key, global, no local-only mode; a phone can follow any number.
+
+**Entry:** on Now playing the station name becomes its own header line (`Beach Sync Radio ▾`, 15 px bold) under your nym, and opens Stations. The listener count line under it still opens Swarm. (Proposal: the header gains one line.)
+
+| Stations element | Shows |
+|---|---|
+| Intro | Global, in sync, the clock doesn't change when you switch. |
+| NOW | The current station, accent border: tile (initials on its colour until stations have art), name, ✓ if listed, now playing with BPM, `≈ 1.2 M listening · you're here`. |
+| FOLLOWING | Followed stations, same row; tap to switch. |
+| DIRECTORY | Search (stations, artists, tags), tag chips, rows with Follow. Footer: `Listed: in Brocast's signed directory, 48 stations. The tick means the name belongs to that key.` |
+| ADD ANY STATION | Scan a station code; Paste a station link. Unlisted stations show their key instead of a tick. |
+
+| Station page | Shows |
+|---|---|
+| Header | 84 px tile, name, ✓, tagline, tags; Listen now; Following |
+| On now | Artist photo, title, artist · set · track n of m, BPM, ends in |
+| Figures | LISTENING (≈, ±3%), SHARING (phones passing it on), AHEAD (published) |
+| Next 12 hours | Schedule blocks from now, the current one in accent; `same moment for everyone` |
+| Who runs it | Operator line, listed date, station key in groups of 4 hex, one line on what the key means |
+| On this phone | Following keeps schedule and next set ready; downloads ahead only for the station you're on |
+
+| State | Shows |
+|---|---|
+| Switching | The old station plays until the new one has 5 s ready, then cuts over on the next flowtime second; progress `first blocks 3 of 5`. |
+| Added by link | `NOT IN THE DIRECTORY` (amber), the claimed name in quotes, key, check-with-the-sender line; Listen / Cancel. |
+| Name clash | `SAME NAME, DIFFERENT KEY` (red): the listed one with ✓ and its key; the other in quotes with its key in red; opened only from its own link. |
+| Quiet | No sharers and no servers answering: greyed, `quiet`, last heard; tap retries; cached schedule says what should be on. |
+| Offline | Only the current station plays (from what's downloaded ahead); others say `needs network`. |
+| Share | QR plus `brocast://station/<key>`; carries the key, not the name. |
+
+Needs: a signed directory (Brocast key) with name, tagline, tags, colour, operator, listed date per station key; per-station listener estimate and now-playing from each station's catalog.
 
 ## Badge states
 
