@@ -1,4 +1,4 @@
-# UI spec (hand-off 33)
+# UI spec (hand-off 34)
 
 Field names come from Claude Code's "Fields that exist today" table in `feedback.md`, as of 1 Nov 2026. If one has been renamed since, use the new name.
 
@@ -575,6 +575,45 @@ Your 13:48 ASK; design §11a: every station is a public key, global, no local-on
 | Share | QR plus `brocast://station/<key>`; carries the key, not the name. |
 
 Needs: a signed directory (Brocast key) with name, tagline, tags, colour, operator, listed date per station key; per-station listener estimate and now-playing from each station's catalog.
+
+## Sync view
+
+| Screen | States |
+|---|---|
+| ![](screens/sync-view.png) | ![](screens/sync-view-states.png) |
+
+Your 2 Nov notes (`ui/SyncScope.kt`). From Settings › Sync view. For checking two phones side by side **by eye and ear**; the camera test card is for exact numbers.
+
+| Element | Shows |
+|---|---|
+| Header | Back, `L · 120 Hz` (this phone's channel and refresh rate) |
+| Readout | Flowtime `21:33:07.382` (34 px mono), source and its error |
+| Dial (300 px) | **Outer disc:** white sweeps clockwise from 12 o'clock once per flowtime second, accent hand, 10 ticks (100 ms each, 12 o'clock heavier). **Inner disc:** accent sweeps once per beat, following tempo, beat number in the middle. With no steady beat it shows `—` and waits at 12. |
+| Dial choice | Seconds, Beats, Both (default) |
+| Flash and click at 0 | On by default: screen white 2 frames and a 10 ms click at each second's 12 o'clock (click pitch as the test card). Never more than once a second here. |
+| Nudges | Two boxes side by side, −10 −1 +1 +10. **Screen:** moves only the picture. **Audio:** amber border, `Changes what you hear. Not saved.` |
+| Reading | `This phone, by your ears: 6 ms behind` (from the audio nudge's sign), Keep as calibration, Reset |
+
+| State | Shows |
+|---|---|
+| Side by side | How to read two dials: the one whose hand hasn't reached 12 is behind; 3.6° per 10 ms, so 10 ms is the smallest gap to read by eye. |
+| Audio nudged | Amber banner at the top: `Audio nudged +6 ms · this screen only`, Reset. |
+| Leaving | Leaving always removes the audio nudge; a toast offers `Keep it` for 10 s. |
+| Keep as calibration | Sheet: lag 182 → 188 ms, marked "adjusted by ear", with a caution. |
+| No flashing on | Flash off and locked; the dial and click carry on. (The test card asks to turn No flashing off; Sync view doesn't.) |
+| Getting time | `NTP · getting time`, dial waits at 12. Never "No clock yet". |
+| Seeing a gap? | Both phones' refresh rates and frame times; a gap under one frame of the slower screen may be the screens, not the sound; trust the clicks; link to the camera test card. |
+
+## Outputs and headphones' names
+
+![](screens/outputs.png)
+
+| Element | Shows |
+|---|---|
+| Icons | Phone speaker, Wired headphones, USB-C adapter or DAC, Bluetooth headphones, Bluetooth earbuds, Bluetooth speaker, Other device. 24 px grid, 1.8 stroke, round ends, currentColor; used at 28, 16 and 12 px. |
+| Output tile on Now playing | 12 px icon before the heading (`SPEAKER`, `HEADPHONES`, `USB-C`, `BLUETOOTH`, `OUTPUT`), the output's lag, and the device's name (plus codec for Bluetooth: `Sony WH-1000XM5 · LDAC`). Amber `Not calibrated` when that output has no lag yet. Without permission: `Bluetooth · name?`. |
+| First Bluetooth headphones | Once, on Now playing (never at first launch): `Show your headphones' name?` with what it's for and what it isn't (doesn't look for other devices, not used to find listeners); Continue → Android's Nearby devices prompt; Not now. |
+| Not allowed | Tile `Bluetooth · name?` opens Calibration, row `Show headphones' name` asks again; after a second refusal it opens app settings. Without the name, all Bluetooth headphones share one lag. |
 
 ## Badge states
 
