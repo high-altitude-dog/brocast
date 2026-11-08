@@ -1,4 +1,4 @@
-# UI spec (hand-off 40)
+# UI spec (hand-off 41)
 
 Field names come from Claude Code's "Fields that exist today" table in `feedback.md`, as of 1 Nov 2026. If one has been renamed since, use the new name.
 
@@ -461,6 +461,7 @@ Opens from the Kept bookmark on Now playing's artist photo (user, 7 Nov). Everyt
 | Tempo map | One bar per item across its BPM range (low to high), thickness by length, a ring at the BPM it sits at most, name beside it. A two-handle range filters the list (`116–126 BPM · 4 of 5`); items outside dim to 32%. Items with no steady tempo aren't on the map. Two taps clear it. Bars still being analysed are dashed. | SetBeats per item | later |
 | Sort | Recent (kept date), BPM, Length, Artist | | |
 | Legend | energy, tempo, track change | | |
+| Long names | A name that doesn't fit on one line waits 1.5 s, scrolls left at 30 px/s with faded edges, loops with a 40 px gap, pauses under a finger, stops after 3 loops until next on screen. Reduced motion: ellipsis; full name on the opened card. Same for track names (user, 8 Nov). |
 | Card | Artist thumbnail (56 px; photo at its focus point, or initials on a tinted tile), title, `artist · set, 14 tracks`, mono `1:52:10 · 118–124 BPM · 135 MB`, bookmark (44 px). Under it the **fingerprint**: the whole file's energy as a band (waveform summary), its tempo as a white line (beat grid), track changes as ticks (cue list). Footer `✓ verified · plays offline · kept 7 Nov`, or `● Playing now · track 9 of 14` in accent. | File record, waveform summary, SetBeats, cue list | later |
 | Still finishing | A dashed row: `1 still finishing: Salt Lines · Kept, 62% built. Shows here once whole and verified.` | Library | now |
 
@@ -713,6 +714,44 @@ User, 8 Nov. Full screen, black. On each tick a 4 px white line leaves a dashed 
 | Controls (tap) | Tick: Each beat / Each second. **This phone's screen lag** −10 −1 +1 +10, value in amber when not 0; moves only this phone's line, never the sound; `Save +8 ms for this phone`, Reset. Saved per phone and applied to the dial too. |
 | Card check | First time, and from controls: lay a bank or ID card (85.6 mm) along the screen from the start mark and drag the end mark to its far edge; `Reported 420 dpi · measured 428 dpi · +1.9%`; Use 428 dpi. Saved per phone. |
 | No flashing | Doesn't apply: the line moves but never flashes. |
+
+## Station upload page (desktop, SSH tunnel only)
+
+| Running order | Publishing |
+|---|---|
+| ![](screens/admin-order.png) | ![](screens/admin-publish.png) |
+
+User, 8 Nov: redesign the page; reorder sets; announce to listeners. 1440 wide, dark, three columns.
+
+| Area | Shows |
+|---|---|
+| Left rail | `BEACH SYNC RADIO · STATION`; Running order (6 sets), Upload (1 in progress), Artists (5 · 1 to confirm), Disk (41 GB free); footer: tunnel only, no login. |
+| Running order | Title, `Live: edition 14 since 09:00 · loops every 7:54:53`. Table: drag handle, #, thumbnail, set, artist, length, plays (UK, for the next loop), status (`played` muted, `● on air` accent, `ready`), ⋯ (Move up / Move down / Move to…). The on-air set can't be moved. Moved rows: amber tint and `MOVED ↑`. |
+| Draft bar | Amber, `DRAFT`: what changed and that nothing reaches listeners until published; Discard; **Publish order…** |
+| Track order | `TRACK ORDER · LATER`: once sets have track lists, a set opens to its tracks and reorders the same way. |
+| Upload | Drop zone (FLAC, WAV, MP3, up to 4 GB); file with three-step progress Uploaded → Converting % → Signing; Title, Artist (from the artist list; a new name held to confirm), Set name (optional), Goes (At the end of the order ▾). A finished upload joins the draft. |
+| Disk | Bar: sets, this upload's need (accent), 3 GB kept free (hatched red); refused before starting if it wouldn't leave 3 GB. |
+| Artists | Thumbnails, Open artists ›, confirm prompt (`"2 Lanes" on an upload: same as Two Lanes?` Yes / New artist). |
+
+| Publishing | Shows |
+|---|---|
+| Dialog | Now (edition 14) → New (edition 15) side by side, moved set highlighted. **When it takes effect:** `When Overpass ends · 12:31` (default: next set boundary ≥ 10 min away, nothing cut off) or `At a set time` (cuts what's playing; earliest now + 10 min). **Message to listeners** (optional, 140 chars): shown on every phone until the change, then in the event log. `Publish · takes effect 12:31`. |
+| Queued bar | Top of Running order: `QUEUED · Edition 15 takes effect at 12:31, in 29 m. Phones fetching it: 71% of those seen in the last hour.` Edit message, Change order, Cancel edition (red). |
+| Rules | Change order before it starts → a new edition at the same time if still ≥ 10 min away, else the next boundary. Cancel withdraws it; phones drop it and say so. Last 10 min: locked. |
+
+## New running order on the phone
+
+![](screens/order-change.png)
+
+| State | Shows |
+|---|---|
+| Until the change | In the latest-event row's place, cyan (news, not warning): `RUNNING ORDER CHANGES · 12:31 · in 29 m`, the operator's message in quotes, `After Overpass: Meadow Hours (was Golden Hour Set) · ready on this phone ✓`. Minutes, then seconds in the last minute. |
+| Notification | Once, at publish (if notifications are on and the app used in the last week). |
+| Buffer up next | New next set with `new order · was Golden Hour Set` in cyan. |
+| The switch | All phones on the same flowtime second; toast `New running order: Meadow Hours is on now.` (6 s). |
+| Event log | Published (with message) and switched lines. |
+| Away | On reconnect: `The running order changed at 12:31 while you were away.` |
+| Called off | Card grey for 1 min: `The change at 12:31 was called off.` |
 
 ## Badge states
 
