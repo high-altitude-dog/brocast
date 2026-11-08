@@ -1,4 +1,4 @@
-# UI spec (hand-off 30)
+# UI spec (hand-off 31)
 
 Field names come from Claude Code's "Fields that exist today" table in `feedback.md`, as of 1 Nov 2026. If one has been renamed since, use the new name.
 
@@ -506,6 +506,37 @@ For the ShazamKit trial and, if it works, adding each new set (backlog). Runs wh
 | No track list | The set's name is the title; Buffer has no track lines. |
 
 Shazam credit wording and logo follow Apple's ShazamKit terms, checked in the trial.
+
+## Camera test card
+
+| Setup | Between flashes | Flash frame | Rules |
+|---|---|---|---|
+| ![](screens/test-card-setup.png) | ![](screens/test-card-dark.png) | ![](screens/test-card-flash.png) | ![](screens/test-card-rules.png) |
+
+User, 7 Nov: a full-screen card filmed by a third phone (slow motion if it can) to time each phone's screen flash and sound. Entry: Settings › Calibration › a row `Camera test card · film phones side by side`.
+
+**Setup:** Label (L, R, A, B, Name; huge on the card), Channel (Left, Stereo, Right; the home screen's channel), Flash on (Every beat, Beat 1 only, Every second), Click (on: 10 ms tone burst). An amber warning about bright flashes; filming tips; Start test card.
+
+**The card**, 390 × 844, nothing moves between flashes:
+
+| Element | Shows |
+|---|---|
+| Corners (11 px mono, 40% white/black) | `LEFT · CLICK 2 kHz` and `nym · 4 hex` |
+| Label | 300 px bold, centred top (`L`) |
+| Flowtime | 46 px mono, to the millisecond, the time **of the last flash** (`21:33:07.258`); changes only at a flash |
+| Beat line | `FLOWTIME · UK · BEAT 1 · BAR 213`, or `NO BEAT · SECOND` |
+| Code | 10 blocks of 30 px: two references (on, off), then 8 bits of the flowtime second mod 256, most significant first; `CODE 19 · 00010011 · second mod 256` under it |
+| Leave hint | `Hold 2 s anywhere to leave` |
+
+| Rule | Detail |
+|---|---|
+| Between flashes | Pure black, white content. |
+| Flash | Whole screen white for 2 display frames (≈33 ms at 60 Hz, 17 ms at 120 Hz), content in black; scheduled to the display's presentation time for the beat (Choreographer), not draw time. |
+| Click | 10 ms burst at flowtime + output lag. Left 2 kHz, Right 3 kHz, Stereo: 2 kHz left ear and 3 kHz right. |
+| Rate cap | Never more than 3 flashes a second: above 180 BPM, every other beat. |
+| No flashing setting | Stays on unless turned off for this test; it turns itself back on when the card closes. |
+| Screen | Full brightness, kept on, system bars hidden. Taps do nothing; hold 2 s (a ring fills) to leave. |
+| Out of sync | The corner shows `OUT OF SYNC ±41 ms` in amber; the card keeps going so the video records it. |
 
 ## Badge states
 
