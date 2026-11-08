@@ -274,7 +274,10 @@ class LibraryStore private constructor(ctx: Context) : Thread("library") {
     }
 }
 
-/** Feeds StreamClient from the phone's own files, through the same ring as a server would: the audio thread can't tell the difference. */
+/**
+ * Feeds StreamClient from the phone's own files, through the same ring as a server would: the audio thread can't tell the difference.
+ * A set still arriving over the Pears mesh plays from the engine's blocks (MeshSupply), the same bytes the built file will hold.
+ */
 class LocalSupply(private val store: LibraryStore) : BlockSupply {
     private val open = HashMap<String, OpusFile>()
 
@@ -297,7 +300,7 @@ class LocalSupply(private val store: LibraryStore) : BlockSupply {
     override fun opus(n: Long): ByteArray {
         val (item, block) = edition().at(n) ?: throw IOException("the library is empty")
         val f = store.file(item.id)
-        if (!f.exists()) throw IOException("Downloading ${item.title}")
+        if (!f.exists()) return PearsEngine.block(item.id, block) ?: throw IOException("Downloading ${item.title}")
         if (open.size > 2 && item.id !in open) { open.values.forEach { it.close() }; open.clear() }
         return open.getOrPut(item.id) { OpusFile(f) }.block(block)
     }

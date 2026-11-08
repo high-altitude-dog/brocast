@@ -150,6 +150,18 @@ object PearsEngine {
         }
     }
 
+    /**
+     * One 1 s block of a set that isn't built yet, from the mesh (or null): MeshSupply's part, for [LocalSupply]. Called on the stream
+     * thread, never the audio thread; it waits up to [timeoutMs] for the engine, and StreamClient tries again next second if it fails.
+     */
+    fun block(setId: String, second: Long, timeoutMs: Long = 10_000L): ByteArray? {
+        val r = rpc ?: return null
+        val done = java.util.concurrent.CountDownLatch(1)
+        var out: ByteArray? = null
+        r.request(CMD_BLOCK, JSONObject().put("setId", setId).put("second", second).toString().toByteArray()) { res -> out = res.getOrNull(); done.countDown() }
+        return if (done.await(timeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS)) out?.takeIf { it.isNotEmpty() } else null
+    }
+
     private fun call(cmd: Int, body: JSONObject, ok: (JSONObject) -> Unit) {
         rpc?.request(cmd, body.toString().toByteArray()) { res ->
             res.fold({ ok(if (it.isEmpty()) JSONObject() else JSONObject(String(it))) }, { error = "command $cmd: ${it.message}" })
@@ -188,6 +200,7 @@ object PearsEngine {
     private const val CMD_START = 2
     private const val CMD_SUBSCRIBE = 3
     private const val CMD_STOP = 5
+    private const val CMD_BLOCK = 6
     private const val EV_STATUS = 100
     private const val EV_BUILT = 102
     private const val EV_WARNING = 103

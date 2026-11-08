@@ -13,8 +13,9 @@ import { profile } from '../engine/policy.js'
 import { SetBuilder, serialOf } from '../engine/builder.js'
 import { hedge } from '../engine/hedge.js'
 import { nymFrom, nymProof, nymText } from '../engine/nym.js'
+import { PACKETS } from '../engine/blocks.js'
 
-const CMD = { hello: 1, start: 2, subscribe: 3, status: 4, stop: 5 }
+const CMD = { hello: 1, start: 2, subscribe: 3, status: 4, stop: 5, block: 6 }
 const EV = { status: 100, built: 102, warning: 103, fatal: 104, catalog: 105 }
 
 const t0 = Date.now()
@@ -48,6 +49,15 @@ rpc = new RPC(Bare.IPC, async (req) => {
     case CMD.status:
       if (!run) refuse('NOT_STARTED', 'start first')
       return reply(run.snapshot())
+    case CMD.block: { // playback before a set is whole: one 1 s block, as LocalSupply would read it from the built file
+      const s = run?.byId?.get(body.setId)
+      if (!s) refuse('NOT_READY', 'no such set yet: ' + body.setId)
+      const i = Math.floor(body.second / run.bs)
+      run.focus(s)
+      const buf = await s.core.get(i, { timeout: 8000 })
+      run.got(s, i)
+      return req.reply(oneSecond(buf, body.second % run.bs))
+    }
     case CMD.stop:
       if (run) await run.stop()
       reply({})
@@ -56,6 +66,16 @@ rpc = new RPC(Bare.IPC, async (req) => {
       refuse('BAD_REQUEST', 'unknown command ' + req.command)
   }
 })
+
+/** The [k]th 1 s block of a longer block: 50 packets, each a 2-byte little-endian length and its bytes (engine/blocks.js). */
+function oneSecond (buf, k) {
+  let at = 0
+  const skip = (n) => { for (let p = 0; p < n; p++) at += 2 + buf.readUInt16LE(at) }
+  skip(k * PACKETS)
+  const from = at
+  skip(PACKETS)
+  return buf.subarray(from, at)
+}
 
 class Run {
   constructor ({ seed, stationKey, dirs, profile: prof = 'balanced', lan = true, relayThrough, share = true, count = true }) {
@@ -80,6 +100,7 @@ class Run {
     this.inflight = new Map()
     this.byPeer = new Map()
     this.sets = []
+    this.byId = new Map()
     this.phase = 'finding station'
     this.restartStatus()
     this.main().catch((e) => { if (!state.stopping) fail('RUN', e) })
@@ -115,6 +136,7 @@ class Run {
       core.on('download', (index, bytes, from) => this.peer(from).rx += bytes)
       core.on('upload', (index, bytes, to) => this.peer(to).tx += bytes)
       this.sets.push(s)
+      this.byId.set(it.id, s)
     }
     // Sets already on the phone (from the server, before the mesh) aren't fetched again.
     this.todo = this.sets.filter((s) => !s.builder.done)
@@ -146,12 +168,24 @@ class Run {
 
   fetch (s, i, key) {
     this.inflight.set(key, now())
-    s.core.get(i, { timeout: 20000 }).then(() => {
-      this.held.add(key)
-      s.got++
-      this.build(s)
-      if (this.held.size === this.total) { this.phase = 'all sets held'; this.sendStatus() }
-    }, () => {}).finally(() => this.inflight.delete(key)) // a failed block is asked for again on the next pump
+    s.core.get(i, { timeout: 20000 }).then(() => this.got(s, i), () => {})
+      .finally(() => this.inflight.delete(key)) // a failed block is asked for again on the next pump
+  }
+
+  /** Block [i] of set [s] is in the store, by the fetch loop or for playback: counted once, and the set built as far as it goes. */
+  got (s, i) {
+    const key = s.n + ':' + i
+    if (this.held.has(key)) return
+    this.held.add(key)
+    s.got++
+    this.build(s)
+    if (this.held.size === this.total) { this.phase = 'all sets held'; this.sendStatus() }
+  }
+
+  /** The set being played goes to the front of the fetch order, so what's heard next arrives first. */
+  focus (s) {
+    const at = this.todo?.indexOf(s) ?? -1
+    if (at > 0) { this.todo.splice(at, 1); this.todo.unshift(s) }
   }
 
   async build (s) {

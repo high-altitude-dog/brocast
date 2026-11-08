@@ -98,7 +98,7 @@ fun NowPlaying(state: BenchState, actions: BenchActions, openLog: () -> Unit, op
     val listen = {
         if (s == null) { state.stream = true; actions.listen() } else actions.startOrStop()
     }
-    val lockedByDownload = s == null && (state.library?.let { l -> playingAt(l.editions, l.dMs, System.currentTimeMillis() * 1_000_000L)?.let { !l.file(it.first.id).exists() } } ?: false)
+    val lockedByDownload = s == null && !org.beachsync.proto.PearsEngine.running && (state.library?.let { l -> playingAt(l.editions, l.dMs, System.currentTimeMillis() * 1_000_000L)?.let { !l.file(it.first.id).exists() } } ?: false)
     // The output lag's uncertainty is part of the sync error (hand-off 12): from this output's saved test, else the shared table.
     val out = actions.output()
     val cal = actions.savedCalibration(out) ?: actions.tableCalibration(out)
