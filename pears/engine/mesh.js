@@ -61,8 +61,10 @@ export class Mesh {
       const t = Date.now()
       const before = copy({ punches: dht.stats.punches, relaying: dht.stats.relaying })
       const conn = connect(publicKey, lan ? opts : { ...opts, localConnection: false })
-      conn.on('open', () => this._record(conn, 'client', t, before, 'open'))
-      conn.on('error', (err) => this._record(conn, 'client', t, before, err.code || err.message))
+      let opened = false
+      conn.on('open', () => { opened = true; this._record(conn, 'client', t, before, 'open') })
+      // An error after opening is a connection ending (a peer stopping), not a failure to connect.
+      conn.on('error', (err) => { if (!opened) this._record(conn, 'client', t, before, err.code || err.message) })
       return conn
     }
   }
