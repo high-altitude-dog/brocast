@@ -68,7 +68,7 @@ fun TestCardSetupScreen(state: BenchState, actions: BenchActions, back: () -> Un
         }
         Card {
             BasicText("FILMING", style = Tokens.Text.cardLabel.style())
-            BasicText("Both phones side by side, flat, same distance from the camera. Film at the highest frame rate (slow motion if the camera has it), held still, for 60 s. Music modes need the music playing first; Every second plays clicks, so only when you're ready for sound.", style = Tokens.Text.small.style(Ink.textSecondary))
+            BasicText("Both phones side by side, flat, same distance from the camera. Film at the highest frame rate (slow motion if the camera has it) with sound recording on, held still, for 60 s. Wait until both phones show a satellite fix. Music modes need the music playing first; Every second plays clicks, so only when you're ready for sound.", style = Tokens.Text.small.style(Ink.textSecondary))
         }
         Row { PillButton("Start test card", true) {
             val c = listOf(Renderer.LEFT, Renderer.BOTH, Renderer.RIGHT)[channel]
@@ -86,13 +86,17 @@ fun TestCardScreen(state: BenchState, actions: BenchActions, setup: TestCardSetu
     DisposableEffect(Unit) {
         val w = activity?.window
         val oldBrightness = w?.attributes?.screenBrightness
-        w?.attributes = w?.attributes?.apply { screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_FULL }
+        val oldMode = w?.attributes?.preferredDisplayModeId ?: 0
+        // The display's fastest mode at its current size, held for the test, so the flash length doesn't change under us.
+        val d = activity?.display
+        val fastest = d?.supportedModes?.filter { it.physicalWidth == d.mode.physicalWidth && it.physicalHeight == d.mode.physicalHeight }?.maxByOrNull { it.refreshRate }
+        w?.attributes = w?.attributes?.apply { screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_FULL; fastest?.let { preferredDisplayModeId = it.modeId } }
         w?.insetsController?.hide(WindowInsets.Type.systemBars())
         val wasNoFlashing = ScreenPrefs.noFlashing
         if (wasNoFlashing) ScreenPrefs.set(ctx, noFlashing = false)
         actions.setChannel(setup.channel)
         onDispose {
-            w?.attributes = w?.attributes?.apply { screenBrightness = oldBrightness ?: WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE }
+            w?.attributes = w?.attributes?.apply { screenBrightness = oldBrightness ?: WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE; preferredDisplayModeId = oldMode }
             w?.insetsController?.show(WindowInsets.Type.systemBars())
             if (wasNoFlashing) ScreenPrefs.set(ctx, noFlashing = true)
         }
@@ -115,14 +119,17 @@ fun TestCardScreen(state: BenchState, actions: BenchActions, setup: TestCardSetu
     }
     BackHandler { close() }
     val monoToBoot = remember { monoToBootNs() }
-    val log = remember { File(ctx.getExternalFilesDir(null), "testcard-${System.currentTimeMillis()}.csv").apply { writeText("event_utc_ns,frame_utc_ns,frame_boot_ns,label,channel,mode\n") } }
+    val log = remember { File(ctx.getExternalFilesDir(null), "testcard-${System.currentTimeMillis()}.csv").apply { writeText("event_utc_ns,frame_utc_ns,frame_boot_ns,label,channel,mode,frame_period_ns,refresh_hz\n") } }
     var lit by remember { mutableIntStateOf(0) }            // frames left to show white
     var shownUtc by remember { mutableLongStateOf(0L) }      // flowtime of the last flash
     var beatLine by remember { mutableStateOf("waiting for the first flash") }
     var lastEvent by remember { mutableLongStateOf(0L) }
     var sync by remember { mutableStateOf<String?>(null) }
+    var lastFrame by remember { mutableLongStateOf(0L) }
     LaunchedEffect(setup) {
         while (true) withFrameNanos { frame ->
+            val period = if (lastFrame > 0) frame - lastFrame else 0L
+            lastFrame = frame
             if (lit > 0) lit--
             val fit = FlowTime.fit() ?: return@withFrameNanos
             val boot = frame + monoToBoot
@@ -146,7 +153,7 @@ fun TestCardScreen(state: BenchState, actions: BenchActions, setup: TestCardSetu
             }
             if (event != Long.MIN_VALUE && event > lastEvent && utc - event < 100_000_000L) {
                 lastEvent = event; shownUtc = event; beatLine = line; lit = 2
-                val row = "$event,$utc,$boot,${setup.label},${setup.channel},${setup.flashOn}\n"
+                val row = "$event,$utc,$boot,${setup.label},${setup.channel},${setup.flashOn},$period,${activity?.display?.refreshRate ?: 0f}\n"
                 scope.launch(Dispatchers.IO) { log.appendText(row) }
             }
         }

@@ -79,6 +79,13 @@ def centres(v, t, mask, xs, ev):
     return out
 
 
+def refresh(path):
+    """The display rate from a log's frame periods, or None for an older log without them."""
+    with open(path) as f:
+        p = [int(r["frame_period_ns"]) for r in csv.DictReader(f) if r.get("frame_period_ns") and int(r["frame_period_ns"]) > 0]
+    return 1e9 / np.median(p) if p else None
+
+
 def log_offsets(path):
     """Per flash: how long after the flowtime second the app's display frame came (frame flowtime minus event), in ms."""
     with open(path) as f:
@@ -91,6 +98,10 @@ def main():
     p.add_argument("--left-log"); p.add_argument("--right-log")
     p.add_argument("--left-flash-ms", type=float, default=33.3); p.add_argument("--right-flash-ms", type=float, default=16.7)
     a = p.parse_args()
+    if a.left_log and refresh(a.left_log):
+        a.left_flash_ms = 2000 / refresh(a.left_log)
+    if a.right_log and refresh(a.right_log):
+        a.right_flash_ms = 2000 / refresh(a.right_log)
     t, v = frames(a.video)
     mask, xl, xr = columns(v)
     sl = v[:, :, xl][:, mask[:, xl]].mean(1); sr = v[:, :, xr][:, mask[:, xr]].mean(1)
@@ -121,6 +132,10 @@ def main():
     print(f"camera readout across the frame width: {np.median(slopes):.1f} ms")
     if a.left_log and a.right_log:
         ll, lr = log_offsets(a.left_log), log_offsets(a.right_log)
+        for name, path in (("left", a.left_log), ("right", a.right_log)):
+            hz = refresh(path)
+            if hz:
+                print(f"{name} display ran at {hz:.0f} Hz (from its log): its flash is {2000 / hz:.1f} ms")
         print(f"logged frame after the second: left {ll.mean():.2f} ms (sd {ll.std():.2f}), right {lr.mean():.2f} ms (sd {lr.std():.2f})")
         rest = d[keep].mean() - (lr.mean() - ll.mean())
         print(f"left over (right minus left): {rest:+.2f} ms = screen delay difference + clock difference")
