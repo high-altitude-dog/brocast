@@ -18,6 +18,7 @@ Needs Python 3.8+ and ffmpeg with libopus.
 from __future__ import annotations
 
 import argparse
+import difflib
 import hashlib
 import json
 import math
@@ -40,6 +41,9 @@ ID = re.compile(r"^[0-9a-f]{32}$")
 
 
 OPUS_DELAY_FRAMES = 312
+ARTIST_CROPS = {"1x1": (512, 512), "9x16": (720, 1280), "16x9": (1280, 720)}   # thumbnails, full screen, wide (hand-off 28)
+ARTIST_MAX_BYTES = 25 * 1024 * 1024
+ARTIST_SPLIT = re.compile(r"\s*(?:&|,|\+|/|\bfeat\.?|\bft\.?|\bx\b|\band\b|\bb2b\b|\bvs\.?)\s*", re.I)
 REEL_TITLE = "Test reel"   # server/make_reel.py: it repeats the other sets, so it stays out of the library
 LIBRARY_D_MS = 60000
 LIBRARY_NOTICE_S = 600     # how far ahead a changed library takes effect
@@ -56,11 +60,14 @@ class Library:
         self.jobs: queue.Queue = queue.Queue()
         self.progress: dict[str, float] = {}
         os.makedirs(self.sets_dir, exist_ok=True)
+        self.artists_dir = os.path.join(directory, "artists")
+        os.makedirs(self.artists_dir, exist_ok=True)
         shutil.rmtree(self.incoming, ignore_errors=True)   # anything here was cut off by a restart
         os.makedirs(self.incoming)
         for s in self.sets():
             if s["status"] in ("queued", "transcoding"):
                 self.fail(s["id"], "the server restarted during transcoding, so please upload it again")
+        self.rematch()
         self.publish_library()   # for a library from before this list existed
         threading.Thread(target=self.worker, daemon=True).start()
 
@@ -221,6 +228,146 @@ class Library:
         shutil.rmtree(os.path.join(self.sets_dir, set_id))
         self.publish_library()
 
+    # ---- Artist registry: names, other spellings and one photo per artist, cropped three ways round a focus point. Lives only in the
+    # library volume and on phones, never in git.
+
+    def artists(self) -> list[dict]:
+        out = []
+        for a in sorted(os.listdir(self.artists_dir)):
+            try:
+                with open(os.path.join(self.artists_dir, a, "meta.json")) as f:
+                    out.append(json.load(f))
+            except (OSError, ValueError):
+                pass
+        return sorted(out, key=lambda m: m["name"].lower())
+
+    def artist_path(self, artist_id: str, name: str) -> str:
+        return os.path.join(self.artists_dir, artist_id, name)
+
+    def add_artist(self, upload: str, name: str, aliases: list[str]) -> str:
+        artist_id = uuid.uuid4().hex
+        os.makedirs(os.path.join(self.artists_dir, artist_id))
+        try:
+            photo = self.artist_path(artist_id, "photo.jpg")
+            # Re-encode: strips the camera's metadata (location included), turns it upright and caps its size.
+            r = subprocess.run(["ffmpeg", "-nostdin", "-v", "error", "-y", "-i", upload, "-vf", "scale='min(2048,iw)':-2", "-q:v", "3", photo], capture_output=True, text=True)
+            if r.returncode != 0:
+                raise ValueError("that doesn't look like a photo")
+            w, h = image_size(photo)
+            self.write_json(self.artist_path(artist_id, "meta.json"), {"id": artist_id, "name": name, "aliases": aliases, "focus": [0.5, 0.4], "w": w, "h": h, "v": 0, "added": time.time()})
+            self.crop_artist(artist_id)
+        except Exception:
+            shutil.rmtree(os.path.join(self.artists_dir, artist_id), ignore_errors=True)
+            raise
+        finally:
+            try:
+                os.remove(upload)
+            except OSError:
+                pass
+        self.rematch()
+        self.publish_library()
+        return artist_id
+
+    def crop_artist(self, artist_id: str):
+        with open(self.artist_path(artist_id, "meta.json")) as f:
+            m = json.load(f)
+        fx, fy = m["focus"]
+        for name, (tw, th) in ARTIST_CROPS.items():
+            # The largest rectangle of this shape that fits, centred on the focus point as far as the edges allow.
+            cw, ch = (m["w"], round(m["w"] * th / tw)) if m["w"] * th / tw <= m["h"] else (round(m["h"] * tw / th), m["h"])
+            x = min(max(0, round(fx * m["w"] - cw / 2)), m["w"] - cw)
+            y = min(max(0, round(fy * m["h"] - ch / 2)), m["h"] - ch)
+            r = subprocess.run(["ffmpeg", "-nostdin", "-v", "error", "-y", "-i", self.artist_path(artist_id, "photo.jpg"),
+                                "-vf", f"crop={cw}:{ch}:{x}:{y},scale={tw}:{th}", "-q:v", "4", self.artist_path(artist_id, name + ".jpg")], capture_output=True, text=True)
+            if r.returncode != 0:
+                raise ValueError("couldn't crop the photo: " + r.stderr[:200])
+        m["v"] = int(time.time())
+        self.write_json(self.artist_path(artist_id, "meta.json"), m)
+
+    def set_focus(self, artist_id: str, fx: float, fy: float):
+        path = self.artist_path(artist_id, "meta.json")
+        with open(path) as f:
+            m = json.load(f)
+        m["focus"] = [min(max(fx, 0.0), 1.0), min(max(fy, 0.0), 1.0)]
+        self.write_json(path, m)
+        self.crop_artist(artist_id)
+        self.publish_library()
+
+    def update_artist(self, artist_id: str, name: str, aliases: list[str]):
+        path = self.artist_path(artist_id, "meta.json")
+        with open(path) as f:
+            m = json.load(f)
+        m["name"], m["aliases"] = name, aliases
+        self.write_json(path, m)
+        self.rematch()
+        self.publish_library()
+
+    def delete_artist(self, artist_id: str):
+        shutil.rmtree(os.path.join(self.artists_dir, artist_id))
+        for s in self.sets():
+            if artist_id in s.get("artist_ids", []):
+                self.update(s["id"], artist_ids=[a for a in s["artist_ids"] if a != artist_id], artist_sure=False)
+        self.rematch()
+        self.publish_library()
+
+    def match(self, text: str) -> tuple[list[str], bool]:
+        """Registry artists named in a set's artist field (or its title before " - "), and whether every match was exact."""
+        key = lambda t: re.sub(r"[^a-z0-9]+", "", t.lower())
+        names = {}
+        for a in self.artists():
+            for n in [a["name"]] + a.get("aliases", []):
+                names[key(n)] = a["id"]
+        whole = key(text)
+        if whole in names:
+            return [names[whole]], True
+        near = difflib.get_close_matches(whole, list(names), n=1, cutoff=0.85) if whole else []
+        if near:   # a typo in the whole name, such as "Lynnnic": a match to confirm
+            return [names[near[0]]], False
+        ids, sure = [], True
+        for part in ARTIST_SPLIT.split(text):
+            k = key(part)
+            if not k:
+                continue
+            if k in names:
+                hit = names[k]
+            else:
+                close = difflib.get_close_matches(k, list(names), n=1, cutoff=0.8)
+                if not close:
+                    continue
+                hit, sure = names[close[0]], False
+            if hit not in ids:
+                ids.append(hit)
+        return ids, sure and bool(ids)
+
+    def match_title(self, title: str) -> tuple[list[str], bool]:
+        """Artists named in a title: one part of "Artist - Title", "Title - Artist" or "Title | Artist", or a title that starts with the name."""
+        for part in re.split(r"\s+[-–]\s+|\s*[|｜]\s*", title):
+            ids, sure = self.match(part)
+            if ids:
+                return ids, sure
+        key = lambda t: re.sub(r"[^a-z0-9]+", "", t.lower())
+        for a in self.artists():
+            for n in [a["name"]] + a.get("aliases", []):
+                if len(key(n)) >= 4 and key(title).startswith(key(n)):
+                    return [a["id"]], True
+        return [], False
+
+    def rematch(self):
+        """Matches every set the user hasn't confirmed by hand."""
+        for s in self.sets():
+            if s.get("artist_confirmed"):
+                continue
+            ids, sure = self.match(s["artist"]) if s.get("artist") else ([], False)
+            if not ids:
+                ids, sure = self.match_title(s.get("title") or "")
+            if ids != s.get("artist_ids") or sure != s.get("artist_sure"):
+                self.update(s["id"], artist_ids=ids, artist_sure=sure)
+
+    def confirm_artists(self, set_id: str, ids: list[str]):
+        known = {a["id"] for a in self.artists()}
+        self.update(set_id, artist_ids=[i for i in ids if i in known], artist_sure=True, artist_confirmed=True)
+        self.publish_library()
+
     def publish_library(self):
         """The list phones loop and keep. A change takes effect at a set time in the future, so phones all switch together."""
         items = [{"id": m["id"], "title": m["title"], "artist": m["artist"], "bytes": m["opus_bytes"], "sha256": m["sha256"],
@@ -234,12 +381,27 @@ class Library:
                     editions = json.load(f)["editions"]
             except (OSError, ValueError, KeyError):
                 editions = []
-            if (editions[-1]["items"] if editions else []) == items:
-                return
-            now = time.time_ns() // 1_000_000_000
-            start = now + (LIBRARY_NOTICE_S if editions else 1)
-            editions = editions[-1:] + [{"start_ns": start * 1_000_000_000, "items": items}]
-            self.write_json(path, {"version": 1, "D_ms": LIBRARY_D_MS, "editions": editions})
+            # Artists ride beside the editions, so a new photo or a confirmed match never moves the shared timeline.
+            artists = {a["id"]: {"name": a["name"], "v": a["v"]} for a in self.artists() if a.get("v")}
+            set_artists = {m["id"]: m["artist_ids"] for m in self.sets() if m["status"] == "ready" and m.get("artist_ids") and m.get("artist_sure")}
+            if (editions[-1]["items"] if editions else []) != items:
+                now = time.time_ns() // 1_000_000_000
+                start = now + (LIBRARY_NOTICE_S if editions else 1)
+                editions = editions[-1:] + [{"start_ns": start * 1_000_000_000, "items": items}]
+            new = {"version": 1, "D_ms": LIBRARY_D_MS, "editions": editions, "artists": artists, "set_artists": set_artists}
+            try:
+                with open(path) as f:
+                    if json.load(f) == new:
+                        return
+            except (OSError, ValueError):
+                pass
+            self.write_json(path, new)
+
+
+def image_size(path: str) -> tuple[int, int]:
+    r = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height", "-of", "json", path], capture_output=True, text=True)
+    s = json.loads(r.stdout)["streams"][0]
+    return int(s["width"]), int(s["height"])
 
 
 def probe(path: str) -> tuple[dict, float | None]:
@@ -273,6 +435,9 @@ label { display: block; margin: 8px 0; font-size: 14px; } input[type=text], inpu
 button { min-height: 44px; padding: 0 16px; margin: 8px 8px 0 0; font: inherit; cursor: pointer; }
 progress { width: 100%; height: 12px; margin-top: 8px; } .air { border-color: #cf5; } .tag { color: #cf5; font-weight: 700; }
 .title { font-weight: 600; overflow-wrap: anywhere; }
+.artist { display: flex; gap: 12px; align-items: flex-start; } .artist img { border-radius: 8px; } .crops img { height: 72px; margin-right: 6px; }
+.photo { position: relative; display: inline-block; cursor: crosshair; } .photo img { max-width: 220px; display: block; }
+.dot { position: absolute; width: 14px; height: 14px; margin: -7px; border: 2px solid #cf5; border-radius: 50%; pointer-events: none; }
 </style></head><body>
 <h1>Brocast test sets</h1>
 <p class="muted" id="disk"></p>
@@ -287,6 +452,16 @@ progress { width: 100%; height: 12px; margin-top: 8px; } .air { border-color: #c
   <progress id="bar" max="1" value="0" hidden></progress>
   <p id="message" role="status"></p>
 </form>
+<h2>Artists</h2>
+<p class="muted">Names and photos stay on this server and the phones, never in git. Tap a photo where the face is: phones crop round that point.</p>
+<form id="aform">
+  <label>Name<input type="text" id="aname" maxlength="200" required></label>
+  <label>Other spellings (optional, separated by ;)<input type="text" id="aalias" maxlength="200"></label>
+  <label>Photo<input type="file" id="afile" accept="image/*" required></label>
+  <button id="ago">Add artist</button>
+  <p id="amessage" role="status"></p>
+</form>
+<div id="artists"></div>
 <h2>On air</h2>
 <div id="air"></div>
 <h2>Sets</h2>
@@ -303,8 +478,44 @@ async function act(url, method) {
   const r = await fetch(url, {method, headers}); const j = await r.json().catch(() => ({}));
   if (!r.ok) alert(j.error || "That didn't work"); refresh();
 }
+let artistsShown = "";
+function showArtists(artists) {
+  const sig = JSON.stringify(artists.map(a => [a.id, a.v, a.name, a.aliases, a.focus]));
+  if (sig === artistsShown) return; artistsShown = sig;   // rebuilding every 2 s would reload the photos
+  const box = $("artists"); box.replaceChildren();
+  if (!artists.length) box.append(el("p", "No artists yet", "muted"));
+  for (const a of artists) {
+    const row = el("div", null, "set artist");
+    const ph = el("div", null, "photo"); const img = el("img"); img.src = "/api/artists/" + a.id + "/photo.jpg?v=" + a.v; ph.append(img);
+    const dot = el("div", null, "dot"); dot.style.left = (a.focus[0] * 100) + "%"; dot.style.top = (a.focus[1] * 100) + "%"; ph.append(dot);
+    ph.onclick = e => { const r = img.getBoundingClientRect(); act("/api/artists/" + a.id + "/focus?x=" + ((e.clientX - r.left) / r.width).toFixed(3) + "&y=" + ((e.clientY - r.top) / r.height).toFixed(3), "POST"); };
+    const info = el("div");
+    info.append(el("p", a.name, "title"));
+    if (a.aliases && a.aliases.length) info.append(el("p", "Also: " + a.aliases.join("; "), "muted"));
+    const crops = el("div", null, "crops");
+    for (const c of ["1x1", "9x16", "16x9"]) { const i = el("img"); i.src = "/api/artists/" + a.id + "/" + c + ".jpg?v=" + a.v; i.alt = c; crops.append(i); }
+    info.append(crops);
+    const ren = el("button", "Rename"); ren.onclick = () => { const n = prompt("Name", a.name); if (n === null) return;
+      const al = prompt("Other spellings, separated by ;", (a.aliases || []).join("; ")); act("/api/artists/" + a.id + "?" + new URLSearchParams({name: n, aliases: al || ""}), "POST"); };
+    const del = el("button", "Delete"); del.onclick = () => { if (confirm("Delete " + a.name + "?")) act("/api/artists/" + a.id, "DELETE"); };
+    info.append(ren, del); row.append(ph, info); box.append(row);
+  }
+}
+function artistLine(s, artists, box) {
+  const byId = Object.fromEntries(artists.map(a => [a.id, a.name]));
+  const ids = s.artist_ids || [];
+  const line = el("p", ids.length ? "Artists: " + ids.map(i => byId[i] || "?").join(", ") + (s.artist_sure ? "" : " · not sure") : "Artists: no match", s.artist_sure ? "muted" : "warn");
+  box.append(line);
+  if (!artists.length) return;
+  const pick = el("select"); pick.multiple = true; pick.size = Math.min(4, artists.length);
+  for (const a of artists) { const o = el("option", a.name); o.value = a.id; o.selected = ids.includes(a.id); pick.append(o); }
+  const ok = el("button", s.artist_sure ? "Change artists" : "Confirm artists");
+  ok.onclick = () => act("/api/sets/" + s.id + "/artists?ids=" + [...pick.selectedOptions].map(o => o.value).join(","), "POST");
+  box.append(pick, ok);
+}
 async function refresh() {
   const r = await fetch("/api/sets"); const d = await r.json();
+  showArtists(d.artists || []);
   $("disk").textContent = "Library " + gb(d.used) + " of " + gb(d.max) + " · shared disk has " + gb(d.free) + " free and keeps " + gb(d.reserve);
   const air = $("air"); air.replaceChildren();
   const onAir = d.on_air;
@@ -318,6 +529,7 @@ async function refresh() {
     const box = el("div", null, "set" + (on ? " air" : ""));
     box.append(el("p", s.title || s.filename, "title"));
     const by = [s.artist, s.set].filter(Boolean).join(" · "); if (by) box.append(el("p", by, "muted"));
+    if (s.status === "ready") artistLine(s, d.artists || [], box);
     if (s.added) box.append(el("p", "Uploaded " + new Date(s.added * 1000).toLocaleString([], {dateStyle: "medium", timeStyle: "short"}), "muted"));
     if (s.status === "ready") {
       box.append(el("p", time(s.seconds) + " · disk " + mb(s.pcm_bytes + s.opus_bytes) + " · Opus " + mb(s.opus_bytes), "muted"));
@@ -347,6 +559,17 @@ $("form").onsubmit = e => {
     refresh();
   };
   x.send(file);
+};
+$("aform").onsubmit = e => {
+  e.preventDefault();
+  const file = $("afile").files[0]; if (!file) return;
+  const q = new URLSearchParams({name: $("aname").value, aliases: $("aalias").value});
+  $("ago").disabled = true; $("amessage").textContent = "Uploading…";
+  fetch("/api/artists?" + q, {method: "PUT", headers, body: file}).then(async r => {
+    const j = await r.json().catch(() => ({})); $("ago").disabled = false;
+    $("amessage").textContent = r.ok ? "Added. Tap the photo where the face is." : (j.error || "That didn't work");
+    if (r.ok) $("aform").reset(); refresh();
+  });
 };
 refresh(); setInterval(refresh, 2000);
 </script></body></html>
@@ -387,7 +610,13 @@ def make_handler(lib: Library):
             if path == "/":
                 self.send(200, PAGE.encode(), "text/html; charset=utf-8")
             elif path == "/api/sets":
-                self.reply(sets=lib.sets(), on_air=lib.on_air(), free=lib.free(), used=lib.used(), max=lib.max, reserve=lib.reserve)
+                self.reply(sets=lib.sets(), on_air=lib.on_air(), free=lib.free(), used=lib.used(), max=lib.max, reserve=lib.reserve, artists=lib.artists())
+            elif m := re.fullmatch(r"/api/artists/([0-9a-f]{32})/(photo|1x1|9x16|16x9)\.jpg", path):
+                try:
+                    with open(lib.artist_path(m.group(1), m.group(2) + ".jpg"), "rb") as f:
+                        self.send(200, f.read(), "image/jpeg")
+                except OSError:
+                    self.reply(404, error="no such photo")
             else:
                 self.reply(404, error="not found")
 
@@ -395,7 +624,7 @@ def make_handler(lib: Library):
             if not self.allowed(True):
                 return
             url = urlparse(self.path)
-            if url.path != "/api/upload":
+            if url.path not in ("/api/upload", "/api/artists"):
                 self.close_connection = True
                 self.reply(404, error="not found")
                 return
@@ -412,6 +641,10 @@ def make_handler(lib: Library):
                 return
             q = parse_qs(url.query)
             field = lambda k: (q.get(k) or [""])[0].strip()[:200]
+            if url.path == "/api/artists" and (length > ARTIST_MAX_BYTES or not field("name")):
+                self.close_connection = True
+                self.reply(400, error="an artist needs a name and a photo under 25 MB")
+                return
             temp = os.path.join(lib.incoming, uuid.uuid4().hex)
             try:
                 left = length
@@ -429,13 +662,36 @@ def make_handler(lib: Library):
                     pass
                 self.close_connection = True
                 return
+            if url.path == "/api/artists":
+                try:
+                    self.reply(id=lib.add_artist(temp, field("name"), [a.strip() for a in field("aliases").split(";") if a.strip()]))
+                except (OSError, ValueError) as e:
+                    self.reply(400, error=str(e))
+                return
             set_id = lib.add(temp, field("name") or "upload", field("title"), field("artist"), field("set"))
             self.reply(id=set_id)
 
         def do_POST(self):
             if not self.allowed(True):
                 return
-            m = re.fullmatch(r"/api/sets/([0-9a-f]{32})/air", urlparse(self.path).path)
+            url = urlparse(self.path)
+            q = parse_qs(url.query)
+            field = lambda k: (q.get(k) or [""])[0].strip()[:200]
+            try:
+                if a := re.fullmatch(r"/api/artists/([0-9a-f]{32})/focus", url.path):
+                    lib.set_focus(a.group(1), float(field("x")), float(field("y")))
+                    return self.reply()
+                if a := re.fullmatch(r"/api/artists/([0-9a-f]{32})", url.path):
+                    if not field("name"):
+                        return self.reply(400, error="an artist needs a name")
+                    lib.update_artist(a.group(1), field("name"), [x.strip() for x in field("aliases").split(";") if x.strip()])
+                    return self.reply()
+                if a := re.fullmatch(r"/api/sets/([0-9a-f]{32})/artists", url.path):
+                    lib.confirm_artists(a.group(1), [i for i in field("ids").split(",") if ID.match(i)])
+                    return self.reply()
+            except (OSError, ValueError) as e:
+                return self.reply(400, error=str(e))
+            m = re.fullmatch(r"/api/sets/([0-9a-f]{32})/air", url.path)
             if not m:
                 self.reply(404, error="not found")
                 return
@@ -452,6 +708,13 @@ def make_handler(lib: Library):
             if path == "/api/air":
                 lib.take_off_air()
                 self.reply()
+                return
+            if a := re.fullmatch(r"/api/artists/([0-9a-f]{32})", path):
+                try:
+                    lib.delete_artist(a.group(1))
+                    self.reply()
+                except OSError as e:
+                    self.reply(400, error=str(e))
                 return
             m = re.fullmatch(r"/api/sets/([0-9a-f]{32})", path)
             if not m:

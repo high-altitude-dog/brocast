@@ -38,7 +38,21 @@ class LibraryStore private constructor(ctx: Context) : Thread("library") {
     fun file(id: String) = File(dir, "$id.opus")
 
     /** The artist photo for a track, copied here by hand for now (the photos stay out of the repo). It may not exist. */
-    fun photo(id: String) = File(dir, "$id.jpg")
+    /** Artists from the server's registry: name and photo version, and which artists each set is by. */
+    @Volatile var artists: Map<String, Pair<String, Long>> = emptyMap()
+    @Volatile var setArtists: Map<String, List<String>> = emptyMap()
+    private val artistDir = File(dir, "artists").apply { mkdirs() }
+    private fun artistFile(aid: String, crop: String) = artists[aid]?.let { File(artistDir, "$aid-$crop-${it.second}.jpg") }
+
+    /**
+     * The set's photo: its first artist's crop from the registry (1x1 for thumbnails, 9x16 full screen, 16x9 wide; hand-off 28), or a photo copied
+     * onto the phone by hand before the registry existed.
+     */
+    fun photo(id: String, crop: String = "1x1"): File =
+        setArtists[id]?.firstNotNullOfOrNull { artistFile(it, crop)?.takeIf { f -> f.exists() } } ?: File(dir, "$id.jpg")
+
+    /** The registry's names for the set's artists, joined, or null if it has none. */
+    fun artistNames(id: String): String? = setArtists[id]?.mapNotNull { artists[it]?.first }?.takeIf { it.isNotEmpty() }?.joinToString(" & ")
 
     /** The set's beat and bar grid, saved by [SetBeatAnalyser]. */
     fun beatsFile(id: String) = File(dir, "$id.beats")
@@ -69,6 +83,8 @@ class LibraryStore private constructor(ctx: Context) : Thread("library") {
                 LibraryItem(it.getString("id"), it.optString("title"), it.optString("artist"), it.getLong("seconds"), it.getLong("bytes"), it.getString("sha256"))
             })
         }
+        artists = j.optJSONObject("artists")?.let { a -> a.keys().asSequence().associateWith { k -> a.getJSONObject(k).let { it.optString("name") to it.optLong("v") } } }.orEmpty()
+        setArtists = j.optJSONObject("set_artists")?.let { s -> s.keys().asSequence().associateWith { k -> s.getJSONArray(k).let { l -> (0 until l.length()).map { l.getString(it) } } } }.orEmpty()
     }
 
     override fun run() {
@@ -105,8 +121,29 @@ class LibraryStore private constructor(ctx: Context) : Thread("library") {
             if (!going) return false
             if (!file(item.id).exists()) get(item, edition)
         }
+        if (allowed.size == order.size) syncArtists()
         summarise(if (allowed.size < order.size) "waiting for Wi-Fi" else null, edition)
         return allowed.size == order.size
+    }
+
+    /** Each artist's three crops, once per photo version (small JPEGs, after the music), and old versions removed. */
+    private fun syncArtists() {
+        val wanted = HashSet<String>()
+        for (aid in artists.keys) for (crop in listOf("1x1", "9x16", "16x9")) {
+            val f = artistFile(aid, crop) ?: continue
+            wanted.add(f.name)
+            if (f.exists() || !going) continue
+            try {
+                val c = open("/artist/$aid/$crop.jpg", 0L)
+                try {
+                    if (c.responseCode != 200) continue
+                    val tmp = File(artistDir, f.name + ".tmp")
+                    c.inputStream.use { input -> FileOutputStream(tmp).use { input.copyTo(it) } }
+                    tmp.renameTo(f)
+                } finally { c.disconnect() }
+            } catch (e: IOException) { return }
+        }
+        artistDir.listFiles()?.forEach { if (it.name !in wanted) it.delete() }
     }
 
     private fun get(item: LibraryItem, edition: Edition) {

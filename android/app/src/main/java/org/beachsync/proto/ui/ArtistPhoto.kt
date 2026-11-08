@@ -89,7 +89,7 @@ fun ArtistPhotoScreen(state: BenchState, back: () -> Unit) {
     val boot = org.beachsync.proto.Session.nowBoot()
     val lib = state.library
     val item = nowPlayingItem(lib, boot)
-    val photo = rememberPhoto(item?.let { lib?.photo(it.id) }, 1440)
+    val photo = rememberPhoto(item?.let { lib?.photo(it.id, "9x16") }, 1440)
     Box(Modifier.fillMaxSize().background(Color.Black).clickable(onClick = back)) {
         if (photo != null) Image(photo, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
         else BasicText(initials(item?.artist?.ifEmpty { null } ?: item?.title ?: "?"), Modifier.align(Alignment.Center), Tokens.Text.screenTitle.style(Ink.textSecondary).copy(fontSize = 72.sp))

@@ -301,7 +301,7 @@ def make_handler(stream):
                     self.end_headers()
                     return
                 self.send_response(206 if m else 200)
-                self.send_header("Content-Type", "audio/ogg")
+                self.send_header("Content-Type", "image/jpeg" if path.endswith(".jpg") else "audio/ogg")
                 self.send_header("Content-Length", str(end + 1 - start))
                 self.send_header("Accept-Ranges", "bytes")
                 if m:
@@ -332,6 +332,13 @@ def make_handler(stream):
                     self.send_file(os.path.join(library, "sets", set_id, "set.opus"))
                 else:
                     self.send(400, b"bad file id", "text/plain", "no-store")
+                return
+            if path.startswith("/artist/") and library:   # an artist's photo crop, from the upload page's registry
+                m = re.fullmatch(r"/artist/([0-9a-f]{32})/(1x1|9x16|16x9)\.jpg", path)
+                if m:
+                    self.send_file(os.path.join(library, "artists", m.group(1), m.group(2) + ".jpg"))
+                else:
+                    self.send(400, b"bad artist photo", "text/plain", "no-store")
                 return
             if path == "/on_air.opus":   # what's playing, whole: the music test decodes it locally to compare against
                 on_air = stream.opus_path()

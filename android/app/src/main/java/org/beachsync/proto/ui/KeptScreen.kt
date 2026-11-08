@@ -107,7 +107,8 @@ fun KeptScreen(state: BenchState, back: () -> Unit, openArtist: () -> Unit) {
     val highest = ((kept.mapNotNull { infos[it.id]?.bpmHigh }.maxOrNull() ?: 130) + 2)
     var range by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     val (from, to) = range ?: (lowest to highest)
-    fun inRange(it: LibraryItem) = infos[it.id]?.let { i -> i.bpmLow != null && i.bpmHigh!! >= from && i.bpmLow <= to } ?: true
+    // Only the BPM filter dims a card. A set with no tempo yet (still being worked out, or no steady beat) isn't on the map, so it never dims.
+    fun inRange(it: LibraryItem) = infos[it.id]?.let { i -> i.bpmLow == null || (i.bpmHigh!! >= from && i.bpmLow <= to) } ?: true
     val playing = lib?.let { l -> shownAt(l.editions, l.dMs, FlowTime.fit()?.utcAt(Session.nowBoot()) ?: (System.currentTimeMillis() * 1_000_000L))?.first?.id }
     val sorted = when (sort) {
         1 -> kept.sortedBy { infos[it.id]?.bpmMain ?: 999 }
@@ -219,7 +220,7 @@ private fun KeptCard(lib: LibraryStore, item: LibraryItem, info: KeptInfo?, play
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 BasicText(item.title, style = Tokens.Text.bodyStrong.style().copy(fontSize = 17.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                BasicText(listOf(item.artist.ifEmpty { null }, "set").filterNotNull().joinToString(" · "), style = Tokens.Text.small.style(Ink.textSecondary), maxLines = 1)
+                BasicText(listOf(item.artist.ifEmpty { null } ?: lib.artistNames(item.id), "set").filterNotNull().joinToString(" · "), style = Tokens.Text.small.style(Ink.textSecondary), maxLines = 1)
                 BasicText("${clock(item.seconds)} · $bpm · ${mb(item.bytes)}", style = Tokens.Text.valueSmall.style(Ink.textSecondary).copy(fontSize = 11.sp), maxLines = 1)
             }
             Bookmark()
