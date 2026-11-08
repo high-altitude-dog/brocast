@@ -1,8 +1,8 @@
 # Pears step 1: results, for the main session
 
-7 Nov 2026, branch `pears-step1` (commits `6fec442`, `f82d574` and this file, on `d70d73d`; not pushed). One run on both phones, same Wi-Fi as the laptop: the laptop's own DHT on UDP 49737 plus the step 0 station, 4 s blocks, test library of 3 pink-noise sets (18.7 MB Opus). Nothing played, no server used.
+7 Nov 2026, branch `pears-step1` (commits `6fec442`, `f82d574` and this file, on `d70d73d`; not pushed). Two runs on both phones (run 2 unplugged), same Wi-Fi as the laptop: the laptop's own DHT on UDP 49737 plus the step 0 station, 4 s blocks, test library of 3 pink-noise sets (18.7 MB Opus). Nothing played, no server used.
 
-## Works (measured, one run each, phones charging over USB)
+## Works (run 1, phones on USB; run 2 below)
 
 | | Pixel 10 Pro | Galaxy A16 |
 |---|---|---|
@@ -16,11 +16,12 @@
 
 - **Files match:** all 3 sets on both phones are byte-identical to the laptop's rebuild from the station's cores, and BLAKE2b matches the signed catalog (`tools/verify.js`).
 - **Overhead explained:** it is duplicate blocks. With one source (Pixel) it is 3.2%. With two sources (Galaxy: station and Pixel) Hypercore sent 454 requests for 273 blocks, cancelled 172, and still received 151 extra data messages (blocks it already had). Framing, proofs and retransmissions are small. The Pixel retransmitted 1528 packets while uploading 13.7 MB to the Galaxy (Wi-Fi loss); the station 334.
+- **Run 2, cables out, started by hand:** the Galaxy went first this time. It got 3.2% overhead, the Pixel (two sources) 55.5%, with 418 data messages for 273 blocks and 174 cancels: the same pattern, so the overhead finding holds. All blocks in 17.5 s (Galaxy) and 21.5 s (Pixel); first block 0.8 s and 2.5 s; CPU 10.8 s and 10.0 s to done.
 - The station's egress log had no alerts at start or stop; it and the DHT were stopped by hand after the run.
 
 ## Not done or unproven
 
-- **Battery:** not measured. Both phones were charging over USB, so the charge counter rose. Needs a run over Wi-Fi adb with the cables out.
+- **Battery, upper bound only:** in run 2 the charge counter didn't move between start and done (0 µAh) on either phone. Its step looks like 2.5 mAh on the Pixel and 4.5 mAh on the Galaxy (inferred from the deltas seen), so fetching 18.7 MB used less than one step: under 0.1% of either battery. The mean current includes time after plugging back in, so it isn't usable. For a real figure: integrate `CURRENT_NOW` samples over the fetch window only (the app keeps only the mean today), or fetch a much larger library.
 - One run only; no repeat, no larger library, no screen-off or background run (the test app is an Activity, no foreground service).
 - 10-minute auto-stop is built into the app and `tools/lan.js` but wasn't reached.
 
@@ -49,4 +50,4 @@
 ## Open questions
 
 1. For the Pears developers: why does Hypercore 11 request one block from several peers on a LAN, and how do we stop cancelled data still arriving (55% extra on the receiver)? Can bare-kit-kotlin ship `libc++_shared.so`, or should addons link libc++ statically?
-2. User: a battery run with cables out, over Wi-Fi adb?
+2. User: is the battery upper bound enough for step 1, or should the app integrate current over the fetch window and run again?
