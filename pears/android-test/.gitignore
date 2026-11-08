@@ -5,5 +5,6 @@ local.properties
 # Made by the build from pears/ (bare-pack and bare-link)
 app/src/main/assets/engine.bundle
 app/src/main/addons/
+app/src/main/libcxx/
 # Phone results pulled by tools/phone.sh
 results/

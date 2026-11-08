@@ -22,7 +22,7 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    sourceSets["main"].jniLibs.srcDir("src/main/addons")
+    sourceSets["main"].jniLibs.srcDirs("src/main/addons", "src/main/libcxx")
     packaging { jniLibs { useLegacyPackaging = false } }
 }
 
@@ -38,7 +38,16 @@ val linkAddons by tasks.registering(Exec::class) {
     commandLine("nice", "node_modules/.bin/bare-link", "--host", "android-arm64",
         "--out", "android-test/app/src/main/addons", "android-test/js/worklet.js")
 }
-tasks.named("preBuild") { dependsOn(packEngine, linkAddons) }
+// udx-native needs the NDK's C++ runtime, which bare-kit doesn't ship. One 1.8 MB file from NDK r27c (the version
+// Holepunch's Android example uses), fetched by range request rather than installing the NDK.
+val fetchLibcxx by tasks.registering(Exec::class) {
+    val out = file("src/main/libcxx/arm64-v8a/libc++_shared.so")
+    onlyIf { !out.exists() }
+    doFirst { out.parentFile.mkdirs() }
+    commandLine("python3", "-I", "fetch_from_zip.py", "https://dl.google.com/android/repository/android-ndk-r27c-linux.zip",
+        "sysroot/usr/lib/aarch64-linux-android/libc++_shared.so", out.path)
+}
+tasks.named("preBuild") { dependsOn(packEngine, linkAddons, fetchLibcxx) }
 
 kotlin { compilerOptions { jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17) } }
 

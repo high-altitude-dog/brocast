@@ -11,7 +11,7 @@ import { buildOgg, serialOf, blake2b } from '../engine/builder.js'
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..')
 const work = path.join(root, 'work')
 const seed = fs.readFileSync(path.join(work, 'lan-station-seed'))
-const store = new Corestore(path.join(work, 'lan-station'), { primaryKey: keysFromSeed(seed).primaryKey })
+const store = new Corestore(path.join(work, 'lan-station'), { primaryKey: keysFromSeed(seed).primaryKey, unsafe: true })
 const bs = Number(process.env.BLOCK_SECONDS || 4)
 const ns = store.namespace('blocks-' + bs)
 const catalog = ns.get({ name: 'catalog' })
