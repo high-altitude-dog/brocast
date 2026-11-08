@@ -1,4 +1,4 @@
-# UI spec (hand-off 24)
+# UI spec (hand-off 25)
 
 Field names come from Claude Code's "Fields that exist today" table in `feedback.md`, as of 1 Nov 2026. If one has been renamed since, use the new name.
 
@@ -37,6 +37,7 @@ Field names come from Claude Code's "Fields that exist today" table in `feedback
 | Seconds sweep | The outer accent arc fills once per flowtime **minute**, like a second hand | Seconds of the current minute | Steps once a second at Reduced level | now |
 | Time-source pictogram | **Satellites:** a mini constellation: the sky squashed into a small ellipse, one dot per satellite in view, lit in accent for each one in use, the ones in use joined by faint lines (the same shortest-path pattern as the Satellites screen), no labels; then `GPS · 10 of 14`. Tapping it opens Satellites. **Hold:** an accent hourglass beside the same sky gone dark, `HOLDING · 41 s`. **NTP:** a cell tower with radio waves, `NTP · stratum 1` (Privacy mode shows this one). **First second:** the tower with dashed waves, `NTP · getting time`, until the first fit (never a 'no time' state). | `FlowTime.chosen`, `GpsTime.used`, `seen`, `lastBoot`, `NtpClient.stratum`; per-satellite positions **later** (until then, place dots evenly) | Updates once a second | partly |
 | Precision ring | A glow whose width shows the sync error on the budget's log scale; its figure is on the bottom bezel | Sync error | | now |
+| Beat counter (user, 7 Nov) | A 44 px strip **under the clock**: `BAR 212` left, four beat cells, `BPM 124` right (mono). Beat 1's cell is wider and keeps an accent outline. The current beat's cell is filled accent, with a dark line inside it filling as the beat's phase runs to the next beat; beats already played this bar stay faintly lit. On beat 1 the strip's border flashes accent for 120 ms. Beats change when the sound **reaches your ears** (flowtime plus output lag), so every phone in a crowd lights beat 1 together. States: Working out the beats (dashed cells, `BEATS 62%`), No steady beat (`—`, dashed), Tempo change (new BPM in accent for one bar), New set (bar 1). | `SetBeats`: bar from set start, beat 1–4, bpm, beat phase; per set, after download | Tap opens Buffer. Reduced motion: no flash, no phase line, the cell steps. Reduced level: updates on the beat only. Minimal: hidden. | now (after analysis) |
 | Play control and sync badge | A 52 px round button left of the badge: **Stop** (a white square, outlined) while playing; **Play** (an accent-filled circle with a dark triangle) when stopped; dashed and disabled while the set due now is downloading. The badge shows words, the ± figure and the source. | See Badge states | Play starts in sync at once. Tapping the badge opens the error budget detail. | now |
 | Latest event | Time, lane mark and name, and the event text, **directly under the badge**. The text wraps onto as many lines as it needs, with no ellipsis, and the row grows (the user's decision, 2 Nov). | `EventLog.latest()` | Tapping opens the Event log. A banner elsewhere links to its own event. | now |
 | Sync card (replaces the error budget, user's request 3 Nov) | **Headline:** `You hear it within ±3.0 ms of everyone's clock` (the badge figure, accent). **Window:** a signed log line from 1 s earlier to 1 s later around the Brocast clock (marks at 1, 10, 100 ms and 1 s each side, knee at 100 µs; `0` at the centre) (a white tick, `BROCAST CLOCK`); an accent band shows where this phone's sound most likely is (centred on the held gap, here 200 µs later, half-width √(clock² + delay estimate²)); a dot marks the centre; dashed lines at ±5 ms mark a typical event limit, labelled `EARLIER` and `LATER`. **What makes up the ±:** one bar split by each part's share of the total (squared), output delay estimate in amber, clock in accent, then one sentence naming the largest part and what would tighten it (`Mostly your headphones' delay estimate (±2.8 ms). Clock ±400 µs. An earcup test can tighten it.`). The output word follows the output in use. | Badge figure; `errAt`; Calibration ±; `NudgeControl.gapAt` | The whole card opens Time signals for the detail. | partly |
@@ -439,6 +440,12 @@ From `docs/keys.md` (pears-spike branch). Runs once, before First use · sharing
 ![](screens/id-desktop.png)
 
 The same six steps as a left rail, the step in the middle, sources on the right. Gathering: a mouse-and-typing pad (`Only the timing is used, never the keys`; `1,204 moves · 37 keys · 3.4 KB`). Sources: system generator, engine, CPU and disk timing jitter, battery (laptops), mouse timing, key timing; microphone and webcam opt-in from the browser control page with the browser's prompt. The browser control page uses the same layout.
+
+## Beat counter states
+
+![](screens/beat-states.png)
+
+One bar as it plays (beats 1, 2, 4), then: working out the beats, no steady beat, tempo change, new set, reduced motion. Rules are in the Now playing table.
 
 ## Badge states
 
