@@ -42,15 +42,16 @@ class LibraryStore private constructor(ctx: Context) : Thread("library") {
 
     /** The set's beat and bar grid, saved by [SetBeatAnalyser]. */
     fun beatsFile(id: String) = File(dir, "$id.beats")
+    fun featuresFile(id: String) = File(dir, "$id.feat")
 
     private val beatCache = java.util.concurrent.ConcurrentHashMap<String, SetBeats>()
     private val beatLooked = java.util.concurrent.ConcurrentHashMap<String, Long>()
 
     /** The set's grid, or null until it's worked out. Cheap enough for every frame: a missing file is looked for again at most every 5 s. */
-    fun beats(id: String): SetBeats? {
+    fun beats(id: String, fresh: Boolean = false): SetBeats? {
         beatCache[id]?.let { return it }
         val now = android.os.SystemClock.uptimeMillis()
-        if (now - (beatLooked[id] ?: Long.MIN_VALUE / 2) < 5000) return null
+        if (!fresh && now - (beatLooked[id] ?: Long.MIN_VALUE / 2) < 5000) return null
         beatLooked[id] = now
         val f = beatsFile(id)
         return if (f.exists()) SetBeats.decode(f.readText())?.also { beatCache[id] = it } else null

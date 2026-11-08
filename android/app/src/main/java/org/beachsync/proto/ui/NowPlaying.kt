@@ -134,6 +134,7 @@ fun NowPlaying(state: BenchState, actions: BenchActions, openLog: () -> Unit, op
         ChannelHint(chUi)
         LibraryLine(state.library)
         Dial(s, s?.gps ?: state.idleGps, boot, state.localTime, lagUncNs, openSatellites)
+        BeatCounter(state, openBuffer)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Top) {
             PlayStopButton(s != null, lockedByDownload, listen)
             SyncBadge(s, boot, lagUncNs, if (s != null && dueMissing) (lib?.partPct ?: -1).coerceAtLeast(0) else if (lockedByDownload) (lib?.partPct ?: -1).coerceAtLeast(0) else null, Modifier.weight(1f))

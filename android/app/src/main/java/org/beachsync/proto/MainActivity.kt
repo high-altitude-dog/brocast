@@ -77,9 +77,9 @@ class MainActivity : ComponentActivity(), BenchActions {
         idle?.stop(); idle = null; state.idleGps = null
     }
 
-    override fun onStart() { super.onStart(); visible = true; startIdle() }
+    override fun onStart() { super.onStart(); visible = true; HoldStore.restore(this); startIdle() }
 
-    override fun onStop() { visible = false; if (session == null) stopIdle(); super.onStop() }
+    override fun onStop() { visible = false; HoldStore.save(this); if (session == null) stopIdle(); super.onStop() }
 
     private val proximity = object : SensorEventListener {
         override fun onSensorChanged(e: SensorEvent) { PocketGuard.covered = e.values[0] < e.sensor.maximumRange.coerceAtMost(5f) }

@@ -318,6 +318,7 @@ async function refresh() {
     const box = el("div", null, "set" + (on ? " air" : ""));
     box.append(el("p", s.title || s.filename, "title"));
     const by = [s.artist, s.set].filter(Boolean).join(" · "); if (by) box.append(el("p", by, "muted"));
+    if (s.added) box.append(el("p", "Uploaded " + new Date(s.added * 1000).toLocaleString([], {dateStyle: "medium", timeStyle: "short"}), "muted"));
     if (s.status === "ready") {
       box.append(el("p", time(s.seconds) + " · disk " + mb(s.pcm_bytes + s.opus_bytes) + " · Opus " + mb(s.opus_bytes), "muted"));
       if (on) box.append(el("p", "On air", "tag"));
