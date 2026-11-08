@@ -22,7 +22,7 @@ for (const dir of process.argv.slice(2)) {
   console.log(`  catalog at ${cat?.t} ms; first block ${end.firstMs} ms; all ${end.held}/${end.total} blocks ${end.allMs} ms; sets built ${end.built}`)
   console.log(`  per block ms p50/p95/max ${pct(ms, 0.5)}/${pct(ms, 0.95)}/${pct(ms, 1)}; from other phone ${all ? ((fromL / all) * 100).toFixed(0) : 0}%`)
   console.log(`  audio ${mb(end.audio)} MB; wire rx ${mb(w.rx)} MB (overhead ${((w.rx / end.audio - 1) * 100).toFixed(1)}%), tx ${mb(w.tx)} MB; shared ${mb(ups.reduce((a, e) => a + e.bytes, 0))} MB`)
-  console.log(`  data msgs ${end.stats.dataRx} for ${end.held} blocks (${(((end.stats.dataRx - end.held) / end.held) * 100).toFixed(1)}% extra); requests ${end.stats.requestTx}, cancels ${end.stats.cancelTx}; download events ${blocks.length}`)
+  console.log(`  data msgs ${end.stats.dataRx} for ${end.held} blocks (${(((end.stats.dataRx - end.held) / end.held) * 100).toFixed(1)}% extra); requests ${end.stats.requestTx}, cancels ${end.stats.cancelTx}, hotswaps ${end.stats.hotswaps ?? '?'}; download events ${blocks.length}`)
   console.log(`  packets rx ${w.packetsRx} (${(w.rx / w.packetsRx).toFixed(0)} B avg); my retransmits ${w.retransmits}`)
   const st = ev.find((e) => e.ev === 'start')
   if (st?.publicDht) {

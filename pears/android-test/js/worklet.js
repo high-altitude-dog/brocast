@@ -14,6 +14,7 @@ import { ENGINE, topic, decodeRecord } from '../../engine/index.js'
 import { Mesh, hex } from '../../engine/mesh.js'
 import { profile } from '../../engine/policy.js'
 import { SetBuilder, serialOf } from '../../engine/builder.js'
+import { hedge } from '../../engine/hedge.js'
 
 // Command and event numbers on the wire (bare-rpc commands are integers). Names as in docs/engine-api.md.
 const CMD = { hello: 1, start: 2, subscribe: 3, status: 4, stop: 5 }
@@ -61,7 +62,8 @@ rpc = new RPC(Bare.IPC, async (req) => {
 })
 
 class Run {
-  constructor ({ seed, stationKey, dirs, profile: prof = 'generous', bootstrap, lan = true, relayThrough, network }) {
+  constructor ({ seed, stationKey, dirs, profile: prof = 'generous', bootstrap, lan = true, relayThrough, network, hedge: hedgeMode = 'delayed', hedgeMs = 1000 }) {
+    this.hedge = { mode: hedgeMode, afterMs: hedgeMs }
     this.p = profile(prof)
     this.dirs = dirs
     this.out = dirs.log ? fs.openSync(dirs.log, 'w') : null
@@ -79,7 +81,7 @@ class Run {
     this.byPeer = new Map()
     this.sets = []
     this.phase = 'finding catalog'
-    this.log({ ev: 'start', me: hex(this.mesh.keyPair.publicKey).slice(0, 8), mode: 'share', profile: this.p.name, publicDht: !bootstrap?.length, lan, relay: !!relayThrough, network: network || null })
+    this.log({ ev: 'start', me: hex(this.mesh.keyPair.publicKey).slice(0, 8), mode: 'share', profile: this.p.name, publicDht: !bootstrap?.length, lan, relay: !!relayThrough, network: network || null, hedge: this.hedge })
     this.restartStatus()
     this.arrivalTimer = setInterval(() => this.flushArrivals(), 250)
     this.main().catch((e) => { if (!state.stopping) fail('RUN', e) })
@@ -112,6 +114,7 @@ class Run {
     for (const [n, it] of ed.items.entries()) {
       const core = this.mesh.store.get({ key: b4a.from(it.core, 'hex') })
       await core.ready()
+      hedge(core, this.hedge) // duplicate blocks: re-request from a second peer only after hedgeMs in flight
       const s = { n, it, blocks: it.blocks, core, got: 0 }
       s.builder = new SetBuilder({ music: this.dirs.music, id: it.id, blocks: it.blocks, serial: serialOf(core.key), sha: it.blake2b })
       core.on('download', (index, bytes, from) => {
@@ -195,13 +198,14 @@ class Run {
   /** A subset of the status snapshot of docs/engine-api.md §6, with a `step1` block for the measurements. */
   snapshot () {
     const wire = this.mesh.wire()
-    const stats = { dataRx: 0, requestTx: 0, cancelTx: 0 }
+    const stats = { dataRx: 0, requestTx: 0, cancelTx: 0, hotswaps: 0 }
     for (const s of this.sets) {
       const st = s.core.replicator?.stats
       if (!st) continue
       stats.dataRx += st.wireData.rx
       stats.requestTx += st.wireRequest.tx
       stats.cancelTx += st.wireCancel.tx
+      stats.hotswaps += st.hotswaps
     }
     const held = this.held.size
     return {

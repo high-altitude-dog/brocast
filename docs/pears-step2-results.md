@@ -18,8 +18,15 @@
 - **Files match:** all 3 sets on both phones are byte-identical to the station's rebuild, and BLAKE2b matches the signed catalog (`STATION=net-station tools/verify.js`).
 - **Finding the catalog is the slow part:** about 7.5 s, against 0.6 to 1 s on the LAN DHT. Most of that is the public DHT: about 3.5 s to the station's mutable record, then about 4 s to the catalog. After that the fetch speed is close to step 1 (16 to 21 s for 273 blocks).
 - **Mobile data really used** (Galaxy `rmnet0`, before and after): **33.5 MB** (32.3 down, 1.2 up) for 18.7 MB of audio. The quoted estimate was 25–35 MB.
-- **Duplicates, unchanged from step 1:** with two sources (station and Pixel), the Galaxy received 428 data messages for 273 blocks. On a metered phone that is 60% more paid data. **The duplicate-block fix matters more on mobile than it did on the LAN.** Still deferred to before step 4.
+- **Duplicates, unchanged from step 1:** with two sources (station and Pixel), the Galaxy received 428 data messages for 273 blocks. On a metered phone that is 60% more paid data. **The duplicate-block fix matters more on mobile than it did on the LAN.** The cause is now found and fixed on the laptop; see the next section.
 - Station egress log: no alerts at start or stop. It uploaded 34.9 MB from the home line and was stopped by hand after the run (it would have stopped at 10 min).
+
+## Duplicate blocks: cause and fix (laptop, local testnet)
+
+- **Cause (confirmed by counting):** Hypercore's *hotswap*. Every block in flight is a candidate, and any peer with fewer than `max(16, maxInflight/2)` requests in flight re-requests it. Our fetch keeps about 4 blocks in flight, so the second peer is never "busy". `replicator.stats.hotswaps` matches the extra data: 106 hotswaps gave 75 extra messages, and 146 gave 100. A cancel can't beat a 72 KB block that is already on the wire.
+- **`tools/dup.js`:** station plus two listeners using the phone's fetch loop, 2 runs per mode. Duplicate data: as shipped, 27.5% and 36.6% extra on whichever listener had two sources. With hotswap off, 1.1%. Delayed (only blocks in flight > 1 s), 1.1%. Sharing still works: with hotswap off, B got about 50% of its blocks from A.
+- **Stalled peer** (A frozen for 10 s while B was fetching from it; one run per mode): with hotswap off, B's slowest block took 10.0 s. Delayed: 1.25 s, with 14 re-requests to the station. So **delayed** is the fix.
+- **Built:** `engine/hedge.js` (`hedge(core, { mode, afterMs })`, by default `delayed`, 1000 ms). It replaces the private `replicator._updateHotswap` and runs a 250 ms check. The worklet calls it for every set core, and `start` takes `hedge` and `hedgeMs`. `hotswaps` is in the status and the report. **Not yet run on the phones.** It patches private methods, so pin Hypercore 11.40.x until there is a supported option.
 
 ## Connection types
 
@@ -53,6 +60,18 @@
 
 ## Open questions
 
+0. For the Pears developers: see the draft message below.
 1. For the Pears developers: is a round-1 punch meant to leave `stats.punches` untouched? A per-connection "how it connected" field would help.
 2. For the Pears developers: catalog discovery over the public DHT takes about 7.5 s. Would `mutableGet` with `latest: false`, or caching the record, cut that? It matters for a listener's first start.
 3. For the user: a run with both phones on mobile needs a second SIM with data, or a hotspot from a third phone. That's still one carrier NAT; two carriers would be better.
+
+## Draft message to the Pears developers (not sent)
+
+> Hi, we're building a P2P music app on Hypercore, Hyperswarm and bare-kit-kotlin 0.2.2 (Android). It fetches pre-recorded sets by key from a station and from other phones. Versions: hypercore 11.40.3, hyperswarm 4.17.2, hyperdht 6.36.0, corestore from npm on 7 Nov. Four questions, with measurements:
+>
+> 1. **Duplicate blocks from hotswap.** We fetch with `core.get(i)` and keep about 4 blocks (~300 KB) in flight. With two sources, 27–68% of the data received is duplicate blocks: 55–68% on phones over Wi-Fi and LTE, 27–37% on a laptop testnet. `stats.hotswaps` matches the extra exactly. Our reading: a peer with fewer than `max(16, maxInflight/2)` requests in flight hotswaps every in-flight block, so with a small window the second peer always re-requests, and the cancel arrives after a 72 KB block is already sent. We now replace `replicator._updateHotswap` so a block is hedged only after it has been in flight for 1 s. Duplicates drop to 1.1%, and a frozen peer still loses its blocks within about 1.25 s. Is there, or could there be, a supported option for this, such as a hotswap delay, a per-core off switch, or a threshold based on actual inflight? On metered mobile data the duplicates cost users money.
+> 2. **Connection stats.** A connection that hole-punches in round 1 (both NATs consistent) leaves `dht.stats.punches` untouched. Only round-2 probes count. Could the stream say how it connected (direct, punched, relayed, LAN)?
+> 3. **First lookup.** On the public DHT, `mutableGet` on the station key and then finding the catalog core's peers takes about 7.5 s on a phone, against under 1 s on a LAN testnet. Any recommended settings or caching to cut a listener's first start?
+> 4. **Relays and Android packaging.** Are there blind relays you recommend for a mobile-heavy app, or should we always run our own? And could bare-kit-kotlin ship `libc++_shared.so`, which udx-native's prebuild needs, or should add-ons link libc++ statically?
+>
+> Happy to share the test scripts. Thanks!
