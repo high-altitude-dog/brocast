@@ -11,6 +11,8 @@ import org.beachsync.proto.ui.DataSharingAdvancedScreen
 import org.beachsync.proto.ui.DataLogScreen
 import org.beachsync.proto.ui.IdentityWizard
 import org.beachsync.proto.ui.KeptScreen
+import org.beachsync.proto.ui.TestCardScreen
+import org.beachsync.proto.ui.TestCardSetupScreen
 import android.Manifest
 import android.content.pm.PackageManager
 import android.graphics.Color
@@ -138,9 +140,10 @@ class MainActivity : ComponentActivity(), BenchActions {
             var from by remember { mutableStateOf(home) }   // where the event log and nudge screens go back to
             var logLane by remember { mutableStateOf<Lane?>(null) }
             var artistFrom by remember { mutableStateOf(home) }
+            var cardSetup by remember { mutableStateOf<org.beachsync.proto.ui.TestCardSetup?>(null) }
             BackHandler(page != home) {
                 if (page == Page.EARCUP) cancelEarcup()
-                page = when (page) { Page.LOG, Page.NUDGE -> from; Page.EARCUP -> Page.CALIBRATION; Page.ADVANCED, Page.DATALOG -> Page.DATA; Page.DATA, Page.IDENTITY -> Page.SETTINGS; Page.ARTIST -> if (artistFrom == Page.KEPT) Page.KEPT else home; else -> home }
+                page = when (page) { Page.LOG, Page.NUDGE -> from; Page.EARCUP -> Page.CALIBRATION; Page.ADVANCED, Page.DATALOG -> Page.DATA; Page.DATA, Page.IDENTITY, Page.CARD_SETUP -> Page.SETTINGS; Page.CARD -> Page.CARD_SETUP; Page.ARTIST -> if (artistFrom == Page.KEPT) Page.KEPT else home; else -> home }
             }
             when (page) {
                 Page.NOW -> NowPlaying(state, this, { logLane = null; from = Page.NOW; page = Page.LOG }, { from = Page.NOW; page = Page.NUDGE }, { page = Page.BENCH }, { page = Page.SETTINGS }, { page = Page.SIGNALS }, { page = Page.CALIBRATION }, { page = Page.SATELLITES }, { page = Page.STEREO }, { page = Page.ARTIST }, { page = Page.SWARM }, { page = Page.BUFFER }) { page = Page.KEPT }
@@ -155,7 +158,9 @@ class MainActivity : ComponentActivity(), BenchActions {
                 Page.SWARM -> SwarmScreen { page = home }
                 Page.BUFFER -> BufferScreen(state, { page = home }) { page = Page.SWARM }
                 Page.SATELLITES -> SatellitesScreen(state, this, { page = home }, { page = Page.SIGNALS })
-                Page.SETTINGS -> SettingsPage(state, this, { page = home }, { page = Page.CALIBRATION }, { page = Page.SATELLITES }, { page = Page.SYNC }, { page = Page.BEAT }, { page = Page.STEREO }, { page = Page.DATA }, { page = Page.IDENTITY })
+                Page.SETTINGS -> SettingsPage(state, this, { page = home }, { page = Page.CALIBRATION }, { page = Page.SATELLITES }, { page = Page.SYNC }, { page = Page.BEAT }, { page = Page.STEREO }, { page = Page.DATA }, { page = Page.IDENTITY }) { page = Page.CARD_SETUP }
+                Page.CARD_SETUP -> TestCardSetupScreen(state, this, { page = Page.SETTINGS }) { cardSetup = it; page = Page.CARD }
+                Page.CARD -> cardSetup?.let { TestCardScreen(state, this, it) { page = Page.CARD_SETUP } }
                 Page.IDENTITY -> IdentityWizard(!state.satellites) { page = Page.SETTINGS }
                 Page.DATA -> DataSharingScreen({ page = Page.SETTINGS }, { page = Page.DATALOG }, { page = Page.ADVANCED })
                 Page.ADVANCED -> DataSharingAdvancedScreen { page = Page.DATA }
@@ -334,7 +339,7 @@ class MainActivity : ComponentActivity(), BenchActions {
             .apply()
     }
 
-    private enum class Page { NOW, BENCH, LOG, NUDGE, SETTINGS, SIGNALS, CALIBRATION, EARCUP, SATELLITES, SYNC, BEAT, STEREO, ARTIST, SWARM, BUFFER, DATA, ADVANCED, DATALOG, IDENTITY, KEPT }
+    private enum class Page { NOW, BENCH, LOG, NUDGE, SETTINGS, SIGNALS, CALIBRATION, EARCUP, SATELLITES, SYNC, BEAT, STEREO, ARTIST, SWARM, BUFFER, DATA, ADVANCED, DATALOG, IDENTITY, KEPT, CARD_SETUP, CARD }
 
     companion object {
         /** Kept outside the activity, so a test run survives the screen being rebuilt. */

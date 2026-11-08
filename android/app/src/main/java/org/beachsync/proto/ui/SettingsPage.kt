@@ -26,7 +26,7 @@ import androidx.compose.ui.unit.dp
 
 /** Only the LISTENING section for now: the design's other sections have nothing behind them yet. */
 @Composable
-fun SettingsPage(state: BenchState, actions: BenchActions, back: () -> Unit, openCalibration: () -> Unit, openSatellites: () -> Unit, openSync: () -> Unit, openBeat: () -> Unit, openStereo: () -> Unit, openData: () -> Unit, openIdentity: () -> Unit) {
+fun SettingsPage(state: BenchState, actions: BenchActions, back: () -> Unit, openCalibration: () -> Unit, openSatellites: () -> Unit, openSync: () -> Unit, openBeat: () -> Unit, openStereo: () -> Unit, openData: () -> Unit, openIdentity: () -> Unit, openTestCard: () -> Unit = {}) {
     rememberTick(SETTINGS_TICK_MS).value    // the output's name can change during a run
     val s = state.session
     Column(
@@ -75,6 +75,12 @@ fun SettingsPage(state: BenchState, actions: BenchActions, back: () -> Unit, ope
         }
         val ctx = androidx.compose.ui.platform.LocalContext.current
         androidx.compose.runtime.LaunchedEffect(Unit) { ScreenPrefs.load(ctx) }
+        Card {
+            Column(Modifier.fillMaxWidth().heightIn(min = Tokens.Space.touchTarget.dp).clickable(role = Role.Button, onClick = openTestCard), Arrangement.Center) {
+                BasicText("Camera test card", style = Tokens.Text.bodyStrong.style())
+                BasicText("Film phones side by side to time screen and sound", style = Tokens.Text.small.style(Ink.textSecondary))
+            }
+        }
         BasicText("SCREEN", Modifier.padding(top = 6.dp), Tokens.Text.cardLabel.style())
         Card {
             SwitchRow("No flashing", "Nothing on screen ever flashes, whatever else is set", ScreenPrefs.noFlashing) { ScreenPrefs.set(ctx, noFlashing = it) }
