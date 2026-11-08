@@ -119,6 +119,8 @@ fun NowPlaying(state: BenchState, actions: BenchActions, openLog: () -> Unit, op
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Masthead(s, openBench, openSwarm, openSettings, openSignals, openCalibration)
+        val mesh = org.beachsync.proto.PearsEngine.view
+        mesh?.moments?.takeIf { !it.firstMusicDone }?.let { FirstListenCard(it, openSwarm) }
         if (state.headphonesNameOffer && out.icon.bluetooth && !out.named) HeadphonesNameCard(actions::askHeadphonesName, actions::notNowHeadphonesName)
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             // The track and artist come from the library file the timeline has at the ear; the station name stands in before that.
@@ -140,7 +142,8 @@ fun NowPlaying(state: BenchState, actions: BenchActions, openLog: () -> Unit, op
             PlayStopButton(s != null, lockedByDownload, listen)
             SyncBadge(s, boot, lagUncNs, if (s != null && dueMissing) lib.partPct.coerceAtLeast(0) else if (lockedByDownload) (lib?.partPct ?: -1).coerceAtLeast(0) else null, Modifier.weight(1f))
         }
-        EventRow(state.eventLog, SECOND_MS, openLog)
+        val offlineSince = mesh?.moments?.stationOfflineSinceMs
+        if (mesh != null && offlineSince != null) PlayingFromListeners(mesh, offlineSince, openSwarm) else EventRow(state.eventLog, SECOND_MS, openLog)
         SyncCard(s, boot, lagUncNs, out.kind.label.lowercase(), out.external, openSignals)
         NudgeRow(state, openNudge, SECOND_MS)
         Row(Modifier.fillMaxWidth().height(IntrinsicTile), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -214,15 +217,15 @@ private fun Masthead(s: Session?, openBench: () -> Unit, openSwarm: () -> Unit, 
     // Live from the Pears engine when a station key is set; demo values otherwise.
     val live = org.beachsync.proto.PearsEngine.view
     val nym = live?.nym?.ifEmpty { null } ?: DemoMesh.NYM
-    val listening = live?.let { approxCount(it.listeners) } ?: DemoMesh.LISTENING
+    val listening = live?.let { listenerWords(it) } ?: "${DemoMesh.LISTENING} listening"
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Column(
-            Modifier.weight(1f).pointerInput(Unit) { detectTapGestures(onLongPress = { openBench() }, onTap = { openSwarm() }) }.semantics { contentDescription = "$nym, $listening listening${if (live == null) ", demo data" else ""}. Tap for the swarm; hold to open the test bench." },
+            Modifier.weight(1f).pointerInput(Unit) { detectTapGestures(onLongPress = { openBench() }, onTap = { openSwarm() }) }.semantics { contentDescription = "$nym, $listening${if (live == null) ", demo data" else ""}. Tap for the swarm; hold to open the test bench." },
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             // The design wants your nym and "N listeners linked" here, opening Swarm. Neither exists yet (see design/feedback.md), so only the name stays. D lives on the Test bench.
             BasicText(nym, style = Tokens.Text.eyebrow.style())
-            BasicText("● $listening listening" + if (live == null) " · demo" else "", style = Tokens.Text.small.style(Ink.accent))
+            BasicText("● $listening" + if (live == null) " · demo" else "", style = Tokens.Text.small.style(Ink.accent))
         }
         // Archive isn't built, so its button is dimmed and does nothing.
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -522,6 +525,17 @@ private fun StereoChip(channel: Int, headphones: Boolean, open: () -> Unit) {
 }
 
 /** The mesh's listener estimate, always with ≈ (hand-off 21): ≈ 12, ≈ 3.4 k, ≈ 1.2 M. */
+/** The count in words (hand-off 36): exact below 10, where the sketch counts everyone it has seen; "≈" only once it's an estimate. */
+internal fun listenerWords(v: org.beachsync.proto.MeshView): String {
+    val others = v.others
+    return when {
+        others == 0 -> "just you"
+        others == 1 -> "you and 1 other"
+        others + 1 < 10 -> "you and $others others"
+        else -> approxCount(others + 1) + " listening"
+    }
+}
+
 internal fun approxCount(n: Int): String = "≈ " + when {
     n < 1000 -> "$n"
     n < 1_000_000 -> "%.1f k".format(java.util.Locale.ROOT, n / 1e3)

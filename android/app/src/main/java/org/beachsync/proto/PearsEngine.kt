@@ -17,6 +17,7 @@ import to.holepunch.bare.kit.Ipc
 import to.holepunch.bare.kit.Worklet
 import java.io.File
 import java.security.SecureRandom
+import kotlin.math.roundToLong
 
 /**
  * The Pears engine (pears/host/worklet.js) in a bare-kit worklet, spoken to over bare-rpc as in docs/engine-api.md. Given a station's key, it
@@ -32,13 +33,27 @@ import java.security.SecureRandom
 /** One live peer, from the engine's status. [path] is lan, direct, punched or relayed (null if not yet known). */
 class MeshPeer(val key: String, val station: Boolean, val path: String?, val toYouKbps: Int, val fromYouKbps: Int)
 
+/**
+ * First listen and the mesh moments (hand-offs 35 and 36), timed from the engine's phases on its event thread. [stageS] holds each stage's
+ * time in seconds from the engine's start, null until it's done: finding the station, getting the set list, first music, rest of the sets.
+ * First music is the first 5 blocks held, not yet the due set's own 5 s (the engine doesn't say which blocks it holds).
+ */
+class MeshMoments(
+    val startedMs: Long, val stageS: List<Double?>, val elapsedS: Double, val heldPct: Int,
+    val stationOfflineSinceMs: Long?, val allRelayed: Boolean,
+) {
+    val firstMusicDone get() = stageS[2] != null
+}
+
 /** What the screens show of the mesh, parsed once per status (once a second). Null while the engine isn't running. */
-class MeshView(val nym: String, val listeners: Int, val peers: List<MeshPeer>, val foundNotConnected: Int, val upBytes: Long, val downBytes: Long, val sharing: Boolean) {
+class MeshView(val nym: String, val listeners: Int, val peers: List<MeshPeer>, val foundNotConnected: Int, val upBytes: Long, val downBytes: Long, val sharing: Boolean, val counted: Boolean = true, val moments: MeshMoments? = null) {
     val stations get() = peers.filter { it.station }
     val listenerPeers get() = peers.filter { !it.station }
+    /** Other listeners: the estimate counts this phone too unless it's switched out of the count. */
+    val others get() = maxOf(0, if (counted) listeners - 1 else listeners)
 
     companion object {
-        fun of(s: JSONObject, sharing: Boolean): MeshView {
+        fun of(s: JSONObject, sharing: Boolean, counted: Boolean = true, moments: MeshMoments? = null): MeshView {
             val sw = s.optJSONObject("swarm")
             val list = sw?.optJSONArray("peers")
             val peers = (0 until (list?.length() ?: 0)).map { i ->
@@ -48,7 +63,7 @@ class MeshView(val nym: String, val listeners: Int, val peers: List<MeshPeer>, v
             val today = s.optJSONObject("ledger")?.optJSONObject("today")
             return MeshView(
                 s.optJSONObject("me")?.optString("nym").orEmpty(), s.optJSONObject("listeners")?.optInt("estimate") ?: 0, peers,
-                sw?.optInt("foundNotConnected") ?: 0, today?.optLong("upBytes") ?: 0L, today?.optLong("downBytes") ?: 0L, sharing,
+                sw?.optInt("foundNotConnected") ?: 0, today?.optLong("upBytes") ?: 0L, today?.optLong("downBytes") ?: 0L, sharing, counted, moments,
             )
         }
     }
@@ -104,6 +119,8 @@ object PearsEngine {
         val lib = library ?: return
         error = null
         sharing = !metered(ctx)
+        startBoot = android.os.SystemClock.elapsedRealtime(); startWallMs = System.currentTimeMillis()
+        stages.fill(null); stationSeen = false; stationGoneAt = null; offlineSinceMs = null
         val w = Worklet(ctx)
         w.start("engine.bundle")   // from the app's assets
         val io = Ipc(w)
@@ -142,13 +159,64 @@ object PearsEngine {
     private fun onEvent(ev: Int, body: ByteArray) {
         val text = String(body)
         when (ev) {
-            EV_STATUS -> JSONObject(text).let { s -> status = s; view = MeshView.of(s, sharing); library?.meshProgress(s) }
+            EV_STATUS -> JSONObject(text).let { s -> status = s; view = MeshView.of(s, sharing, counted, moments(s)); library?.meshProgress(s) }
             EV_CATALOG -> JSONObject(text).optJSONObject("library")?.let { library?.fromMesh(it.toString()) }
             EV_BUILT -> library?.meshBuilt()
             EV_WARNING -> Log.w("BeachSync", "Mesh: $text")
             EV_FATAL -> { error = JSONObject(text).optString("text").lineSequence().firstOrNull() ?: "engine stopped"; Log.e("BeachSync", "Mesh: $text") }
         }
     }
+
+    // First listen and mesh moments: touched only on the engine's event thread.
+    private var startBoot = 0L
+    private var startWallMs = 0L
+    private val stages = arrayOfNulls<Double>(4)
+    private var stationSeen = false
+    private var stationGoneAt: Long? = null
+    private var offlineSinceMs: Long? = null
+    /** Each stage's time, the station offline while listeners carry the music, and every link relayed. Event log lines on the way. */
+    private fun moments(s: JSONObject): MeshMoments {
+        val nowBoot = android.os.SystemClock.elapsedRealtime()
+        val t = (nowBoot - startBoot) / 1000.0
+        val phase = s.optString("phase")
+        val lib = s.optJSONObject("library")
+        val held = lib?.optInt("held") ?: 0
+        val total = lib?.optInt("total") ?: 0
+        val allHeld = phase == "all sets held"
+        if (stages[0] == null && phase != "finding station" && phase.isNotEmpty()) stages[0] = t
+        if (stages[1] == null && (phase == "fetching" || allHeld)) stages[1] = t
+        if (stages[2] == null && stages[1] != null && (held >= FIRST_MUSIC_BLOCKS || allHeld)) {
+            stages[2] = t; log("Started $STATION_NAME in ${"%.1f".format(t)} s")
+        }
+        if (stages[3] == null && allHeld) { stages[3] = t; if (total > 0) log("All sets held · ${t.roundToLong()} s") }
+        val peers = s.optJSONObject("swarm")?.optJSONArray("peers")
+        var stationsUp = 0; var listeners = 0; var relayed = 0; var n = 0
+        for (i in 0 until (peers?.length() ?: 0)) {
+            val p = peers!!.getJSONObject(i)
+            n++
+            if (p.optString("role") == "station-seed") stationsUp++ else listeners++
+            if (p.optString("path") == "relayed") relayed++
+        }
+        // The station counts as offline once it's been gone 10 s while listeners still carry the music; the log says when it's back.
+        if (stationsUp > 0) {
+            offlineSinceMs?.let { since -> log("The station is back. Listeners carried it for ${maxOf(1L, (System.currentTimeMillis() - since) / 60_000L)} min.") }
+            stationSeen = true; stationGoneAt = null; offlineSinceMs = null
+        } else if (stationSeen && listeners > 0) {
+            val gone = stationGoneAt ?: nowBoot.also { stationGoneAt = it }
+            if (offlineSinceMs == null && nowBoot - gone >= OFFLINE_AFTER_MS) offlineSinceMs = System.currentTimeMillis() - (nowBoot - gone)
+        }
+        val pct = if (total > 0) 100 * held / total else if (allHeld) 100 else 0
+        return MeshMoments(startWallMs, stages.toList(), t, pct, offlineSinceMs, n > 0 && relayed == n)
+    }
+
+    private val pending = ArrayList<Event>()
+    /** To the run's event log, or held for the next run's when nothing is playing yet (first listen usually ends before Play). */
+    @Synchronized private fun log(text: String) {
+        val boot = android.os.SystemClock.elapsedRealtimeNanos()
+        val e = Event(boot, FlowTime.fit()?.utcAt(boot), Lane.NET, text)
+        MainActivity.eventLog?.takeIf { MainActivity.session != null }?.add(e) ?: run { pending.add(e); if (pending.size > 20) pending.removeAt(0) }
+    }
+    @Synchronized fun flushTo(log: EventLog) { pending.forEach(log::add); pending.clear() }
 
     /**
      * One 1 s block of a set that isn't built yet, from the mesh (or null): MeshSupply's part, for [LocalSupply]. Called on the stream
@@ -196,6 +264,10 @@ object PearsEngine {
     }
 
     // Command and event numbers on the wire, as in pears/host/worklet.js.
+    private const val FIRST_MUSIC_BLOCKS = 5
+    private const val OFFLINE_AFTER_MS = 10_000L
+    /** The station's name until the directory (hand-off 33) gives each station its own. */
+    const val STATION_NAME = "Beach Sync Radio"
     private const val CMD_HELLO = 1
     private const val CMD_START = 2
     private const val CMD_SUBSCRIBE = 3

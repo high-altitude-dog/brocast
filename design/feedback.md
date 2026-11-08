@@ -400,3 +400,16 @@ The engine now runs in the app when a station key is set. The nym, the listener 
 6. **Privacy mode is tied to the Satellites switch** ("off = Privacy mode"), and it now also stops this phone being counted among listeners. Should Privacy mode be its own switch? Satellites off for GPS reasons isn't the same choice as not being counted.
 7. **Station key entry is on the test bench only.** The station directory (hand-off 33) is the listener's way in; until it's built, testers paste a 64-digit key.
 8. **First download over the mesh took 30 to 70 s** for 66 MB on home Wi-Fi. The first-listen stages from hand-off 35 match what the engine reports: `finding station` → `getting the set list` → `fetching` → `all sets held`.
+
+## 8 Nov: hand-offs 35 and 36 as built
+
+Built: first listen (live stage times, over 20 s, can't find), Playing from listeners banner and the dashed offline station, all-relayed line, real-data wording with music time, Asked field and the asked-twice route (demo), Swarm sparse states (station only, you + 1 or 2, same Wi-Fi, receive-only with the mobile sheet), count wording, PASSED ON SINCE, and the split: `Be counted as a listener` is its own switch (user's decision, 8 Nov).
+
+Differs from the design:
+- Same-Wi-Fi link shows `same Wi-Fi` without `· 2 ms`: the engine doesn't report a per-peer delay yet.
+- Stage 3 ticks on the first 5 blocks held, not the due set's own 5 s (the status doesn't say which blocks are held).
+- Stage 4 on Buffer shows `62% held`, not `41 of 66 MB`: the status counts blocks, not bytes.
+- Over 20 s: no "also trying the station's servers" (a phone on the mesh doesn't fall back to the server yet) and no "Pick another station" (the directory, h33, isn't built).
+- Can't-find copy: "this card ticks on when it appears" in place of "tells you when it appears" (no notice is built).
+- Exact counts under 10 come from the listener sketch (1024 registers; collisions are negligible at that size).
+- Not built: station key words and key renewal (need the h33 screens), the Engine row and update lines (no update mechanism), the new-identity sheet (not offered).

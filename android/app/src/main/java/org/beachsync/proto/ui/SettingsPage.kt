@@ -37,7 +37,8 @@ fun SettingsPage(state: BenchState, actions: BenchActions, back: () -> Unit, ope
         ScreenHeader("Settings", back)
         BasicText("LISTENING", Modifier.padding(top = 6.dp), Tokens.Text.cardLabel.style())
         Card {
-            SatellitesRow(state.satellites, actions::setSatellites, "Position stays on this phone · off = Privacy mode")
+            SatellitesRow(state.satellites, actions::setSatellites, "GPS time only. Your position never leaves the phone")
+            SwitchRow("Be counted as a listener", "Adds you to the listener estimate. Off: you still listen and share, but aren’t counted", state.counted, actions::setCounted)
             Column(Modifier.fillMaxWidth().heightIn(min = Tokens.Space.touchTarget.dp).clickable(role = Role.Button, onClick = openSatellites), Arrangement.Center) {
                 BasicText("Satellites", style = Tokens.Text.bodyStrong.style())
                 BasicText("Your chip, your sky and what limits timing", style = Tokens.Text.small.style(Ink.textSecondary))

@@ -299,6 +299,11 @@ object DemoSharing {
 }
 
 private fun keepText(s: Int) = when { s < 60 -> "$s s"; s < 3600 -> "${s / 60} min"; else -> "${s / 3600} h" }
+/** How much music a data figure buys (hand-off 35): real data is the music plus about 17% for proofs and connections, at 160 kbps. */
+internal fun musicTimeText(mb: Double): String {
+    val min = (mb / 1.17 / 72.0 * 60).roundToInt()
+    return when { min < 60 -> "$min min"; min < 600 && min % 60 >= 15 && min % 60 < 45 -> "${min / 60}½ h"; else -> "${((min + 30) / 60)} h" }
+}
 private fun mbText(mb: Int) = when { mb < 0 -> "no limit"; mb >= 1000 -> "${mb / 1000} GB"; else -> "$mb MB" }
 private fun mbpsText(v: Double) = when { v.isInfinite() -> "no limit"; v < 1 -> "$v Mbps"; else -> "${v.toInt()} Mbps" }
 private fun wifiShareWords(i: Int) = when (i) { 0 -> "Off"; 1 -> "Only while charging"; 2 -> "Unless battery under 30%"; else -> "Always" }
@@ -351,8 +356,8 @@ fun DataSharingScreen(back: () -> Unit, openLog: () -> Unit, openAdvanced: () ->
                     "Wi-Fi usually costs you nothing, so sharing here is generous.", "today ↓ 1.4 GB\nshared ↑ 1.2 GB", Modifier.weight(1f).fillMaxHeight(),
                 )
                 NetCard(
-                    "On mobile data", false, "Up to ${mbText(DemoSharing.MOBILE_MB[s.mobileLimit])} a day",
-                    if (d.shareMobile) "Up to ${mbText(DemoSharing.CAP_MB[d.mobileCap])} a day" else "Off",
+                    "On mobile data", false, DemoSharing.MOBILE_MB[s.mobileLimit].let { mb -> if (mb < 0) "No daily limit" else "Up to ${mbText(mb)} a day\n≈ ${musicTimeText(mb.toDouble())} of music" },
+                    if (d.shareMobile) "Up to ${mbText(DemoSharing.CAP_MB[d.mobileCap])} a day" else "Receive-only · never shares unless you allow it",
                     if (d.shareMobile) "Stops at the cap until midnight. Data Saver always wins." else "Never uses your mobile data to share. Includes hotspots and paid Wi-Fi.",
                     "today ↓ 120 MB\nshared ↑ 0 MB", Modifier.weight(1f).fillMaxHeight(),
                 )
@@ -393,7 +398,7 @@ private fun doesLines(s: MeshSettings): List<Pair<String, String>> {
         2 -> "shares with other listeners unless the battery is under 30%"
         else -> "always shares with other listeners"
     } + if (s.wifiShare == 0) "." else if (d.UPLOAD[s.upload].isInfinite()) ", with no speed limit." else ", up to ${mbpsText(d.UPLOAD[s.upload])}."
-    val mobile = d.MOBILE_MB[s.mobileLimit].let { if (it < 0) "downloads with no daily limit." else "downloads up to ${mbText(it)} a day." }
+    val mobile = d.MOBILE_MB[s.mobileLimit].let { if (it < 0) "downloads with no daily limit." else "uses up to ${mbText(it)} of data a day, about ${musicTimeText(it.toDouble())} of music." }
     val find = when (s.findable) { 0 -> "Finds others but doesn't announce itself."; 1 -> "Announces itself while sharing."; else -> "Always announces itself." }
     return listOf(
         "↓" to "Downloads in bursts: tops up to ${keepText(d.KEEP_S[s.keepHigh])} ahead whenever it drops under ${keepText(d.KEEP_S[s.keepLow])}, then lets the radio sleep for long stretches.",
@@ -433,7 +438,7 @@ private fun Measured(label: String, value: String, detail: String, modifier: Mod
 
 /** The sheet before sharing on mobile data: a daily cap on a log scale, 10 MB to 1 GB, 50 MB by default. */
 @Composable
-private fun MobileCapSheet(close: () -> Unit) {
+internal fun MobileCapSheet(close: () -> Unit) {
     val d = DemoSharing
     var cap by remember { mutableIntStateOf(d.mobileCap) }
     Sheet(close) {
@@ -444,6 +449,7 @@ private fun MobileCapSheet(close: () -> Unit) {
             BasicText(mbText(DemoSharing.CAP_MB[cap]), style = Tokens.Text.valueSmall.style())
         }
         StepSlider("Daily cap", DemoSharing.CAP_MB.size, cap, { cap = it }, listOf(0 to "10 MB", 3 to "100 MB", 6 to "1 GB"), { mbText(DemoSharing.CAP_MB[it]) })
+        BasicText("≈ ${musicTimeText(DemoSharing.CAP_MB[cap].toDouble())} of music a day. Real data: the music plus about 17% for proofs and connections.", style = Tokens.Text.small.style(Ink.textSecondary))
         PillButton("Allow up to ${mbText(DemoSharing.CAP_MB[cap])} a day", true) { d.mobileCap = cap; d.shareMobile = true; close() }
         PillButton("Cancel", false, close)
     }
@@ -514,6 +520,7 @@ fun DataSharingAdvancedScreen(back: () -> Unit) {
             Card {
                 SectionHead("ON MOBILE DATA", "includes hotspots and paid Wi-Fi")
                 Setting("Download limit a day", mbText(DemoSharing.MOBILE_MB[s.mobileLimit]), changed({ it.mobileLimit }) { mbText(DemoSharing.MOBILE_MB[it]) },
+                    DemoSharing.MOBILE_MB[s.mobileLimit].let { mb -> if (mb < 0) "" else "Real data, about ${musicTimeText(mb.toDouble())} of music (music plus ~17% for proofs and connections). " } +
                     "Past this, it plays what's already downloaded, then fetches only what's needed, a minute at a time. Resets at midnight.") {
                     StepSlider("Download limit a day", DemoSharing.MOBILE_MB.size, s.mobileLimit, { v -> d.change { it.copy(mobileLimit = v) } },
                         listOf(0 to "10 MB", 3 to "100 MB", 6 to "1 GB", 7 to "no limit"), { mbText(DemoSharing.MOBILE_MB[it]) })
@@ -607,8 +614,8 @@ private class Ledger(
     val up get() = wifiUp + mobileUp
 }
 
-private val LEDGER_TODAY = Ledger(1.41, 1.20, 0.12, 0.0, 32.0, 2.1, 12.0, 0.8, 3.4)
-private val LEDGER_MONTH = Ledger(9.59, 7.2, 0.71, 0.0, 216.0, 2.2, 79.0, 0.8, 24.0)
+private val LEDGER_TODAY = Ledger(1.41, 1.20, 0.12, 0.0, 32.0, 2.1, 29.0, 1.9, 3.4)
+private val LEDGER_MONTH = Ledger(9.59, 7.2, 0.71, 0.0, 216.0, 2.2, 190.0, 2.0, 24.0)
 
 private fun gbText(gb: Double) = if (gb < 1) "${(gb * 1000).roundToInt()} MB" else "%.2f GB".format(gb)
 
@@ -622,8 +629,8 @@ fun DataLogScreen(back: () -> Unit) {
         BasicText("Every byte, by the network it went over. Counted on this phone, reset at local midnight and on the 1st.", style = Tokens.Text.body.style(Ink.textSecondary))
         Choice(listOf("Today", "This month"), if (month) 1 else 0, { month = it == 1 })
         Row(Modifier.fillMaxWidth()) {
-            Total("DOWNLOADED", gbText(l.down), "≈ ${(l.down * 1000 / 72).roundToInt()} h of music", Ink.text, Modifier.weight(1f))
-            Total("SHARED", gbText(l.up), "≈ ${(l.up * 1000 / 72).roundToInt()} listening hours given", Ink.accent, Modifier.weight(1f))
+            Total("DOWNLOADED", gbText(l.down), "≈ ${musicTimeText(l.down * 1000)} of music", Ink.text, Modifier.weight(1f))
+            Total("SHARED", gbText(l.up), "≈ ${musicTimeText(l.up * 1000)} of listening given", Ink.accent, Modifier.weight(1f))
         }
         val scale = maxOf(l.wifiDown, l.wifiUp, l.mobileDown, 0.001)
         Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -639,7 +646,7 @@ fun DataLogScreen(back: () -> Unit) {
             WentRow("Music downloaded", "", gbText(l.down - (l.protoMb + l.dupMb + l.dhtMb) / 1000), "Blocks you kept and will play or pass on.")
             WentRow("Music shared", "", gbText(l.up), "Blocks other listeners asked you for.")
             WentRow("Proof and protocol", "${l.protoPct}%", "${l.protoMb.roundToInt()} MB", "The hashes that prove each block, plus connection overhead.")
-            WentRow("Duplicate blocks", "${l.dupPct}%", "${l.dupMb.roundToInt()} MB", "A late block is asked of two phones at once; the slower copy is dropped.")
+            WentRow("Duplicate blocks", "${l.dupPct}%", "${l.dupMb.roundToInt()} MB", "A block slow from one phone is asked of another after 1 s; whichever copy arrives second is dropped. Usually 1–4%.")
             WentRow("Finding peers", "", "${l.dhtMb} MB", "Lookups on the shared peer-to-peer network.")
         }
         MonthChart()
@@ -737,14 +744,15 @@ private fun MonthChart() {
 
 // ---- Block provenance ----
 
-private class DemoBlock(val station: Boolean, val nym: String, val key: String, val via: String, val ms: Int, val bytes: Int)
+private class DemoBlock(val station: Boolean, val nym: String, val key: String, val via: String, val ms: Int, val bytes: Int, val asks: Int = 1)
 
-/** A made-up sender for each near-zone block, cycling through the four routes so each one can be seen. */
-private fun demoBlock(sec: Int): DemoBlock = when (sec % 4) {
+/** A made-up sender for each near-zone block, cycling through the four routes and one block asked twice, so each can be seen. */
+private fun demoBlock(sec: Int): DemoBlock = when (sec % 5) {
     0 -> DemoBlock(false, "Teal Plum Otter", "a3f9…71c2", "hole-punched", 38, 20148)
     1 -> DemoBlock(true, "", "7c2e…19ab", "direct", 61, 20231)
     2 -> DemoBlock(false, "Rose Lime Wren", "5d10…e4a7", "relayed", 112, 19987)
-    else -> DemoBlock(false, "Jade Kiwi Lynx", "c88b…0f3d", "same Wi-Fi", 4, 20096)
+    3 -> DemoBlock(false, "Jade Kiwi Lynx", "c88b…0f3d", "same Wi-Fi", 4, 20096)
+    else -> DemoBlock(false, "Sand Fig Ibis", "e21d…8b40", "direct", 1240, 20177, asks = 2)
 }
 
 private val UK_CLOCK: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm:ss").withZone(ZoneId.of("Europe/London"))
@@ -766,7 +774,7 @@ internal fun BlockProvenanceSheet(sec: Int, nowUtcNs: Long, setId: String, close
         }
         DemoBanner("Made up until the mesh engine reports each block.")
         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            for ((t, accent) in listOf(b.via to false, "${b.ms} ms" to false, "${"%.1f".format(b.bytes / 1000.0)} KB" to false, "✓ verified" to true)) {
+            for ((t, accent) in listOf(b.via to false, fmtRouteMs(b.ms) to false, "${"%.1f".format(b.bytes / 1000.0)} KB" to false, "✓ verified" to true)) {
                 BasicText(t, Modifier.border(1.dp, if (accent) Ink.accent else Ink.grid, RoundedCornerShape(Tokens.Radius.pill.dp)).padding(horizontal = 12.dp, vertical = 6.dp), Tokens.Text.valueSmall.style(if (accent) Ink.accent else Ink.text).copy(fontSize = 12.sp))
             }
         }
@@ -805,6 +813,7 @@ internal fun BlockProvenanceSheet(sec: Int, nowUtcNs: Long, setId: String, close
                 Triple("Kind", "blockInfo.from", if (b.station) "station" else "listener"),
                 Triple("Route", "blockInfo.via", b.via),
                 Triple("Asked → verified", "blockInfo.ms", "${b.ms} ms"),
+                Triple("Asked", "blockInfo.asks", if (b.asks == 1) "once" else "twice"),
                 Triple("Size", "blockInfo.bytes", "${"%,d".format(b.bytes)} B"),
                 Triple("Set, second", "blockInfo.setId, index", "$setId · ${"%,d".format(index)}"),
                 Triple("Transport block", "blockInfo.transportSec", "4 s"),
@@ -824,11 +833,13 @@ internal fun BlockProvenanceSheet(sec: Int, nowUtcNs: Long, setId: String, close
     }
 }
 
+private fun fmtRouteMs(ms: Int) = if (ms >= 1000) "%.2f s".format(ms / 1000.0) else "$ms ms"
+
 /** Sender → you: a pill for a listener, a solid tile for the station; dashed through a padlock when relayed. */
 @Composable
 private fun Route(b: DemoBlock) {
     val relayed = b.via == "relayed"
-    Canvas(Modifier.fillMaxWidth().height(if (relayed) 78.dp else 60.dp).semantics { contentDescription = "Route: ${b.via}, ${b.ms} ms" }) {
+    Canvas(Modifier.fillMaxWidth().height(if (relayed || b.asks > 1) 78.dp else 60.dp).semantics { contentDescription = "Route: ${b.via}, ${b.ms} ms" }) {
         val y = 32.dp.toPx()
         val sw = 72.dp.toPx(); val sh = 34.dp.toPx()
         val r = 18.dp.toPx()
@@ -848,7 +859,8 @@ private fun Route(b: DemoBlock) {
         val h = 6.dp.toPx()
         drawLine(Ink.accent, Offset(e, y), Offset(e - h, y - h * 0.6f), 1.5.dp.toPx(), StrokeCap.Round)
         drawLine(Ink.accent, Offset(e, y), Offset(e - h, y + h * 0.6f), 1.5.dp.toPx(), StrokeCap.Round)
-        monoText("${b.via} · ${b.ms} ms", (a + e) / 2, y - 10.dp.toPx(), 10f, Ink.textSecondary)
+        monoText("${b.via} · ${fmtRouteMs(b.ms)}", (a + e) / 2, y - 10.dp.toPx(), 10f, Ink.textSecondary)
+        if (b.asks > 1) monoText("asked twice · first sender slow", (a + e) / 2, y + 18.dp.toPx(), 9f, Ink.muted)
         if (relayed) {
             val c = Offset((a + e) / 2, y); val bs = 22.dp.toPx()
             drawRoundRect(Ink.surface, Offset(c.x - bs / 2, c.y - bs / 2), Size(bs, bs), CornerRadius(4.dp.toPx()))

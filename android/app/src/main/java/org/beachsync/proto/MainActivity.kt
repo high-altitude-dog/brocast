@@ -219,6 +219,7 @@ class MainActivity : ComponentActivity(), BenchActions {
         stopIdle()   // the run brings its own time sources; the fits they inherit carry on
         SessionService.run(this, satellitesOn)
         val started = Session(applicationContext, settings, satellitesOn)
+        PearsEngine.flushTo(started.events)   // first listen's lines come before the run's own
         started.start()
         session = started
         eventLog = started.events
@@ -231,6 +232,12 @@ class MainActivity : ComponentActivity(), BenchActions {
         state.satellites = on
         prefs.edit().putBoolean(KEY_SATELLITES, on).apply()
         if (on && !hasLocation()) askForSwitch.launch(locationPermissions) else satellitesInRun(on)
+    }
+
+    /** Be counted as a listener (hand-off 36, the user's split from Use satellites): off leaves this phone out of the listener count. */
+    override fun setCounted(on: Boolean) {
+        state.counted = on
+        prefs.edit().putBoolean(KEY_COUNTED, on).apply()
         if (state.library != null) applyStation()
     }
 
@@ -255,7 +262,6 @@ class MainActivity : ComponentActivity(), BenchActions {
     private fun satellitesOff() {
         state.satellites = false
         prefs.edit().putBoolean(KEY_SATELLITES, false).apply()
-        if (state.library != null) applyStation()
     }
 
     override fun setNudgeMode(mode: NudgeMode) {
@@ -342,6 +348,7 @@ class MainActivity : ComponentActivity(), BenchActions {
         state.lag = prefs.getString(KEY_LAG, "0") ?: "0"
         state.satellites = prefs.getBoolean(KEY_SATELLITES, true)
         state.localTime = prefs.getBoolean(KEY_LOCAL_TIME, true)
+        state.counted = prefs.getBoolean(KEY_COUNTED, true)
         state.nudgeMode = if (prefs.getBoolean(KEY_NUDGE_MANUAL, false)) NudgeMode.MANUAL else NudgeMode.AUTO
         state.nudgePeriodS = prefs.getFloat(KEY_NUDGE_PERIOD, -1f).let { if (it > 0f) it.toDouble() else null }
     }
@@ -349,7 +356,7 @@ class MainActivity : ComponentActivity(), BenchActions {
     /** The library's source: the station's key over the mesh, or the server. Only acts on a change. */
     private fun applyStation() {
         val key = state.stationKey.trim().lowercase()
-        val privacy = !state.satellites   // Satellites off is Privacy mode: this phone isn't counted among listeners
+        val privacy = !state.counted   // Be counted as a listener, a setting of its own since hand-off 36
         if (state.library != null && "$key/$privacy" == appliedStation) return
         appliedStation = "$key/$privacy"
         val lib = LibraryStore.begin(this, state.url.trim(), key)
@@ -398,6 +405,7 @@ class MainActivity : ComponentActivity(), BenchActions {
         private const val KEY_CHANNEL = "channel"
         private const val KEY_SATELLITES = "satellites"
         private const val KEY_LOCAL_TIME = "localTime"
+        private const val KEY_COUNTED = "counted"
         private const val KEY_CAL = "cal."
         private const val KEY_LAUNCHED = "launched"
         private const val KEY_BT_NAME_ASKED = "btNameAsked"

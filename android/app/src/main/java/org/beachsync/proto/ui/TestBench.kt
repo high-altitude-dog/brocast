@@ -85,6 +85,7 @@ class BenchState {
     /** The GPS engine of the idle clock, while no run is going; null otherwise. */
     var idleGps by mutableStateOf<org.beachsync.proto.GpsTime?>(null)
     var localTime by mutableStateOf(true)
+    var counted by mutableStateOf(true)
     var nudgeMode by mutableStateOf(NudgeMode.AUTO)
     var nudgePeriodS by mutableStateOf<Double?>(null)
     var session by mutableStateOf<Session?>(null)
@@ -103,6 +104,7 @@ interface BenchActions {
     fun setSatellites(on: Boolean)
     fun setChannel(channel: Int)
     fun setLocalTime(on: Boolean)
+    fun setCounted(on: Boolean)
     /** Like startOrStop, but playing with the value calibration chose for the output in use: the library, or with [clicks] the per-second tick. */
     fun listen(clicks: Boolean = false)
     fun output(): org.beachsync.proto.AudioOutput
