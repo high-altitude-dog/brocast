@@ -53,7 +53,7 @@ private const val TICK_MS = 250L
 private fun msText(v: Double) = org.beachsync.proto.fmtMillis(v)
 
 private fun sourceWord(s: CalSource) = when (s) {
-    CalSource.TABLE -> "TABLE"; CalSource.EARCUP -> "EARCUP"; CalSource.HANDSHAKE -> "HANDSHAKE"; CalSource.TYPED -> "TYPED"; CalSource.NONE -> "NOT MEASURED"
+    CalSource.TABLE -> "TABLE"; CalSource.EARCUP -> "EARCUP"; CalSource.HANDSHAKE -> "HANDSHAKE"; CalSource.TYPED -> "TYPED"; CalSource.BY_EAR -> "ADJUSTED BY EAR"; CalSource.NONE -> "NOT MEASURED"
 }
 
 @Composable
@@ -98,11 +98,12 @@ fun CalibrationPage(state: BenchState, actions: BenchActions, back: () -> Unit, 
             }
             BasicText("Audio is sent this much early, so it reaches your ears in time with everyone else.", style = Tokens.Text.body.style())
         }
+        if (output.icon.bluetooth && !output.named) HeadphonesNameRow(actions::askHeadphonesName)
         if (output.route.startsWith("Bluetooth")) BasicText("Bluetooth delay can change each time headphones connect, so a saved value may not hold. If the sync sounds off, test again.", style = Tokens.Text.small.style(Ink.textSecondary))
         BasicText("SOURCES · ONE IS IN USE", Modifier.padding(top = 4.dp), Tokens.Text.cardLabel.style())
         Card {
             SourceRow("Shared table", "This phone with this output", table.takeIf { it.source == CalSource.TABLE }, inUse.source == CalSource.TABLE)
-            SourceRow("Earcup test", "This phone", saved, inUse.source == CalSource.EARCUP)
+            SourceRow(if (saved?.source == CalSource.BY_EAR) "Adjusted by ear" else "Earcup test", "This phone", saved, saved != null)
             SourceRow("Two-phone test", "Not available yet", null, false)
             SourceRow("Typed", "Not available yet", null, false)
         }

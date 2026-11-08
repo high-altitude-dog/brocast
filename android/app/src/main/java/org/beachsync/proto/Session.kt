@@ -105,12 +105,33 @@ class Session(ctx: Context, val s: Settings, private val satellitesOn: Boolean) 
         note(Lane.CLOCK, "Satellites turned ${if (on) "on" else "off"} by you")
     }
 
-    /** The Sync view's temporary diagnostic offset (ms, larger plays earlier). Logged, because it changes what is heard; it ends with the session. */
+    /**
+     * The Sync view's temporary diagnostic offset (ms, larger plays earlier). Logged, because it changes what is heard; it ends with the session.
+     * It rides on the lag kept by ear ([keptNs]), so both reach the audio thread as the one value it already reads.
+     */
     fun setDiagnosticOffsetMs(ms: Double) {
-        play.extraLagNs = Math.round(ms * 1e6)
+        play.extraLagNs = keptNs + Math.round(ms * 1e6)
         note(Lane.AUDIO, if (ms == 0.0) "Diagnostic audio offset cleared" else "Diagnostic audio offset set to %+.0f ms (%s)".format(java.util.Locale.ROOT, ms, if (ms > 0) "plays earlier" else "plays later"))
     }
-    val diagnosticOffsetMs get() = play.extraLagNs / 1e6
+    val diagnosticOffsetMs get() = (play.extraLagNs - keptNs) / 1e6
+
+    /** Lag kept as calibration by ear during this run. The saved value applies from the next start; this keeps the sound where it is until then. */
+    @Volatile private var keptNs = 0L
+
+    /** The diagnostic offset becomes kept lag. The audio thread's value doesn't change, so the sound doesn't move. */
+    fun keepDiagnostic() {
+        keptNs = play.extraLagNs
+        note(Lane.AUDIO, "Lag adjusted by ear: the audio offset is kept as calibration")
+    }
+
+    /** Kept lag added after the diagnostic offset was already removed (the Sync view's Keep-it toast), so the sound goes back to where it was nudged. */
+    fun keepOffsetMs(ms: Double) {
+        val diag = play.extraLagNs - keptNs
+        keptNs += Math.round(ms * 1e6)
+        play.extraLagNs = keptNs + diag
+        note(Lane.AUDIO, "Lag adjusted by ear: %+.0f ms kept as calibration".format(java.util.Locale.ROOT, ms))
+    }
+    val lagInUseMs get() = s.lagMs + keptNs / 1e6
 
     /** From the UI thread: the channel chip's change, for the event log. */
     fun logChannel(text: String) = note(Lane.AUDIO, text)

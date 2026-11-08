@@ -16,10 +16,11 @@ import org.beachsync.proto.ui.TestCardSetupScreen
 import android.Manifest
 import android.content.pm.PackageManager
 import android.graphics.Color
-import android.media.AudioDeviceInfo
 import android.media.AudioManager
 import android.os.Build
 import android.os.Bundle
+import android.content.Intent
+import android.net.Uri
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
@@ -63,10 +64,11 @@ class MainActivity : ComponentActivity(), BenchActions {
     private var listenFromLibrary = false
     private var earcupOutput: AudioOutput? = null
 
-    private val askForHeadsetName = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
-    private var askedForHeadsetName = false
+    /** Asked only from Now playing's card or Calibration's row, once Bluetooth headphones are connected, because their name is the only reason the app wants this. */
+    private val askForHeadsetName = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) A2dpCodec.connect(this) else prefs.edit().putInt(KEY_BT_NAME_REFUSED, prefs.getInt(KEY_BT_NAME_REFUSED, 0) + 1).apply()
+    }
 
-    /** Asked only once a Bluetooth headset is connected, because its name is the only reason the app wants this. */
     /** The clock runs with no run going, so the screen always has a source and Play starts with a clock in hand. Only while on screen. */
     private fun startIdle() {
         if (!visible || idle != null || session != null) return
@@ -99,12 +101,7 @@ class MainActivity : ComponentActivity(), BenchActions {
         super.onResume()
         PocketGuard.resumedAt = SystemClock.uptimeMillis()
         getSystemService(SensorManager::class.java).let { sm -> sm.getDefaultSensor(Sensor.TYPE_PROXIMITY)?.let { sm.registerListener(proximity, it, SensorManager.SENSOR_DELAY_NORMAL) } }
-        val bluetooth = getSystemService(AudioManager::class.java).getDevices(AudioManager.GET_DEVICES_OUTPUTS)
-            .any { it.type == AudioDeviceInfo.TYPE_BLUETOOTH_A2DP || it.type == AudioDeviceInfo.TYPE_BLE_HEADSET }
-        if (bluetooth && !askedForHeadsetName && checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
-            askedForHeadsetName = true
-            askForHeadsetName.launch(Manifest.permission.BLUETOOTH_CONNECT)
-        }
+        A2dpCodec.connect(this)   // also after the permission is given in app settings
     }
 
     private val askForMic = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -128,6 +125,9 @@ class MainActivity : ComponentActivity(), BenchActions {
         enableEdgeToEdge(SystemBarStyle.dark(Color.TRANSPARENT), SystemBarStyle.dark(Color.TRANSPARENT))
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         volumeControlStream = AudioManager.STREAM_MUSIC
+        val firstLaunch = !prefs.getBoolean(KEY_LAUNCHED, false) && prefs.all.isEmpty()   // an app updated from before this key isn't new
+        prefs.edit().putBoolean(KEY_LAUNCHED, true).apply()
+        state.headphonesNameOffer = !firstLaunch && !prefs.getBoolean(KEY_BT_NAME_ASKED, false)
         load()
         state.session = session
         val testScript = intent?.hasExtra("tickPattern") == true || (intent?.hasExtra("soloSlot") == true && intent?.hasExtra("library") != true)
@@ -151,7 +151,7 @@ class MainActivity : ComponentActivity(), BenchActions {
                 Page.CALIBRATION -> CalibrationPage(state, this, { page = home }, { resetEarcup(); page = Page.EARCUP })
                 Page.EARCUP -> EarcupPage(state, this) { page = Page.CALIBRATION }
                 Page.SIGNALS -> TimeSignalsScreen(state, this, { page = Page.SATELLITES }) { page = home }
-                Page.SYNC -> SyncScope(state) { page = Page.SETTINGS }
+                Page.SYNC -> SyncScope(state, this, { page = Page.SETTINGS }) { page = Page.CARD_SETUP }
                 Page.BEAT -> BeatSyncScope(state) { page = Page.SETTINGS }
                 Page.STEREO -> StereoScreen(state, this) { page = home }
                 Page.ARTIST -> ArtistPhotoScreen(state) { page = if (artistFrom == Page.KEPT) Page.KEPT else home; artistFrom = home }
@@ -169,6 +169,7 @@ class MainActivity : ComponentActivity(), BenchActions {
                 Page.LOG -> EventLogScreen(state, logLane) { page = from }
                 Page.NUDGE -> StreamGapScreen(state, this) { page = from }
             }
+            org.beachsync.proto.ui.SyncNudgeOverlays(state, this)   // the Sync view's Keep-it toast and sheet, over whichever page it left for
         }
     }
 
@@ -267,15 +268,26 @@ class MainActivity : ComponentActivity(), BenchActions {
         session?.nudge?.setPeriod(seconds, Session.nowBoot())
     }
 
-    override fun listen() {
-        listenFromLibrary = true
+    override fun listen(clicks: Boolean) {
+        listenFromLibrary = !clicks
         val out = output()
         val cal = savedCalibration(out) ?: tableCalibration(out)
-        if (cal.source != CalSource.NONE) { listenLag = cal.lagMs; state.lagSource = cal.source.name.lowercase() } else state.lagSource = "not measured"
+        if (cal.source != CalSource.NONE) { listenLag = cal.lagMs; state.lagSource = if (cal.source == CalSource.BY_EAR) "adjusted by ear" else cal.source.name.lowercase() } else state.lagSource = "not measured"
         startOrStop()
     }
 
     override fun output() = currentOutput(this)
+
+    override fun askHeadphonesName() {
+        notNowHeadphonesName()
+        if (prefs.getInt(KEY_BT_NAME_REFUSED, 0) >= 2) startActivity(Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", packageName, null)))
+        else askForHeadsetName.launch(Manifest.permission.BLUETOOTH_CONNECT)
+    }
+
+    override fun notNowHeadphonesName() {
+        state.headphonesNameOffer = false
+        prefs.edit().putBoolean(KEY_BT_NAME_ASKED, true).apply()
+    }
 
     override fun tableCalibration(o: AudioOutput) = LatencyTable.lookup(RouteKey(Build.MODEL, tableRoute(o)))
 
@@ -284,11 +296,12 @@ class MainActivity : ComponentActivity(), BenchActions {
     override fun savedCalibration(o: AudioOutput): Calibration? {
         val p = prefs.getString(KEY_CAL + o.key, null)?.split("|") ?: return null
         val lag = p.getOrNull(0)?.toDoubleOrNull() ?: return null
-        return Calibration(lag, p.getOrNull(1)?.toDoubleOrNull() ?: 0.0, CalSource.EARCUP, p.getOrNull(2)?.toLongOrNull() ?: 0L)
+        val source = p.getOrNull(3)?.let { n -> CalSource.entries.firstOrNull { it.name == n } } ?: CalSource.EARCUP
+        return Calibration(lag, p.getOrNull(1)?.toDoubleOrNull() ?: 0.0, source, p.getOrNull(2)?.toLongOrNull() ?: 0L)
     }
 
     override fun saveCalibration(o: AudioOutput, c: Calibration) {
-        prefs.edit().putString(KEY_CAL + o.key, "${c.lagMs}|${c.plusMinusMs}|${c.measuredUtcMs}").apply()
+        prefs.edit().putString(KEY_CAL + o.key, "${c.lagMs}|${c.plusMinusMs}|${c.measuredUtcMs}|${c.source.name}").apply()
     }
 
     override fun earcupValue(pass: EarcupOutcome.Pass): Calibration {
@@ -366,6 +379,9 @@ class MainActivity : ComponentActivity(), BenchActions {
         private const val KEY_SATELLITES = "satellites"
         private const val KEY_LOCAL_TIME = "localTime"
         private const val KEY_CAL = "cal."
+        private const val KEY_LAUNCHED = "launched"
+        private const val KEY_BT_NAME_ASKED = "btNameAsked"
+        private const val KEY_BT_NAME_REFUSED = "btNameRefused"
         private const val KEY_NUDGE_MANUAL = "nudgeManual"
         private const val KEY_NUDGE_PERIOD = "nudgePeriod"
     }

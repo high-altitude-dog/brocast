@@ -379,3 +379,11 @@ Measured: `docs/pears-step1-results.md`, `docs/pears-step2-results.md`. Suggesti
 7. **Engine updates over the mesh** (spike design §11): states for `Engine updated`, `Update rolled back (health check failed)` and `Waiting to update until the music stops`. Probably only in Settings and the event log.
 8. **Battery is still unmeasured.** Step 4 measures it. Until then, Auto's battery thresholds and the Advanced cost card should look provisional (`typical phone` wording), as they do now.
 9. **Station keys.** With a station directory (hand-off 33), a listener trusts a station by its key. Consider a short fingerprint (like the nym) on the station page, and what a key change looks like: a station that rotates its key must not look like an impostor, and an impostor must not look like the station.
+
+## 8 Nov: hand-off 34 built, with these gaps
+
+1. **The other phone's refresh rate** ("Seeing a gap?") isn't known without a link between phones. The card says `In its header` for now, since each phone's header shows its own rate.
+2. **The click** is the app's existing per-second tick: 5 ms long, not 10, at the test card's pitches. It plays only when nothing else is playing (Sync view starts a tick run, which stops when the view closes). With music on, the music is the sound, and the switch's detail says so.
+3. **Earbuds or headphones:** Bluetooth's device class can't tell them apart, so the earbuds picture is chosen from the name the device reports (buds, pods, ear).
+4. **Codec** comes from a system call reached by reflection. If Android blocks it on a phone, the tile shows the name alone.
+5. **Without the permission,** the name isn't used at all, so every Bluetooth output shares one saved lag, as the spec says.

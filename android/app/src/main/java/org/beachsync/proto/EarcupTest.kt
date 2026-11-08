@@ -27,7 +27,11 @@ import java.util.Locale
 /** The output a listener would hear, and the name Android gives it: for a Bluetooth headset, usually the name it reports. */
 enum class OutputKind(val label: String) { PHONE_SPEAKER("SPEAKER"), HEADPHONES("HEADPHONES"), PORTABLE_SPEAKER("PORTABLE SPEAKER"), CAR("CAR AUDIO") }
 
-class AudioOutput(val device: AudioDeviceInfo?, val name: String, val route: String, val kind: OutputKind) {
+/**
+ * What the output is, for its picture and heading (hand-off 34). [named] is false for Bluetooth without the nearby devices permission: then its name
+ * isn't shown or used, and all Bluetooth headphones share one lag. [codec] is Bluetooth's own report (Android 13 and later), else null.
+ */
+class AudioOutput(val device: AudioDeviceInfo?, val name: String, val route: String, val kind: OutputKind, val icon: OutputIcon = OutputIcon.SPEAKER, val named: Boolean = true, val codec: String? = null) {
     val key get() = "$route|$name"
     val external get() = device != null && device.type != AudioDeviceInfo.TYPE_BUILTIN_SPEAKER
 }
@@ -42,15 +46,29 @@ fun currentOutput(ctx: Context): AudioOutput {
     for ((type, route) in order) {
         val d = all.firstOrNull { it.type == type } ?: continue
         val bt = bluetoothDevice(ctx, d)
+        val wireless = type == AudioDeviceInfo.TYPE_BLUETOOTH_A2DP || type == AudioDeviceInfo.TYPE_BLE_HEADSET
+        val named = !wireless || ctx.checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
         // The name the device itself reports, never the one a person gave it on their phone: results get compared across listeners.
         @SuppressLint("MissingPermission") val reported = try { bt?.name } catch (_: Exception) { null }
-        val product = reported ?: d.productName?.toString().orEmpty()
+        val product = if (named) reported ?: d.productName?.toString().orEmpty() else ""
         val name = if (type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER || product.isBlank() || product == Build.MODEL) route else product
         val kind = if (type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER) OutputKind.PHONE_SPEAKER else bluetoothKind(bt)
-        return AudioOutput(d, name, route, kind)
+        val icon = when {
+            type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER -> OutputIcon.SPEAKER
+            type == AudioDeviceInfo.TYPE_USB_HEADSET -> OutputIcon.USB
+            !wireless -> OutputIcon.WIRED
+            kind == OutputKind.PORTABLE_SPEAKER -> OutputIcon.BT_SPEAKER
+            kind == OutputKind.CAR -> OutputIcon.OTHER
+            // Bluetooth classes don't tell earbuds from headphones, so this goes by the name the device reports.
+            named && EARBUD_NAME.containsMatchIn(name) -> OutputIcon.BT_EARBUDS
+            else -> OutputIcon.BT_HEADPHONES
+        }
+        return AudioOutput(d, name, route, kind, icon, named, bt?.let { A2dpCodec.of(it) })
     }
     return AudioOutput(null, "No output", "None", OutputKind.PHONE_SPEAKER)
 }
+
+private val EARBUD_NAME = Regex("buds|pods|earbud|\\bear\\b", RegexOption.IGNORE_CASE)
 
 /** What's connected, as far as Bluetooth says. Null without the nearby devices permission. */
 @SuppressLint("MissingPermission")     // checked here

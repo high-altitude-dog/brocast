@@ -108,7 +108,7 @@ fun TestCardScreen(state: BenchState, actions: BenchActions, setup: TestCardSetu
             if (state.session != null) actions.startOrStop()
             state.stream = false
             state.pitch = if (setup.channel == Renderer.RIGHT) "3000" else "2000"
-            actions.listen()
+            actions.listen(clicks = true)
         }
         onDispose {
             if (setup.click) {

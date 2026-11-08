@@ -119,6 +119,7 @@ fun NowPlaying(state: BenchState, actions: BenchActions, openLog: () -> Unit, op
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Masthead(s, openBench, openSwarm, openSettings, openSignals, openCalibration)
+        if (state.headphonesNameOffer && out.icon.bluetooth && !out.named) HeadphonesNameCard(actions::askHeadphonesName, actions::notNowHeadphonesName)
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             // The track and artist come from the library file the timeline has at the ear; the station name stands in before that.
             ArtistThumb(lib, playing?.first, openArtist)
@@ -147,7 +148,7 @@ fun NowPlaying(state: BenchState, actions: BenchActions, openLog: () -> Unit, op
             val gold = when (gpsNow?.gold) { true -> "Gold · "; false -> "Silver · "; null -> "" }
             Tile("SOURCE", FlowTime.chosen?.name ?: "—", if (gpsNow != null && gpsNow.active) "$gold${gpsNow.used} sats" else "Satellites off", Modifier.weight(1f))
             // Named for the output in use: this lag also applies to a phone's own speaker.
-            Tile(out.kind.label, org.beachsync.proto.fmtMillis(s?.s?.lagMs ?: state.lag.toDoubleOrNull() ?: 0.0), if (out.external) out.name else state.lagSource, Modifier.weight(1f))
+            OutputTile(out, cal, s?.lagInUseMs, Modifier.weight(1f), openCalibration)
             Tile("AHEAD", aheadText(lib != null && playing != null, everythingHere, ahead), if (everythingHere) "all downloaded" else "downloaded", Modifier.weight(1f).clickable(role = Role.Button, onClick = openBuffer))
         }
         Card { SatellitesRow(state.satellites, actions::setSatellites, "Position stays on this phone · off = Privacy mode") }

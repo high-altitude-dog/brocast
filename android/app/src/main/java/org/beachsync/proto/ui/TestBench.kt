@@ -92,6 +92,8 @@ class BenchState {
     var earcup by mutableStateOf<org.beachsync.proto.EarcupRun?>(null)
     var lagSource by mutableStateOf("typed")
     var library by mutableStateOf<org.beachsync.proto.LibraryStore?>(null)
+    /** Now playing may still offer "Show your headphones' name?" (hand-off 34): not at first launch, and only once. */
+    var headphonesNameOffer by mutableStateOf(false)
 }
 
 interface BenchActions {
@@ -99,8 +101,8 @@ interface BenchActions {
     fun setSatellites(on: Boolean)
     fun setChannel(channel: Int)
     fun setLocalTime(on: Boolean)
-    /** Like startOrStop, but playing with the value calibration chose for the output in use. */
-    fun listen()
+    /** Like startOrStop, but playing with the value calibration chose for the output in use: the library, or with [clicks] the per-second tick. */
+    fun listen(clicks: Boolean = false)
     fun output(): org.beachsync.proto.AudioOutput
     fun savedCalibration(o: org.beachsync.proto.AudioOutput): org.beachsync.proto.Calibration?
     fun tableCalibration(o: org.beachsync.proto.AudioOutput): org.beachsync.proto.Calibration
@@ -111,6 +113,9 @@ interface BenchActions {
     fun resetEarcup()
     fun setNudgeMode(mode: NudgeMode)
     fun setNudgePeriod(seconds: Double?)
+    /** Android's Nearby devices prompt, or app settings once Android has stopped asking. */
+    fun askHeadphonesName()
+    fun notNowHeadphonesName()
 }
 
 /** A clock tick for the screen. It waits for a frame, so it stops while the app isn't visible. */

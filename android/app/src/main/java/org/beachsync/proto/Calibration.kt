@@ -9,7 +9,7 @@ import kotlin.math.abs
  * A larger lag makes the app output earlier, so a phone or route that's later by x ms needs x ms more lag. All times are in
  * ms. Every lag is relative to REFERENCE: the table can't yet say what the absolute delay to the ear is.
  */
-enum class CalSource { NONE, TABLE, EARCUP, HANDSHAKE, TYPED }
+enum class CalSource { NONE, TABLE, EARCUP, HANDSHAKE, TYPED, BY_EAR }   // BY_EAR: a value nudged by ear in the Sync view, kept on top of another
 
 data class Calibration(val lagMs: Double, val plusMinusMs: Double, val source: CalSource, val measuredUtcMs: Long = 0L)
 
