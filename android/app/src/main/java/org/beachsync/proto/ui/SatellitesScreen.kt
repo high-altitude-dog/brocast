@@ -121,11 +121,7 @@ fun SatellitesScreen(state: BenchState, actions: BenchActions, back: () -> Unit,
                 Sky(sats, picked, { picked = it })
             } else Sky3D(sats, gps.position, picked, { picked = it }) { setFlat(true) }
             BasicText("● GPS   ◆ Galileo   ▲ GLONASS   ■ BeiDou   ○ in view, not used", style = Tokens.Text.small.style(Ink.textSecondary))
-            BasicText(
-                if (flat) "Tap any satellite for its details. Lines join the ones in use, like a constellation."
-                else "Pinch to zoom out to the real orbits, drag to turn, two fingers to tilt. Tap a satellite for its details.",
-                style = Tokens.Text.small.style(Ink.textSecondary),
-            )
+            if (flat) BasicText("Tap any satellite for its details. Lines join the ones in use, like a constellation.", style = Tokens.Text.small.style(Ink.textSecondary))
             picked?.let { label -> sats.firstOrNull { it.label == label }?.let { SatCard(it, tracks[label]?.rateKmS()) { picked = null } } }
             if (!noRaw) {
                 BasicText("WHAT LIMITS IT", Modifier.padding(top = 4.dp), Tokens.Text.cardLabel.style())
@@ -301,12 +297,20 @@ private fun SatCard(s: Sat, rateKmS: Double?, close: () -> Unit) {
     val orbit = SatFacts.orbit(s.system, s.svid)
     val fleet = SatFacts.fleet(s.system)
     val km = rangeOf(s)
+    val ctx = LocalContext.current
+    val craft = org.beachsync.proto.GnssTable.get(ctx)[s.label]
+    val fleetToday = org.beachsync.proto.GnssTable.fleet(ctx, s.letter)
     Card {
         Row(verticalAlignment = Alignment.CenterVertically) {
             BasicText("● ", style = Tokens.Text.bodyStrong.style(if (s.used) Ink.accent else Ink.muted))
             BasicText(s.label, style = Tokens.Text.bodyStrong.style())
             BasicText("  ${s.systemName} · ${if (s.used) "in use" else "in view, not used"}", Modifier.weight(1f), Tokens.Text.small.style(Ink.textSecondary))
             BasicText("×", Modifier.clickable(onClick = close).padding(8.dp), Tokens.Text.bodyStrong.style())
+        }
+        // From the IGS table (hand-off 44): `GPS IIR-M · NAVSTAR 59 · launched Nov 2006`.
+        craft?.let { c ->
+            val launched = runCatching { java.time.LocalDate.parse(c.launched).let { d -> d.month.getDisplayName(java.time.format.TextStyle.SHORT, Locale.UK) + " " + d.year } }.getOrNull()
+            BasicText(listOfNotNull(c.block.replaceFirst('-', ' ').ifEmpty { null }, c.name.ifEmpty { null }, launched?.let { "launched $it" }).joinToString(" · "), style = Tokens.Text.small.style(Ink.textSecondary))
         }
         Column(Modifier.fillMaxWidth().border(1.dp, Ink.border, RoundedCornerShape(10.dp)).padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             BasicText("DISTANCE FROM YOU, NOW", style = Tokens.Text.cardLabel.style())
@@ -328,7 +332,7 @@ private fun SatCard(s: Sat, rateKmS: Double?, close: () -> Unit) {
             Box(Modifier.fillMaxWidth((s.cn0DbHz / 50f).coerceIn(0.02f, 1f)).height(6.dp).background(Ink.accent, RoundedCornerShape(3.dp)))
         }
         fleet?.let { f ->
-            FactRow("COUNTRY") {
+            FactRow("BUILT IN") {
                 for ((code, name) in f.countries) Row(verticalAlignment = Alignment.CenterVertically) {
                     BasicText(org.beachsync.proto.flagOf(code), style = Tokens.Text.body.style().copy(fontSize = 20.sp))
                     BasicText("  $name", style = Tokens.Text.body.style())
@@ -344,10 +348,19 @@ private fun SatCard(s: Sat, rateKmS: Double?, close: () -> Unit) {
             BasicText("%.1f km/s".format(Locale.ROOT, orbit.speedKmS), style = Tokens.Text.valueSmall.style())
             BasicText("about ${"%,d".format(Locale.ROOT, (orbit.speedKmS * 3600 / 10).toInt() * 10)} km/h", style = Tokens.Text.small.style(Ink.textSecondary))
         }
-        fleet?.let { f -> FactRow("FLEET") { BasicText("one of ${f.size} ${s.systemName} satellites", style = Tokens.Text.body.style()) } }
+        craft?.massKg?.let { m ->
+            FactRow("WEIGHT") {
+                BasicText("%,d kg".format(Locale.ROOT, m.toInt()), style = Tokens.Text.valueSmall.style())
+                BasicText("in orbit today", style = Tokens.Text.small.style(Ink.textSecondary))
+            }
+        }
+        if (fleetToday > 0) FactRow("FLEET") {
+            BasicText("one of $fleetToday ${s.systemName} satellites", style = Tokens.Text.body.style())
+            BasicText("with a signal number today", style = Tokens.Text.small.style(Ink.textSecondary))
+        } else fleet?.let { f -> FactRow("FLEET") { BasicText("one of ${f.size} ${s.systemName} satellites", style = Tokens.Text.body.style()) } }
     }
     BasicText(
-        "Distance updates every second from where the satellite is in your sky and the height of its orbit, worked out on this phone. Craft, launch year and weight wait for a satellite table in the app.",
+        "Distance updates every second from where the satellite is in your sky and the height of its orbit, worked out on this phone. Craft, weight and fleet come from the IGS satellite table in the app (International GNSS Service satellite metadata, DLR).",
         style = Tokens.Text.small.style(Ink.textSecondary),
     )
 }

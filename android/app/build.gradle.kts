@@ -23,12 +23,24 @@ android {
     sourceSets["main"].jniLibs.srcDirs("src/main/addons", "src/main/libcxx")
     packaging { jniLibs { useLegacyPackaging = false } }
 
+    // Release key for public APKs. It lives outside the repo; its path and password come from ~/.gradle/gradle.properties
+    // (brocastReleaseStore, brocastReleaseAlias, brocastReleasePassword). Without them a release build falls back to the debug key.
+    val releaseStore = (findProperty("brocastReleaseStore") as String?)?.let { file(it) }?.takeIf { it.exists() }
+    signingConfigs {
+        if (releaseStore != null) create("release") {
+            storeFile = releaseStore
+            storePassword = findProperty("brocastReleasePassword") as String
+            keyAlias = findProperty("brocastReleaseAlias") as String
+            keyPassword = findProperty("brocastReleasePassword") as String
+        }
+    }
+
     buildTypes {
         release {
-            isMinifyEnabled = true
-            isShrinkResources = true
-            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
-            signingConfig = signingConfigs.getByName("debug")   // for testing on our own phones, not for distribution
+            // No R8 yet: the engine's JNI, bare-kit and the reflection in the Bluetooth codec read are untested under shrinking.
+            isMinifyEnabled = false
+            isShrinkResources = false
+            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
         }
     }
 
@@ -180,4 +192,12 @@ val generateTokens = tasks.register("generateTokens") {
 }
 
 android.sourceSets["main"].java.srcDir(generatedTokens)
-tasks.named("preBuild") { dependsOn(generateTokens) }
+// The satellite table (hand-off 44: IGS metadata, credit in About) ships from design/data as an asset, never copied by hand.
+val gnssAssets = layout.buildDirectory.dir("generated/gnss")
+val copyGnssTable = tasks.register<Copy>("copyGnssTable") {
+    from(rootProject.file("../design/data/gnss_table.json"))
+    into(gnssAssets)
+}
+android.sourceSets["main"].assets.srcDir(gnssAssets)
+
+tasks.named("preBuild") { dependsOn(generateTokens, copyGnssTable) }

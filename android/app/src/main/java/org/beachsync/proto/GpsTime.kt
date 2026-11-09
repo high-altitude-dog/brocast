@@ -157,6 +157,7 @@ class GpsTime(ctx: Context, private val log: CsvLog?) {
 /** One satellite in view, as the chip reports it. [system] is a GnssStatus.CONSTELLATION_* value. */
 class Sat(val svid: Int, val system: Int, val azimuthDeg: Float, val elevationDeg: Float, val cn0DbHz: Float, val used: Boolean) {
     val letter get() = when (system) { 1 -> 'G'; 2 -> 'S'; 3 -> 'R'; 4 -> 'J'; 5 -> 'C'; 6 -> 'E'; 7 -> 'I'; else -> '?' }
-    val label get() = "$letter%02d".format(svid)
+    // QZSS reports PRN 193 and up; its own numbering (J01...) is that minus 192, as the satellite table has it.
+    val label get() = "$letter%02d".format(if (system == 4 && svid > 192) svid - 192 else svid)
     val systemName get() = when (system) { 1 -> "GPS"; 2 -> "SBAS"; 3 -> "GLONASS"; 4 -> "QZSS"; 5 -> "BeiDou"; 6 -> "Galileo"; 7 -> "NavIC"; else -> "Other" }
 }
