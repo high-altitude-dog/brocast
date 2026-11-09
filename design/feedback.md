@@ -455,3 +455,12 @@ Engineering limits stay as in "hand-off 42 as built": the orbit plane is inferre
 
 - **h45:** built as designed. "Rose … ago" and "sets in …" are rough (the orbit's own motion less the Earth's turning, from the system's height and tilt), and the path is the inferred orbit plane. Whole Earth still shows only satellites in view.
 - **h46:** engine now sends each peer a hello on its own channel (`brocast/hello/1`: nym proof, app and engine versions, % of the library held, every 10 s); the nym shows only once the proof checks against their key. Round trip from the connection's UDX stream. Block cuts them off and refuses them; undo is a **Blocked listeners · Unblock all** card in Settings › Delivery (no per-listener list yet). Gaps: **Holding** is "% of the library", not time ahead; **Shared** counts since they connected, not today; list rows lead with nym, no flag column change; station sheet uses the same layout without Country/Holding/App/Block.
+
+## 9 Nov: hand-offs 47 and 49 as built
+
+- Headphone button: works only while Brocast plays (the service owns the media session). When stopped, the button can't start the music, as the app holds no session then.
+- The card's waveform is a fixed bar pattern that fills with progress, not the bulletin's real shape.
+- "Get the next one ready on Wi-Fi" checks the feed every 10 minutes while the music plays, not at the moment a bulletin is published.
+- Own feed: a plain text field under the option (no validation beyond starting with http).
+- A station that hasn't sent a news choice yet reads "Station's choice · This station hasn't chosen yet"; one with BBC chosen but no feed URL on the server reads "Not set up on the station yet". Design needed?
+- Upload page: the NEWS BULLETIN card sits under Artists, as the Station colour card (h43) isn't built on the upload page yet.

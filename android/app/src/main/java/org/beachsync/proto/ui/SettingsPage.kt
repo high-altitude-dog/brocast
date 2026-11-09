@@ -26,7 +26,7 @@ import androidx.compose.ui.unit.dp
 
 /** Only the LISTENING section for now: the design's other sections have nothing behind them yet. */
 @Composable
-fun SettingsPage(state: BenchState, actions: BenchActions, back: () -> Unit, openCalibration: () -> Unit, openSatellites: () -> Unit, openSync: () -> Unit, openBeat: () -> Unit, openStereo: () -> Unit, openData: () -> Unit, openIdentity: () -> Unit, openTestCard: () -> Unit = {}) {
+fun SettingsPage(state: BenchState, actions: BenchActions, back: () -> Unit, openCalibration: () -> Unit, openSatellites: () -> Unit, openSync: () -> Unit, openBeat: () -> Unit, openStereo: () -> Unit, openData: () -> Unit, openIdentity: () -> Unit, openTestCard: () -> Unit = {}, openNews: () -> Unit = {}) {
     rememberTick(SETTINGS_TICK_MS).value    // the output's name can change during a run
     val s = state.session
     Column(
@@ -40,6 +40,10 @@ fun SettingsPage(state: BenchState, actions: BenchActions, back: () -> Unit, ope
             SatellitesRow(state.satellites, actions::setSatellites, "GPS time only · your position stays on this phone")
             SwitchRow("Be counted as a listener", "Adds you to the listener estimate · off: you still listen and share", state.counted, actions::setCounted)
             SwitchRow("Show my country", "Others may see it from your internet address · off by default", state.showCountry, actions::setShowCountry)
+            Column(Modifier.fillMaxWidth().heightIn(min = Tokens.Space.touchTarget.dp).clickable(role = Role.Button, onClick = openNews), Arrangement.Center) {
+                BasicText("News on the headphone button", style = Tokens.Text.bodyStrong.style())
+                BasicText(newsSummary(state.library), style = Tokens.Text.small.style(Ink.textSecondary), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
             Column(Modifier.fillMaxWidth().heightIn(min = Tokens.Space.touchTarget.dp).clickable(role = Role.Button, onClick = openSatellites), Arrangement.Center) {
                 BasicText("Satellites", style = Tokens.Text.bodyStrong.style())
                 BasicText("Your chip, your sky and what limits timing", style = Tokens.Text.small.style(Ink.textSecondary))

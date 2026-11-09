@@ -46,6 +46,10 @@ ARTIST_MAX_BYTES = 25 * 1024 * 1024
 ARTIST_SPLIT = re.compile(r"\s*(?:&|,|\+|/|\bfeat\.?|\bft\.?|\bx\b|\band\b|\bb2b\b|\bvs\.?)\s*", re.I)
 REEL_TITLE = "Test reel"   # server/make_reel.py: it repeats the other sets, so it stays out of the library
 LIBRARY_D_MS = 60000
+# Station news bulletin (hand-off 49). The BBC feed URL carries a key, so it comes from station.json in the data
+# folder ("news_urls": {"bbc": "..."}) or BROCAST_NEWS_BBC_URL, never from this public file.
+NEWS_CHOICES = {"bbc": "BBC World Service", "npr": "NPR News Now", "none": "None"}
+NEWS_PUBLIC_URLS = {"npr": "https://feeds.npr.org/500005/podcast.xml"}
 LIBRARY_NOTICE_S = 600     # how far ahead a new running order takes effect at the earliest, so every phone can fetch it
 MESSAGE_MAX = 140
 SEC = 1_000_000_000
@@ -435,11 +439,36 @@ class Library:
             e.setdefault("n", k + 1)
         return {"editions": eds, "called_off": lib.get("called_off") or []}
 
+    # ---- Station settings (hand-off 49: news bulletin)
+
+    def station(self) -> dict:
+        try:
+            with open(os.path.join(self.directory, "station.json")) as f:
+                return json.load(f)
+        except (OSError, ValueError):
+            return {}
+
+    def news(self) -> dict:
+        """The station's bulletin as it goes to phones: choice, name and feed URL ('' when not set up)."""
+        st = self.station()
+        choice = st.get("news") if st.get("news") in NEWS_CHOICES else "bbc"
+        url = (st.get("news_urls") or {}).get(choice) or (os.environ.get("BROCAST_NEWS_BBC_URL", "") if choice == "bbc" else NEWS_PUBLIC_URLS.get(choice, ""))
+        return {"choice": choice, "name": NEWS_CHOICES[choice], "url": url}
+
+    def set_news(self, choice: str):
+        if choice not in NEWS_CHOICES:
+            raise ValueError("no such news choice")
+        with self.lock:
+            st = self.station()
+            st["news"] = choice
+            self.write_json(os.path.join(self.directory, "station.json"), st)
+        self.publish_library()
+
     def write_library(self, editions: list[dict], called_off: list[dict]):
         """Writes library.json. Artists ride beside the editions, so a new photo or a confirmed match never moves the shared timeline."""
         artists = {a["id"]: {"name": a["name"], "v": a["v"]} for a in self.artists() if a.get("v")}
         set_artists = {m["id"]: m["artist_ids"] for m in self.sets() if m["status"] == "ready" and m.get("artist_ids") and m.get("artist_sure")}
-        new = {"version": 1, "D_ms": LIBRARY_D_MS, "editions": editions, "called_off": called_off[-8:], "artists": artists, "set_artists": set_artists}
+        new = {"version": 1, "D_ms": LIBRARY_D_MS, "editions": editions, "called_off": called_off[-8:], "artists": artists, "set_artists": set_artists, "news": self.news()}
         path = os.path.join(self.directory, "library.json")
         try:
             with open(path) as f:
@@ -614,7 +643,7 @@ PAGE = """<!doctype html>
 <title>Station · Beach Sync Radio</title>
 <style>
 :root { color-scheme: dark; --bg: #0A0C0F; --surface: #12161B; --border: #222932; --track: #1A1F26; --grid: #2A323C; --text: #ECEFF2;
-  --text2: #C4CBD2; --muted: #8B95A1; --faint: #4A5562; --accent: #C8FF4D; --on-accent: #0A0C0F; --warn: #FFB547; --danger: #FF5A5A;
+  --text2: #C4CBD2; --muted: #8B95A1; --faint: #4A5562; --accent: #C8FF4D; --news: #56D4DD; --on-accent: #0A0C0F; --warn: #FFB547; --danger: #FF5A5A;
   --mono: 'JetBrains Mono', ui-monospace, monospace; font: 15px/1.45 'Space Grotesk', system-ui, sans-serif; }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--text); display: grid; grid-template-columns: 230px minmax(0, 1fr) 360px; min-height: 100vh; }
@@ -659,6 +688,7 @@ dialog::backdrop { background: rgba(0, 0, 0, .7); } .cols { display: grid; grid-
 .cols li b { font-family: var(--mono); color: var(--muted); font-weight: 400; margin-right: 12px; font-size: 13px; }
 .opt { border: 1px solid var(--grid); border-radius: 12px; padding: 12px 14px; display: flex; gap: 12px; align-items: flex-start; margin-top: 8px; cursor: pointer; }
 .opt.on { border-color: var(--accent); } .opt input { accent-color: var(--accent); margin-top: 4px; }
+.opt.news.on { border-color: var(--news); } .opt.news input { accent-color: var(--news); } .faint { color: var(--faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 300px; }
 .artist { display: flex; gap: 12px; align-items: flex-start; border: 1px solid var(--border); border-radius: 12px; padding: 12px; margin: 8px 0; }
 .photo { position: relative; display: inline-block; cursor: crosshair; } .photo img { max-width: 200px; display: block; border-radius: 8px; }
 .dot { position: absolute; width: 14px; height: 14px; margin: -7px; border: 2px solid var(--accent); border-radius: 50%; pointer-events: none; } .crops img { height: 64px; margin-right: 6px; border-radius: 6px; }
@@ -670,6 +700,7 @@ dialog::backdrop { background: rgba(0, 0, 0, .7); } .cols { display: grid; grid-
   <a id="nav-upload">Upload<span id="nav-upload-sub"></span></a>
   <a id="nav-artists">Artists<span id="nav-artists-sub"></span></a>
   <a id="nav-disk">Disk<span id="nav-disk-sub"></span></a>
+  <a id="nav-news">News<span id="nav-news-sub"></span></a>
   <div class="foot">Reached through the SSH tunnel only. No login: anyone with the tunnel is the operator.</div>
 </nav>
 <main>
@@ -722,6 +753,11 @@ dialog::backdrop { background: rgba(0, 0, 0, .7); } .cols { display: grid; grid-
     <div class="row"><span class="label">Artists</span><a style="color: var(--accent); cursor: pointer" id="open-artists">Open artists ›</a></div>
     <div class="faces" id="faces"></div>
     <div id="confirms"></div>
+  </div>
+  <div class="card" id="news-card">
+    <div class="row"><span class="label">News bulletin</span><span class="small" style="color: var(--news)" id="news-now"></span></div>
+    <div id="news-opts"></div>
+    <p class="muted small">What listeners hear when they press their headphone button. Each phone fetches it straight from the source; nothing goes through this server. Changes reach phones with the next announcement.</p>
   </div>
 </aside>
 <dialog id="pub"></dialog>
@@ -980,7 +1016,20 @@ $("aform").onsubmit = e => {
 function setView(v) { view = v; $("view-order").hidden = v !== "order"; $("view-artists").hidden = v !== "artists";
   $("nav-order").className = v === "order" ? "on" : ""; $("nav-artists").className = v === "artists" ? "on" : ""; }
 $("nav-order").onclick = () => setView("order"); $("nav-artists").onclick = () => setView("artists"); $("open-artists").onclick = () => setView("artists");
-$("nav-upload").onclick = () => $("upload-card").scrollIntoView({behavior: "smooth"}); $("nav-disk").onclick = () => $("disk-card").scrollIntoView({behavior: "smooth"});
+$("nav-upload").onclick = () => $("upload-card").scrollIntoView({behavior: "smooth"}); $("nav-disk").onclick = () => $("disk-card").scrollIntoView({behavior: "smooth"}); $("nav-news").onclick = () => $("news-card").scrollIntoView({behavior: "smooth"});
+// Station news bulletin (hand-off 49): BBC World Service (default), NPR News Now or None.
+const NEWS = [["bbc", "BBC World Service", "Hourly · about 5 min · default"], ["npr", "NPR News Now", "Hourly · about 5 min"], ["none", "None", "No news on the headphone button for this station"]];
+function showNews() {
+  const n = d.news; $("nav-news-sub").textContent = n.name;
+  $("news-now").textContent = n.choice === "none" ? "None" : n.name + (n.url ? " · live" : " · no feed URL set");
+  $("news-opts").replaceChildren(...NEWS.map(([k, name, sub]) => {
+    const o = el("label", null, "opt news" + (n.choice === k ? " on" : "")); const r = el("input"); r.type = "radio"; r.name = "news"; r.checked = n.choice === k;
+    r.onchange = async () => { await fetch("/api/news?choice=" + k, {method: "POST", headers}); refresh(true); };
+    const t = el("div"); t.append(el("b", name), el("div", sub, "muted small"));
+    if (n.choice === k && k !== "none") t.append(el("div", n.url ? n.url.replace("https://", "") : "Feed URL not set: add it to station.json on the server", "mono small faint"));
+    o.append(r, t); return o;
+  }));
+}
 async function refresh(force) {
   if (!force && (dragging || menu || $("pub").open)) return;   // never redraw under the operator's hand
   d = await (await fetch("/api/sets")).json();
@@ -993,7 +1042,7 @@ async function refresh(force) {
   const unsure = d.sets.filter(s => s.status === "ready" && !s.artist_sure && s.title !== "Test reel").length;
   $("nav-artists-sub").textContent = (d.artists || []).length + (unsure ? " · " + unsure + " to confirm" : "");
   $("nav-disk-sub").textContent = gb(d.free) + " free";
-  render(); jobs(); diskBar(); showArtists();
+  render(); jobs(); diskBar(); showArtists(); showNews();
 }
 refresh(true); setInterval(refresh, 2000);
 </script></body></html>
@@ -1037,7 +1086,8 @@ def make_handler(lib: Library):
                 r = lib.running()
                 self.reply(sets=lib.sets(), on_air=lib.on_air(), free=lib.free(), used=lib.used(), max=lib.max, reserve=lib.reserve, artists=lib.artists(),
                            live=r["live"], queued=r["queued"], locked=r["locked"], draft=lib.draft(), plan=lib.plan(),
-                           D_ms=LIBRARY_D_MS, notice_s=LIBRARY_NOTICE_S, now_ns=time.time_ns(), message_max=MESSAGE_MAX)
+                           D_ms=LIBRARY_D_MS, notice_s=LIBRARY_NOTICE_S, now_ns=time.time_ns(), message_max=MESSAGE_MAX,
+                           news={**(n := lib.news()), "url": n["url"].split("?")[0]})   # the key never reaches the page
             elif m := re.fullmatch(r"/api/artists/([0-9a-f]{32})/(photo|1x1|9x16|16x9)\.jpg", path):
                 try:
                     with open(lib.artist_path(m.group(1), m.group(2) + ".jpg"), "rb") as f:
@@ -1122,6 +1172,9 @@ def make_handler(lib: Library):
                     msg = (q.get("message") or [""])[0][:MESSAGE_MAX + 1]
                     e = lib.publish([i for i in (q.get("order") or [""])[0].split(",") if ID.match(i)], field("when"), int(at) if at.isdigit() else None, msg)
                     return self.reply(n=e["n"], start_ns=e["start_ns"])
+                if url.path == "/api/news":
+                    lib.set_news(field("choice"))
+                    return self.reply()
                 if url.path == "/api/queued/message":
                     lib.edit_message((q.get("message") or [""])[0][:MESSAGE_MAX + 1])
                     return self.reply()

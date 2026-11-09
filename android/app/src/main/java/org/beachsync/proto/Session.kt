@@ -82,6 +82,9 @@ class Session(ctx: Context, val s: Settings, private val satellitesOn: Boolean) 
     /** A call or other short interruption. Called from the main thread, never the audio thread. */
     fun mute(on: Boolean) { play.muted = on }
 
+    /** The music's level under the news (hand-off 47): volume only, the timeline never pauses. Never the audio thread. */
+    fun setGain(g: Float) { play.gain = g }
+
     fun stop() {
         play.running = false
         stream?.running = false; stream?.interrupt()

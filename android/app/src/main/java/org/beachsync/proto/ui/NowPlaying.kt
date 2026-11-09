@@ -136,6 +136,7 @@ fun NowPlaying(state: BenchState, actions: BenchActions, openLog: () -> Unit, op
         }
         ChannelHint(chUi)
         LibraryLine(state.library)
+        NewsCard()
         Dial(s, s?.gps ?: state.idleGps, boot, state.localTime, lagUncNs, openSatellites)
         BeatCounter(state, openBuffer)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Top) {
@@ -164,6 +165,7 @@ fun NowPlaying(state: BenchState, actions: BenchActions, openLog: () -> Unit, op
     }
     ChannelOverlays(chUi, state, actions)
     OrderNews.toast?.let { Toast(it.first, null, {}, Modifier.align(Alignment.BottomCenter)) }
+    NewsToast()
     // Asked once, as first listen folds away (hand-off 38).
     if (state.countryOffer && org.beachsync.proto.PearsEngine.view?.moments?.firstMusicDone == true) CountryAskSheet(actions::answerCountry)
     }

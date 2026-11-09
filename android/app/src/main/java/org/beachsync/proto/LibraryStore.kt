@@ -27,6 +27,8 @@ class LibraryStore private constructor(ctx: Context) : Thread("library") {
     /** Starts of queued editions the station called off before they began (hand-off 41), so a phone that saw one coming can say so. */
     @Volatile var calledOff: Set<Long> = emptySet()
     @Volatile var dMs = 60000L
+    /** The station's news bulletin (hand-off 49) from its announcement: null when it hasn't said, name "None" when it chose none. */
+    @Volatile var news: StationNews? = null
     @Volatile var url = ""
     @Volatile var status = "Library not downloaded yet"
     @Volatile var haveSets = 0
@@ -116,6 +118,7 @@ class LibraryStore private constructor(ctx: Context) : Thread("library") {
                 LibraryItem(it.getString("id"), it.optString("title"), it.optString("artist"), it.getLong("seconds"), it.getLong("bytes"), it.getString("sha256"))
             }, ed.optInt("n"), ed.optString("message"), ed.optLong("published_ns"), ed.optLong("from_s"))
         }
+        news = j.optJSONObject("news")?.let { StationNews(it.optString("choice"), it.optString("name"), it.optString("url")) }
         calledOff = j.optJSONArray("called_off")?.let { c -> (0 until c.length()).map { c.getJSONObject(it).optLong("start_ns") }.toSet() }.orEmpty()
         artists = j.optJSONObject("artists")?.let { a -> a.keys().asSequence().associateWith { k -> a.getJSONObject(k).let { it.optString("name") to it.optLong("v") } } }.orEmpty()
         setArtists = j.optJSONObject("set_artists")?.let { s -> s.keys().asSequence().associateWith { k -> s.getJSONArray(k).let { l -> (0 until l.length()).map { l.getString(it) } } } }.orEmpty()
@@ -312,3 +315,6 @@ class LocalSupply(private val store: LibraryStore) : BlockSupply {
 
     private companion object { const val RETAIN = 120L }
 }
+
+/** A station's news choice: "bbc", "npr" or "none", its name, and the feed URL ('' if the station has none set up). */
+data class StationNews(val choice: String, val name: String, val url: String)

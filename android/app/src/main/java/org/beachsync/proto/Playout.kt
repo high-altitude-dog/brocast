@@ -30,13 +30,16 @@ class Playout(
     @Volatile var extraLagNs = 0L
     /** Silenced for a phone call. Volume only: the timeline keeps running, so the music comes back in sync. */
     @Volatile var muted = false
-        set(v) { field = v; track?.setVolume(if (v) 0f else 1f) }
+        set(v) { field = v; track?.setVolume(if (v) 0f else gain) }
+    /** The music's level, 0..1, for news over the music (hand-off 47). Set from the news thread, never read in the loop: AudioTrack applies it. */
+    @Volatile var gain = 1f
+        set(v) { field = v; if (!muted) track?.setVolume(v) }
 
     override fun run() {
         Process.setThreadPriority(Process.THREAD_PRIORITY_URGENT_AUDIO)
         val t = try { makeTrack() } catch (e: Exception) { error = e.toString(); state = "audio failed"; return }
         track = t
-        if (muted) t.setVolume(0f)
+        if (muted) t.setVolume(0f) else if (gain != 1f) t.setVolume(gain)
         val buf = FloatArray(CHUNK * 2)
         val ts = AudioTimestamp()
         var written = 0L

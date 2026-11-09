@@ -6,6 +6,7 @@ import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.os.SystemClock
 import org.beachsync.proto.ui.PocketGuard
+import org.beachsync.proto.ui.NewsSettingsScreen
 import org.beachsync.proto.ui.SyncLineScreen
 import org.beachsync.proto.ui.DataSharingScreen
 import org.beachsync.proto.ui.DataSharingAdvancedScreen
@@ -122,6 +123,7 @@ class MainActivity : ComponentActivity(), BenchActions {
         super.onCreate(savedInstanceState)
         onRunStopped = runStopped
         org.beachsync.proto.ui.ScreenPrefs.load(this)
+        News.load(this)
         // The app is always dark, so the bars' icons stay light whatever the phone's own theme is.
         enableEdgeToEdge(SystemBarStyle.dark(Color.TRANSPARENT), SystemBarStyle.dark(Color.TRANSPARENT))
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -146,7 +148,7 @@ class MainActivity : ComponentActivity(), BenchActions {
             var cardSetup by remember { mutableStateOf<org.beachsync.proto.ui.TestCardSetup?>(null) }
             BackHandler(page != home) {
                 if (page == Page.EARCUP) cancelEarcup()
-                page = when (page) { Page.LOG, Page.NUDGE -> from; Page.EARCUP -> Page.CALIBRATION; Page.ADVANCED, Page.DATALOG -> Page.DATA; Page.SYNC_LINE -> Page.SYNC; Page.DATA, Page.IDENTITY, Page.CARD_SETUP -> Page.SETTINGS; Page.CARD -> Page.CARD_SETUP; Page.ARTIST -> if (artistFrom == Page.KEPT) Page.KEPT else home; else -> home }
+                page = when (page) { Page.LOG, Page.NUDGE -> from; Page.EARCUP -> Page.CALIBRATION; Page.ADVANCED, Page.DATALOG -> Page.DATA; Page.SYNC_LINE -> Page.SYNC; Page.DATA, Page.IDENTITY, Page.CARD_SETUP, Page.NEWS -> Page.SETTINGS; Page.CARD -> Page.CARD_SETUP; Page.ARTIST -> if (artistFrom == Page.KEPT) Page.KEPT else home; else -> home }
             }
             when (page) {
                 Page.NOW -> NowPlaying(state, this, { logLane = null; from = Page.NOW; page = Page.LOG }, { from = Page.NOW; page = Page.NUDGE }, { page = Page.BENCH }, { page = Page.SETTINGS }, { page = Page.SIGNALS }, { page = Page.CALIBRATION }, { page = Page.SATELLITES }, { page = Page.STEREO }, { page = Page.ARTIST }, { page = Page.SWARM }, { page = Page.BUFFER }) { page = Page.KEPT }
@@ -162,9 +164,10 @@ class MainActivity : ComponentActivity(), BenchActions {
                 Page.SWARM -> SwarmScreen { page = home }
                 Page.BUFFER -> BufferScreen(state, { page = home }) { page = Page.SWARM }
                 Page.SATELLITES -> SatellitesScreen(state, this, { page = home }, { page = Page.SIGNALS })
-                Page.SETTINGS -> SettingsPage(state, this, { page = home }, { page = Page.CALIBRATION }, { page = Page.SATELLITES }, { page = Page.SYNC }, { page = Page.BEAT }, { page = Page.STEREO }, { page = Page.DATA }, { page = Page.IDENTITY }) { page = Page.CARD_SETUP }
+                Page.SETTINGS -> SettingsPage(state, this, { page = home }, { page = Page.CALIBRATION }, { page = Page.SATELLITES }, { page = Page.SYNC }, { page = Page.BEAT }, { page = Page.STEREO }, { page = Page.DATA }, { page = Page.IDENTITY }, { page = Page.CARD_SETUP }) { page = Page.NEWS }
                 Page.CARD_SETUP -> TestCardSetupScreen(state, this, { page = Page.SETTINGS }) { cardSetup = it; page = Page.CARD }
                 Page.CARD -> cardSetup?.let { TestCardScreen(state, this, it) { page = Page.CARD_SETUP } }
+                Page.NEWS -> NewsSettingsScreen(state.library) { page = Page.SETTINGS }
                 Page.IDENTITY -> IdentityWizard(!state.satellites) { page = Page.SETTINGS }
                 Page.DATA -> DataSharingScreen({ page = Page.SETTINGS }, { page = Page.DATALOG }, { page = Page.ADVANCED })
                 Page.ADVANCED -> DataSharingAdvancedScreen { page = Page.DATA }
@@ -407,7 +410,7 @@ class MainActivity : ComponentActivity(), BenchActions {
         if (state.library != null) applyStation()
     }
 
-    private enum class Page { NOW, BENCH, LOG, NUDGE, SETTINGS, SIGNALS, CALIBRATION, EARCUP, SATELLITES, SYNC, SYNC_LINE, BEAT, STEREO, ARTIST, SWARM, BUFFER, DATA, ADVANCED, DATALOG, IDENTITY, KEPT, CARD_SETUP, CARD }
+    private enum class Page { NOW, BENCH, LOG, NUDGE, SETTINGS, SIGNALS, CALIBRATION, EARCUP, SATELLITES, SYNC, SYNC_LINE, BEAT, STEREO, ARTIST, SWARM, BUFFER, DATA, ADVANCED, DATALOG, IDENTITY, KEPT, CARD_SETUP, CARD, NEWS }
 
     companion object {
         /** Kept outside the activity, so a test run survives the screen being rebuilt. */

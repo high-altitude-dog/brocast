@@ -13,6 +13,9 @@ import android.content.pm.ServiceInfo
 import android.media.AudioAttributes
 import android.media.AudioFocusRequest
 import android.media.AudioManager
+import android.media.session.MediaSession
+import android.media.session.PlaybackState
+import android.view.KeyEvent
 import android.os.IBinder
 import android.os.PowerManager
 import android.util.Log
@@ -26,6 +29,7 @@ import android.util.Log
 class SessionService : Service() {
     private var wake: PowerManager.WakeLock? = null
     private var focus: AudioFocusRequest? = null
+    private var media: MediaSession? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -37,6 +41,32 @@ class SessionService : Service() {
             .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "beachsync:session")
             .apply { acquire(WAKE_MAX_MS) }
         takeAudioFocus()
+        takeMediaButton()
+    }
+
+    /**
+     * The headphones' play/pause (hand-off 47): news over the music while it plays, else it stops the music as before.
+     * Next and previous mean nothing on a live station, and double or triple presses are taken here so Android doesn't
+     * turn them into skips. Runs on the main thread.
+     */
+    private fun takeMediaButton() {
+        media = MediaSession(this, "brocast").apply {
+            setCallback(object : MediaSession.Callback() {
+                override fun onMediaButtonEvent(intent: Intent): Boolean {
+                    val k = intent.getParcelableExtra(Intent.EXTRA_KEY_EVENT, KeyEvent::class.java) ?: return false
+                    if (k.action != KeyEvent.ACTION_DOWN || k.repeatCount > 0) return true
+                    when (k.keyCode) {
+                        KeyEvent.KEYCODE_HEADSETHOOK, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, KeyEvent.KEYCODE_MEDIA_PAUSE, KeyEvent.KEYCODE_MEDIA_STOP ->
+                            if (k.keyCode == KeyEvent.KEYCODE_MEDIA_STOP || !News.press(this@SessionService)) endRun()
+                    }
+                    return true
+                }
+            })
+            setPlaybackState(PlaybackState.Builder()
+                .setActions(PlaybackState.ACTION_PLAY_PAUSE or PlaybackState.ACTION_PAUSE or PlaybackState.ACTION_STOP)
+                .setState(PlaybackState.STATE_PLAYING, PlaybackState.PLAYBACK_POSITION_UNKNOWN, 1f).build())
+            isActive = true
+        }
     }
 
     /**
@@ -92,6 +122,9 @@ class SessionService : Service() {
     }
 
     override fun onDestroy() {
+        News.stop()
+        media?.release()
+        media = null
         focus?.let { getSystemService(AudioManager::class.java).abandonAudioFocusRequest(it) }
         focus = null
         wake?.let { if (it.isHeld) it.release() }
