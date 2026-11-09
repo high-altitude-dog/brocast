@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
@@ -38,7 +39,10 @@ import androidx.compose.ui.unit.sp
 import org.beachsync.proto.FlowTime
 import org.beachsync.proto.GpsFitter
 import org.beachsync.proto.fmtMillis
+import org.beachsync.proto.RangeTrack
 import org.beachsync.proto.Sat
+import org.beachsync.proto.SatFacts
+import androidx.compose.ui.platform.LocalContext
 import java.util.Locale
 import kotlin.math.PI
 import kotlin.math.cos
@@ -76,6 +80,11 @@ fun SatellitesScreen(state: BenchState, actions: BenchActions, back: () -> Unit,
     // The satellites run from app open (the idle clock) as well as during a run, and only while the switch is on.
     val gps = (state.session?.gps ?: state.idleGps)?.takeIf { it.active }
     var picked by remember { mutableStateOf<String?>(null) }
+    val tracks = remember { HashMap<String, RangeTrack>() }
+    // 3D or Flat (hand-off 42): the choice is remembered.
+    val prefs = LocalContext.current.getSharedPreferences("ui", android.content.Context.MODE_PRIVATE)
+    var flat by remember { mutableStateOf(prefs.getBoolean("sky_flat", false)) }
+    val setFlat = { f: Boolean -> flat = f; prefs.edit().putBoolean("sky_flat", f).apply() }
     Screen {
         ScreenHeader("Satellites", back)
         if (gps == null) {
@@ -100,9 +109,24 @@ fun SatellitesScreen(state: BenchState, actions: BenchActions, back: () -> Unit,
             val accurate = !noRaw && total < 1.0
             Verdict(largest, total, stamp, accurate)
             val sats = gps.sats
-            Sky(sats, picked, { picked = it })
-            picked?.let { label -> sats.firstOrNull { it.label == label }?.let { SatCard(it) { picked = null } } }
-            BasicText("Tap any satellite for its details. Lines join the ones in use, like a constellation.", style = Tokens.Text.small.style(Ink.textSecondary))
+            // Each satellite's distance, once a second while this screen is open, for the rate on its card.
+            remember(boot) { sats.forEach { s -> tracks.getOrPut(s.label) { RangeTrack() }.add(boot / 1e9, rangeOf(s)) } }
+            val used = sats.count { it.used }
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                BasicText("YOUR SKY", Modifier.weight(1f), Tokens.Text.cardLabel.style())
+                BasicText("$used in use of ${sats.size}", style = Tokens.Text.valueSmall.style(Ink.accent))
+            }
+            if (flat) {
+                BasicText("Show in 3D", Modifier.clickable { setFlat(false) }.padding(vertical = 6.dp), Tokens.Text.body.style(Ink.accent))
+                Sky(sats, picked, { picked = it })
+            } else Sky3D(sats, gps.position, picked, { picked = it }) { setFlat(true) }
+            BasicText("● GPS   ◆ Galileo   ▲ GLONASS   ■ BeiDou   ○ in view, not used", style = Tokens.Text.small.style(Ink.textSecondary))
+            BasicText(
+                if (flat) "Tap any satellite for its details. Lines join the ones in use, like a constellation."
+                else "Pinch to zoom out to the real orbits, drag to turn, two fingers to tilt. Tap a satellite for its details.",
+                style = Tokens.Text.small.style(Ink.textSecondary),
+            )
+            picked?.let { label -> sats.firstOrNull { it.label == label }?.let { SatCard(it, tracks[label]?.rateKmS()) { picked = null } } }
             if (!noRaw) {
                 BasicText("WHAT LIMITS IT", Modifier.padding(top = 4.dp), Tokens.Text.cardLabel.style())
                 Card {
@@ -198,10 +222,6 @@ private fun LimitRow(title: String, detail: String, value: Double, top: Double, 
 private fun Sky(sats: List<Sat>, picked: String?, pick: (String?) -> Unit) {
     val measurer = rememberTextMeasurer()
     val used = sats.count { it.used }
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        BasicText("YOUR SKY", Modifier.weight(1f), Tokens.Text.cardLabel.style())
-        BasicText("$used in use of ${sats.size}", style = Tokens.Text.valueSmall.style(Ink.accent))
-    }
     val label = "Sky view with ${sats.size} satellites, $used in use"
     Canvas(
         Modifier.fillMaxWidth().aspectRatio(1f).background(Ink.surface, RoundedCornerShape(12.dp)).semantics { contentDescription = label }
@@ -255,7 +275,6 @@ private fun Sky(sats: List<Sat>, picked: String?, pick: (String?) -> Unit) {
             if (s.label == picked) drawCircle(Ink.text, 13.dp.toPx(), p, style = Stroke(2.dp.toPx()))
         }
     }
-    BasicText("● GPS   ◆ Galileo   ▲ GLONASS   ■ BeiDou   ○ in view, not used", style = Tokens.Text.small.style(Ink.textSecondary))
 }
 
 private fun skyAt(s: Sat, c: Offset, r: Float): Offset {
@@ -278,13 +297,27 @@ private fun DrawScope.mark(s: Sat, p: Offset, color: Color, filled: Boolean) {
 }
 
 @Composable
-private fun SatCard(s: Sat, close: () -> Unit) {
+private fun SatCard(s: Sat, rateKmS: Double?, close: () -> Unit) {
+    val orbit = SatFacts.orbit(s.system, s.svid)
+    val fleet = SatFacts.fleet(s.system)
+    val km = rangeOf(s)
     Card {
         Row(verticalAlignment = Alignment.CenterVertically) {
             BasicText("● ", style = Tokens.Text.bodyStrong.style(if (s.used) Ink.accent else Ink.muted))
             BasicText(s.label, style = Tokens.Text.bodyStrong.style())
-            BasicText("  ${s.systemName} · ${if (s.used) "in use" else "not in use"}", Modifier.weight(1f), Tokens.Text.small.style(Ink.textSecondary))
+            BasicText("  ${s.systemName} · ${if (s.used) "in use" else "in view, not used"}", Modifier.weight(1f), Tokens.Text.small.style(Ink.textSecondary))
             BasicText("×", Modifier.clickable(onClick = close).padding(8.dp), Tokens.Text.bodyStrong.style())
+        }
+        Column(Modifier.fillMaxWidth().border(1.dp, Ink.border, RoundedCornerShape(10.dp)).padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            BasicText("DISTANCE FROM YOU, NOW", style = Tokens.Text.cardLabel.style())
+            Row(verticalAlignment = Alignment.Bottom) {
+                BasicText("%,d".format(Locale.ROOT, km.toInt()), style = Tokens.Text.value.style().copy(fontSize = 30.sp))
+                BasicText(" km", Modifier.weight(1f), Tokens.Text.body.style(Ink.textSecondary))
+                rateKmS?.let { r ->
+                    BasicText(if (r < 0) "▼ %.1f km/s closer".format(Locale.ROOT, -r) else "▲ %.1f km/s farther".format(Locale.ROOT, r), style = Tokens.Text.valueSmall.style(if (r < 0) Ink.accent else Ink.textSecondary))
+                }
+            }
+            BasicText("Its signal left %.1f ms ago; the phone allows for that.".format(Locale.ROOT, km / SatFacts.C_KM_S * 1000), style = Tokens.Text.small.style(Ink.textSecondary))
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Column { BasicText("HEIGHT", style = Tokens.Text.cardLabel.style()); BasicText("%.0f°".format(Locale.ROOT, s.elevationDeg), style = Tokens.Text.valueSmall.style()) }
@@ -294,14 +327,35 @@ private fun SatCard(s: Sat, close: () -> Unit) {
         Box(Modifier.fillMaxWidth().height(6.dp).background(Ink.track, RoundedCornerShape(3.dp))) {
             Box(Modifier.fillMaxWidth((s.cn0DbHz / 50f).coerceIn(0.02f, 1f)).height(6.dp).background(Ink.accent, RoundedCornerShape(3.dp)))
         }
-        BasicText(
-            when {
-                s.cn0DbHz >= 35f && s.elevationDeg >= 30f -> "Strong signal, high in the sky. Satellites near the horizon or behind buildings are weaker."
-                s.cn0DbHz >= 35f -> "Strong signal, though low in the sky."
-                s.cn0DbHz >= 25f -> "A fair signal. A clearer view of the sky would make it stronger."
-                else -> "A weak signal. Buildings or the horizon may be in the way."
-            },
-            style = Tokens.Text.small.style(Ink.textSecondary),
-        )
+        fleet?.let { f ->
+            FactRow("COUNTRY") {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    BasicText(f.code, Modifier.border(1.dp, Ink.border, RoundedCornerShape(4.dp)).padding(horizontal = 5.dp, vertical = 1.dp), Tokens.Text.cardLabel.style(Ink.text))
+                    BasicText("  ${f.country}", style = Tokens.Text.body.style())
+                }
+                BasicText(f.operator, style = Tokens.Text.small.style(Ink.textSecondary))
+            }
+        }
+        FactRow("ORBIT") {
+            BasicText("${orbit.name} · ${"%,d".format(Locale.ROOT, orbit.heightKm)} km up", style = Tokens.Text.body.style())
+            BasicText(orbit.words, style = Tokens.Text.small.style(Ink.textSecondary))
+        }
+        FactRow("SPEED") {
+            BasicText("%.1f km/s".format(Locale.ROOT, orbit.speedKmS), style = Tokens.Text.valueSmall.style())
+            BasicText("about ${"%,d".format(Locale.ROOT, (orbit.speedKmS * 3600 / 10).toInt() * 10)} km/h", style = Tokens.Text.small.style(Ink.textSecondary))
+        }
+        fleet?.let { f -> FactRow("FLEET") { BasicText("one of ${f.size} ${s.systemName} satellites", style = Tokens.Text.body.style()) } }
+    }
+    BasicText(
+        "Distance updates every second from where the satellite is in your sky and the height of its orbit, worked out on this phone. Craft, launch year and weight wait for a satellite table in the app.",
+        style = Tokens.Text.small.style(Ink.textSecondary),
+    )
+}
+
+@Composable
+private fun FactRow(label: String, body: @Composable () -> Unit) {
+    Row(Modifier.fillMaxWidth().padding(top = 6.dp)) {
+        BasicText(label, Modifier.width(84.dp).padding(top = 2.dp), Tokens.Text.cardLabel.style())
+        Column(Modifier.weight(1f)) { body() }
     }
 }

@@ -34,7 +34,7 @@ import kotlin.math.roundToLong
  * One live peer, from the engine's status. [path] is lan, direct, punched or relayed (null if not yet known). [country] (hand-off 38) is an
  * ISO code, `hidden` (the peer doesn't allow it) or `unknown` (relayed, or not in the table); null from an engine that doesn't say.
  */
-class MeshPeer(val key: String, val station: Boolean, val path: String?, val toYouKbps: Int, val fromYouKbps: Int, val country: String? = null) {
+class MeshPeer(val key: String, val station: Boolean, val path: String?, val toYouKbps: Int, val fromYouKbps: Int, val country: String? = null, val rxBytes: Long = 0L) {
     val countryCode get() = country?.takeIf { it.length == 2 }
 }
 
@@ -63,7 +63,7 @@ class MeshView(val nym: String, val listeners: Int, val peers: List<MeshPeer>, v
             val list = sw?.optJSONArray("peers")
             val peers = (0 until (list?.length() ?: 0)).map { i ->
                 val p = list!!.getJSONObject(i)
-                MeshPeer(p.optString("key"), p.optString("role") == "station-seed", p.optString("path").ifEmpty { null }?.takeIf { it != "null" }, p.optInt("toYouKbps"), p.optInt("fromYouKbps"), p.optString("country").ifEmpty { null })
+                MeshPeer(p.optString("key"), p.optString("role") == "station-seed", p.optString("path").ifEmpty { null }?.takeIf { it != "null" }, p.optInt("toYouKbps"), p.optInt("fromYouKbps"), p.optString("country").ifEmpty { null }, p.optLong("rxBytes"))
             }
             val today = s.optJSONObject("ledger")?.optJSONObject("today")
             return MeshView(

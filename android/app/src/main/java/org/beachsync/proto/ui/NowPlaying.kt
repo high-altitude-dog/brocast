@@ -517,7 +517,7 @@ private fun SourceGlyph(gps: org.beachsync.proto.GpsTime?, boot: Long, open: () 
 }
 
 /** AHEAD: hours and minutes already on the phone beyond the playhead, or "All" when the whole library is here. */
-private fun aheadText(known: Boolean, all: Boolean, seconds: Long?): String = when {
+internal fun aheadText(known: Boolean, all: Boolean, seconds: Long?): String = when {
     !known -> "—"
     all -> "All"
     seconds == null -> "—"

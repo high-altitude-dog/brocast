@@ -428,3 +428,13 @@ How a change reaches phones, which the design must respect:
 - Announcement: an edition can carry a short operator message, and each phone knows the switch time in advance. Open for you: where it shows (Now playing line, event log, banner, notification), a countdown, and what happens for listeners offline at the time (they pick it up on reconnect).
 - "Tracks": sets have no per-track cue lists yet, so the first version reorders sets only. Design track order as later.
 - Disk: show free space and what an upload will need before it starts.
+
+## 8 Nov: hand-off 42 (Satellites in 3D) as built
+
+Compose Canvas with a plain perspective camera, no GL. Built: dome on the curved Earth (dot-matrix land from world-atlas 110 m, 15° grid, cyan rim, stars), You at top centre, pinch through Your sky / Orbits / Whole Earth (snaps to a level on release), one-finger turn, two-finger tilt (all the way to Flat), tap, double tap, 3D/Flat remembered, compass, recentre, − +, level chip, "dome not to scale", geostationary belt, orbit-height rings, distance tag, richer card. Reduce motion: zoom jumps. Gaps:
+- **Distance** comes from the satellite's direction and its system's orbit height, not the broadcast orbit (decoding navigation messages is a big job). Good to a few hundred km; chips that report whole-degree elevation make it step. The rate needs a minute and shows nothing until then.
+- **Craft, launch year, weight** need a per-satellite table that isn't in the app yet; the card leaves them out and says so. Country, operator, orbit, speed and fleet come from per-system facts.
+- **Whole Earth shows only the satellites in view**: there's no almanac of the rest, so no grey fleet, no below-horizon card, no orbit ring for the selected one.
+- No momentum on release; one-finger up/down drag is left to the page scroll.
+- The screen-reader list under the view isn't built; the view has the one-line summary.
+- The map waits for a position fix ("map waits for a position fix" chip); the position stays in memory only.

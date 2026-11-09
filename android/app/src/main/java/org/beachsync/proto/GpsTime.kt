@@ -71,8 +71,13 @@ class GpsTime(ctx: Context, private val log: CsvLog?) {
         }
     }
 
-    // The GNSS engine only runs while someone asks for position fixes, so ask for them and ignore them.
-    private val fixes = LocationListener { }
+    // The GNSS engine only runs while someone asks for position fixes. The fix is kept in memory only, for the Satellites screen's map
+    // (hand-off 42): never logged, saved or sent.
+    private val fixes = LocationListener { l -> position = l.latitude to l.longitude }
+
+    /** This phone's latitude and longitude in degrees from the last fix, null before one. In memory only. */
+    @Volatile var position: Pair<Double, Double>? = null
+        private set
 
     /** The caller must already hold location permission. A restart begins a fresh fit; the last one carries on as holdover. */
     @SuppressLint("MissingPermission")

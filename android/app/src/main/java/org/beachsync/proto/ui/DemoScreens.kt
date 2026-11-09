@@ -333,6 +333,35 @@ fun BufferScreen(state: BenchState, back: () -> Unit, openSwarm: () -> Unit) {
     var picked by remember { mutableStateOf<Int?>(null) }
     // Across a queued change of running order (hand-off 41), with what the old order had there.
     val upNext = lib?.let { upNextAt(it.editions, it.dMs, utc, 3) }.orEmpty()
+    // Real figures: AHEAD from the files on the phone (as Now playing), FILLING from the engine's bytes down per second against the set's
+    // own bytes per second, FROM STATION from each connected peer's bytes this session. The timeline drawing is still made up.
+    val mv = org.beachsync.proto.PearsEngine.view
+    val played = lib?.let { org.beachsync.proto.shownAt(it.editions, it.dMs, utc) }
+    val edNow = lib?.let { org.beachsync.proto.editionAt(it.editions, utc - it.dMs * 1_000_000L) }
+    val allHere = lib != null && edNow != null && edNow.items.all { lib.file(it.id).exists() }
+    val aheadS = if (lib != null && edNow != null && played != null) org.beachsync.proto.aheadSeconds(edNow, played.first, played.second) { lib.file(it.id).exists() } else null
+    val ahead = aheadText(lib != null && played != null, allHere, aheadS)
+    var meter by remember { mutableStateOf(Triple(-1L, 0L, 0.0)) }   // last bytes down, its boot time, smoothed bytes/s
+    androidx.compose.runtime.LaunchedEffect(mv) {
+        val b = mv?.downBytes ?: return@LaunchedEffect
+        val t = Session.nowBoot()
+        val (lb, lt, bps) = meter
+        meter = if (lb < 0 || b < lb || t - lt < 500_000_000L) (if (lb < 0 || b < lb) Triple(b, t, 0.0) else meter)
+            else Triple(b, t, 0.6 * bps + 0.4 * (b - lb) * 1e9 / (t - lt))
+    }
+    val audioBps = item?.takeIf { it.seconds > 0 }?.let { it.bytes.toDouble() / it.seconds }
+    val filling = when {
+        allHere -> "—" to "all here"
+        mv == null -> "—" to "from the server"
+        audioBps == null || meter.third < 1.0 -> "0×" to "waiting"
+        else -> "%.0f×".format(meter.third / audioBps).let { if (it == "0×") "<1×" else it } to "real time"
+    }
+    val rxAll = mv?.peers?.sumOf { it.rxBytes } ?: 0L
+    val fromStation = when {
+        mv == null -> "—" to "server, not the mesh"
+        rxAll <= 0L -> "—" to "nothing yet this session"
+        else -> "${(100 * mv.stations.sumOf { it.rxBytes } / rxAll)}%" to "the rest from listeners"
+    }
     Box(Modifier.fillMaxSize()) {
     Column(
         Modifier.fillMaxSize().background(Ink.bg).safeDrawingPadding().verticalScroll(rememberScrollState())
@@ -348,10 +377,10 @@ fun BufferScreen(state: BenchState, back: () -> Unit, openSwarm: () -> Unit) {
                 BasicText("Carries on in the background while you listen; usually 30 to 70 s on home Wi-Fi.", style = Tokens.Text.small.style(Ink.textSecondary))
             }
         }
-        DemoBanner()
         BasicText(item?.title ?: "Beach Sync Radio", style = Tokens.Text.bodyStrong.style(), maxLines = 2, overflow = TextOverflow.Ellipsis)
         item?.artist?.ifEmpty { null }?.let { BasicText(it, style = Tokens.Text.small.style(Ink.textSecondary)) }
-        BasicText("● Filling · ${DemoMesh.AHEAD_TEXT} ahead", style = Tokens.Text.bodyStrong.style(Ink.accent))
+        BasicText(if (allHere) "● All here · nothing left to fetch" else "● Filling · $ahead ahead", style = Tokens.Text.bodyStrong.style(Ink.accent))
+        DemoBanner("The timeline drawing is made up. AHEAD, FILLING and FROM STATION below are real.")
         BasicText("Tap any block near the playhead to see where it came from and why it can be trusted.", style = Tokens.Text.small.style(Ink.textSecondary))
         Canvas(Modifier.fillMaxWidth().height(150.dp).pointerInput(Unit) {
             detectTapGestures { p -> val v = p.x / (size.width / 390f); if (v >= 60f && v < 204f) picked = ((v - 60f) / 12f).toInt() }
@@ -376,7 +405,7 @@ fun BufferScreen(state: BenchState, back: () -> Unit, openSwarm: () -> Unit) {
             drawLine(Ink.accent, Offset(x(330f), mid - h / 2 - 8.dp.toPx()), Offset(x(330f), mid + h / 2 + 8.dp.toPx()), 1.5.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 3.dp.toPx())))
             drawLine(Ink.text, Offset(x(60f), mid - h / 2 - 10.dp.toPx()), Offset(x(60f), mid + h / 2 + 8.dp.toPx()), 2.dp.toPx())
             label(CLOCK_FMT.format(Instant.ofEpochSecond(0, utc)), x(60f), mid - h / 2 - 16.dp.toPx(), 9f, Ink.text)
-            label("FRONTIER +${DemoMesh.AHEAD_TEXT}", size.width, mid - h / 2 - 16.dp.toPx(), 9f, Ink.accent, Paint.Align.RIGHT)
+            label("FRONTIER +$ahead", size.width, mid - h / 2 - 16.dp.toPx(), 9f, Ink.accent, Paint.Align.RIGHT)
             // Blocks in flight: from the station (solid) and from listeners (outline), easing onto the frontier.
             for (k in 0 until 3) {
                 val t = (phase + k / 3f) % 1f
@@ -396,9 +425,9 @@ fun BufferScreen(state: BenchState, back: () -> Unit, openSwarm: () -> Unit) {
             BasicText("▯ not yet", style = Tokens.Text.small.style(Ink.faint)); BasicText("■ station  □ listeners", style = Tokens.Text.small.style(Ink.textSecondary))
         }
         Row(Modifier.fillMaxWidth().height(88.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            StatTile("AHEAD", DemoMesh.AHEAD_TEXT, "no gaps", Modifier.weight(1f))
-            StatTile("FILLING", "12×", "real time", Modifier.weight(1f))
-            StatTile("FROM STATION", "62%", "the rest from listeners", Modifier.weight(1f).clickable(role = Role.Button, onClick = openSwarm))
+            StatTile("AHEAD", ahead, if (allHere) "all downloaded" else "downloaded", Modifier.weight(1f))
+            StatTile("FILLING", filling.first, filling.second, Modifier.weight(1f))
+            StatTile("FROM STATION", fromStation.first, fromStation.second, Modifier.weight(1f).clickable(role = Role.Button, onClick = openSwarm))
         }
         Card {
             BasicText("UP NEXT", style = Tokens.Text.cardLabel.style())
