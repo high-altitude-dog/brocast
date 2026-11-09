@@ -109,7 +109,7 @@ fun NowPlaying(state: BenchState, actions: BenchActions, openLog: () -> Unit, op
     val silentS = lib?.let { silentForSeconds(it.editions, it.dMs, utcNow) } ?: 0L   // nothing is on air yet: the next set's sound is still on its way
     val playing = lib?.let { shownAt(it.editions, it.dMs, utcNow) }
     val dueMissing = playing != null && !lib.file(playing.first.id).exists()
-    val ahead = lib?.let { l -> editionAt(l.editions, utcNow)?.let { ed -> playing?.let { aheadSeconds(ed, it.first, it.second) { item -> l.file(item.id).exists() } } } }
+    val ahead = lib?.let { l -> editionAt(l.editions, utcNow - l.dMs * 1_000_000L)?.let { ed -> playing?.let { aheadSeconds(ed, it.first, it.second) { item -> l.file(item.id).exists() } } } }
     val everythingHere = lib != null && playing != null && !dueMissing && ahead == null
     val chUi = rememberChannelUi()
     Box(Modifier.fillMaxSize()) {
@@ -127,7 +127,7 @@ fun NowPlaying(state: BenchState, actions: BenchActions, openLog: () -> Unit, op
             ArtistThumb(lib, playing?.first, openArtist)
             Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
-                BasicText(playing?.first?.title?.ifEmpty { null } ?: s?.stream?.manifest?.source?.ifEmpty { null } ?: "Beach Sync Radio", style = Tokens.Text.screenTitle.style().copy(fontSize = 20.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                ScrollingName(playing?.first?.title?.ifEmpty { null } ?: s?.stream?.manifest?.source?.ifEmpty { null } ?: "Beach Sync Radio", Tokens.Text.screenTitle.style().copy(fontSize = 20.sp))
                 if (silentS > 0) BasicText("Starts in ${silentS / 60}:${"%02d".format(silentS % 60)}", style = Tokens.Text.small.style(Ink.accent).copy(fontSize = 13.sp), maxLines = 1)
                 else playing?.first?.artist?.ifEmpty { null }?.let { BasicText(it, style = Tokens.Text.small.style(Ink.textSecondary).copy(fontSize = 13.sp), maxLines = 1, overflow = TextOverflow.Ellipsis) }
             }
@@ -142,7 +142,13 @@ fun NowPlaying(state: BenchState, actions: BenchActions, openLog: () -> Unit, op
             PlayStopButton(s != null, lockedByDownload, listen)
             SyncBadge(s, boot, lagUncNs, if (s != null && dueMissing) lib.partPct.coerceAtLeast(0) else if (lockedByDownload) (lib?.partPct ?: -1).coerceAtLeast(0) else null, Modifier.weight(1f))
         }
-        EventRow(state.eventLog, SECOND_MS, openLog)
+        val news = OrderNews.upcoming
+        val off = OrderNews.calledOff
+        when {
+            news != null && lib != null -> OrderChangeCard(lib, news, FlowTime.fit()?.utcAt(boot) ?: (System.currentTimeMillis() * 1_000_000L), openLog)
+            off != null && lib != null -> CalledOffCard(off.first, lib.dMs)
+            else -> EventRow(state.eventLog, SECOND_MS, openLog)
+        }
         SyncCard(s, boot, lagUncNs, out.kind.label.lowercase(), out.external, openSignals)
         NudgeRow(state, openNudge, SECOND_MS)
         mesh?.let { MeshCard(it, openSwarm) }
@@ -157,6 +163,7 @@ fun NowPlaying(state: BenchState, actions: BenchActions, openLog: () -> Unit, op
         Card { SatellitesRow(state.satellites, actions::setSatellites, "Position stays on this phone · off = Privacy mode") }
     }
     ChannelOverlays(chUi, state, actions)
+    OrderNews.toast?.let { Toast(it.first, null, {}, Modifier.align(Alignment.BottomCenter)) }
     // Asked once, as first listen folds away (hand-off 38).
     if (state.countryOffer && org.beachsync.proto.PearsEngine.view?.moments?.firstMusicDone == true) CountryAskSheet(actions::answerCountry)
     }

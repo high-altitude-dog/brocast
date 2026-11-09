@@ -122,8 +122,7 @@ fun BeatSyncScope(state: BenchState, back: () -> Unit) {
 
 /** The beat at stream sample [pos], from the playing set's own grid, or null if that set's grid isn't worked out yet. */
 internal fun libraryBeat(lib: org.beachsync.proto.LibraryStore, utc: Long, pos: Double): org.beachsync.proto.SetBeats.Pos? {
-    val e = org.beachsync.proto.editionAt(lib.editions, utc) ?: return null
     val n = Math.floorDiv(Math.floor(pos).toLong(), 48000L)
-    val (item, block) = e.at(n) ?: return null
+    val (item, block) = org.beachsync.proto.segmentAt(lib.editions, n) ?: return null
     return lib.beats(item.id)?.at(block * 48000.0 + (pos - n * 48000.0))
 }

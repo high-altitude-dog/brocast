@@ -133,6 +133,7 @@ class MainActivity : ComponentActivity(), BenchActions {
         state.session = session
         val testScript = intent?.hasExtra("tickPattern") == true || (intent?.hasExtra("soloSlot") == true && intent?.hasExtra("library") != true)
         if (!testScript) applyStation()
+        window.decorView.post(newsTicker)
         state.eventLog = eventLog
         setContent {
             val fromTestScript = intent?.hasExtra("tickPattern") == true || intent?.hasExtra("soloSlot") == true
@@ -176,7 +177,16 @@ class MainActivity : ComponentActivity(), BenchActions {
         }
     }
 
+    /** Running-order news (hand-off 41), once a second while the app is alive, on the main thread, from the library only. */
+    private val newsTicker = object : Runnable {
+        override fun run() {
+            org.beachsync.proto.ui.OrderNews.tick(this@MainActivity, state.library, state.eventLog)
+            window.decorView.postDelayed(this, 1000L)
+        }
+    }
+
     override fun onDestroy() {
+        window.decorView.removeCallbacks(newsTicker)
         if (onRunStopped === runStopped) onRunStopped = null
         // Closing the app (Back out of it, or finished) stops the music. Home, the screen going off or a rotation don't.
         if (isFinishing && !isChangingConfigurations && session != null) { stopRun(); SessionService.end(this) }

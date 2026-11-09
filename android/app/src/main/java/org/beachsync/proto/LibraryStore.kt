@@ -24,6 +24,8 @@ class LibraryStore private constructor(ctx: Context) : Thread("library") {
     private val listFile = File(dir, "library.json")
 
     @Volatile var editions: List<Edition> = emptyList()
+    /** Starts of queued editions the station called off before they began (hand-off 41), so a phone that saw one coming can say so. */
+    @Volatile var calledOff: Set<Long> = emptySet()
     @Volatile var dMs = 60000L
     @Volatile var url = ""
     @Volatile var status = "Library not downloaded yet"
@@ -112,8 +114,9 @@ class LibraryStore private constructor(ctx: Context) : Thread("library") {
             Edition(ed.getLong("start_ns"), (0 until items.length()).map { i ->
                 val it = items.getJSONObject(i)
                 LibraryItem(it.getString("id"), it.optString("title"), it.optString("artist"), it.getLong("seconds"), it.getLong("bytes"), it.getString("sha256"))
-            })
+            }, ed.optInt("n"), ed.optString("message"), ed.optLong("published_ns"), ed.optLong("from_s"))
         }
+        calledOff = j.optJSONArray("called_off")?.let { c -> (0 until c.length()).map { c.getJSONObject(it).optLong("start_ns") }.toSet() }.orEmpty()
         artists = j.optJSONObject("artists")?.let { a -> a.keys().asSequence().associateWith { k -> a.getJSONObject(k).let { it.optString("name") to it.optLong("v") } } }.orEmpty()
         setArtists = j.optJSONObject("set_artists")?.let { s -> s.keys().asSequence().associateWith { k -> s.getJSONArray(k).let { l -> (0 until l.length()).map { l.getString(it) } } } }.orEmpty()
     }
@@ -142,7 +145,7 @@ class LibraryStore private constructor(ctx: Context) : Thread("library") {
     /** True once every file due is here. */
     private fun sync(): Boolean {
         val now = System.currentTimeMillis() * 1_000_000L
-        val edition = editionAt(editions, now) ?: run { status = "The library is empty"; return true }
+        val edition = editionAt(editions, now - dMs * 1_000_000L) ?: run { status = "The library is empty"; return true }
         val keep = editions.flatMap { it.items }.map { it.id }.toSet()
         dir.listFiles()?.forEach { f -> if (f.name.endsWith(".opus") && f.name.removeSuffix(".opus") !in keep) f.delete() }
         val n = Math.floorDiv(now - dMs * 1_000_000L - edition.startNs, 1_000_000_000L)
@@ -283,29 +286,29 @@ class LocalSupply(private val store: LibraryStore) : BlockSupply {
 
     private fun now() = FlowTime.fit()?.utcAt(SystemClock.elapsedRealtimeNanos()) ?: (System.currentTimeMillis() * 1_000_000L)
 
-    private fun edition(): Edition = editionAt(store.editions, now()) ?: throw IOException("Library not downloaded yet")
-
+    // One stream from a fixed start, whatever the edition: a new running order takes over between two segments, not with a restart.
     override fun manifest(): ByteArray {
-        val e = edition()
+        if (store.editions.isEmpty()) throw IOException("Library not downloaded yet")
         val now = now()
-        val newest = Math.floorDiv(now - e.startNs, 1_000_000_000L) - 1
-        val heard = Math.floorDiv(now - store.dMs * 1_000_000L - e.startNs, 1_000_000_000L)
-        val item = e.at(heard)?.first
-        return JSONObject().put("sample_rate", Renderer.RATE).put("channels", 2).put("start_utc_ns", e.startNs).put("newest", newest)
+        val newest = Math.floorDiv(now - STREAM_EPOCH_NS, 1_000_000_000L) - 1
+        val heard = Math.floorDiv(now - store.dMs * 1_000_000L - STREAM_EPOCH_NS, 1_000_000_000L)
+        val item = segmentAt(store.editions, heard)?.first
+        return JSONObject().put("sample_rate", Renderer.RATE).put("channels", 2).put("start_utc_ns", STREAM_EPOCH_NS).put("newest", newest)
             .put("oldest", maxOf(0L, newest - RETAIN)).put("D_ms", store.dMs).put("server_utc_ns", now)
             .put("source", listOfNotNull(item?.title, item?.artist?.ifEmpty { null }).joinToString(" · "))
             .put("block_format", OpusBlock.FORMAT).toString().toByteArray()
     }
 
     override fun opus(n: Long): ByteArray {
-        val (item, block) = edition().at(n) ?: throw IOException("the library is empty")
+        if (store.editions.isEmpty()) throw IOException("Library not downloaded yet")
+        val (item, block) = segmentAt(store.editions, n) ?: return OpusFile.silentBlock()   // before the first edition
         val f = store.file(item.id)
         if (!f.exists()) return PearsEngine.block(item.id, block) ?: throw IOException("Downloading ${item.title}")
         if (open.size > 2 && item.id !in open) { open.values.forEach { it.close() }; open.clear() }
         return open.getOrPut(item.id) { OpusFile(f) }.block(block)
     }
 
-    override fun startsFile(n: Long) = edition().at(n)?.second == 0L
+    override fun startsFile(n: Long) = segmentAt(store.editions, n)?.second == 0L
 
     private companion object { const val RETAIN = 120L }
 }

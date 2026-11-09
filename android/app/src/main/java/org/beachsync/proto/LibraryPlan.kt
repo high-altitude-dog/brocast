@@ -10,13 +10,18 @@ import java.io.RandomAccessFile
  */
 class LibraryItem(val id: String, val title: String, val artist: String, val seconds: Long, val bytes: Long, val sha256: String)
 
-class Edition(val startNs: Long, val items: List<LibraryItem>) {
+/**
+ * One running order from [startNs] on. [number], [message] and [publishedNs] (hand-off 41) come from the upload page: the edition's number,
+ * the operator's note to listeners, and when it was published (0 if unknown). It takes over at the ear at [startNs] + D, [fromS] seconds
+ * into its loop: a change at a set boundary carries on with the set after the one that ended, not with set 1.
+ */
+class Edition(val startNs: Long, val items: List<LibraryItem>, val number: Int = 0, val message: String = "", val publishedNs: Long = 0L, val fromS: Long = 0L) {
     val totalSeconds = items.sumOf { it.seconds }
 
     /** Which item segment [n] falls in, and which block of it. */
     fun at(n: Long): Pair<LibraryItem, Long>? {
         if (totalSeconds <= 0) return null
-        var left = Math.floorMod(n, totalSeconds)
+        var left = Math.floorMod(n + fromS, totalSeconds)
         for (item in items) {
             if (left < item.seconds) return item to left
             left -= item.seconds
@@ -35,6 +40,29 @@ class Edition(val startNs: Long, val items: List<LibraryItem>) {
 /** The newest edition already started, or the earliest if none has: a new edition takes over on every phone at the same moment. */
 fun editionAt(editions: List<Edition>, utcNs: Long): Edition? =
     editions.filter { it.startNs <= utcNs }.maxByOrNull { it.startNs } ?: editions.minByOrNull { it.startNs }
+
+/**
+ * Stream segments count whole seconds from this fixed instant (1 Jan 2026 UTC), whatever the edition, so a new running order takes over
+ * inside one stream with no restart and no gap (hand-off 41). Segment n is heard at STREAM_EPOCH_NS + n s + D.
+ */
+const val STREAM_EPOCH_NS = 1_767_225_600_000_000_000L
+
+/**
+ * Segment [n]'s item and block: the edition that has started by the segment's own time, so every phone switches on the same second.
+ * Null before the first edition starts, which plays as silence.
+ */
+fun segmentAt(editions: List<Edition>, n: Long): Pair<LibraryItem, Long>? {
+    val t = STREAM_EPOCH_NS + n * 1_000_000_000L
+    val ed = editionAt(editions, t) ?: return null
+    if (t < ed.startNs) return null
+    return ed.at(Math.floorDiv(t - ed.startNs, 1_000_000_000L))
+}
+
+/** The edition still to come at the ear, if any: the next one whose switch, at its start plus D, hasn't been heard yet. */
+fun upcomingEdition(editions: List<Edition>, dMs: Long, utcNs: Long): Edition? {
+    val live = editionAt(editions, utcNs - dMs * 1_000_000L) ?: return null
+    return editions.filter { it.startNs > live.startNs && it.startNs > utcNs - dMs * 1_000_000L }.minByOrNull { it.startNs }
+}
 
 /** One Ogg Opus file as 1 s blocks, read from disk as needed, matching the server's OpusBlocks. Only an index sits in memory. */
 class OpusFile(file: File) : AutoCloseable {
@@ -110,16 +138,21 @@ class OpusFile(file: File) : AutoCloseable {
 
     override fun close() = raf.close()
 
-    private companion object {
-        val SILENCE = byteArrayOf(0xF8.toByte(), 0xFF.toByte(), 0xFE.toByte())
+    companion object {
+        private val SILENCE = byteArrayOf(0xF8.toByte(), 0xFF.toByte(), 0xFE.toByte())
+
+        /** One second of Opus silence, for segments before the first edition. */
+        fun silentBlock(): ByteArray {
+            val out = ByteArrayOutputStream()
+            repeat(OpusBlock.PACKETS) { out.write(SILENCE.size); out.write(0); out.write(SILENCE) }
+            return out.toByteArray()
+        }
     }
 }
 
 /** What the shared timeline has at the ear at flowtime [utcNs]: the item and how far into it, or null when there's no edition. */
-fun playingAt(editions: List<Edition>, dMs: Long, utcNs: Long): Pair<LibraryItem, Long>? {
-    val edition = editionAt(editions, utcNs) ?: return null
-    return edition.at(Math.floorDiv(utcNs - dMs * 1_000_000L - edition.startNs, 1_000_000_000L))
-}
+fun playingAt(editions: List<Edition>, dMs: Long, utcNs: Long): Pair<LibraryItem, Long>? =
+    segmentAt(editions, Math.floorDiv(utcNs - dMs * 1_000_000L - STREAM_EPOCH_NS, 1_000_000_000L))
 
 /**
  * Seconds of music already on the phone from the playhead on, counting whole files in play order until one is missing.
@@ -138,18 +171,46 @@ fun aheadSeconds(edition: Edition, item: LibraryItem, offsetS: Long, have: (Libr
 }
 
 /**
- * Seconds until the library has sound at the ear: 0 when music is on air. A new edition takes over at its start, but
- * its first sound reaches the ear only after the playout delay, so there is a silent gap of that length (and the same
- * before the very first edition).
+ * Seconds until the library has sound at the ear: 0 when music is on air. Only before the very first edition: a later one takes over at
+ * the ear at its start plus D, straight from the one before, with no gap.
  */
 fun silentForSeconds(editions: List<Edition>, dMs: Long, utcNs: Long): Long {
-    val ed = editionAt(editions, utcNs) ?: return 0L
+    val ed = editionAt(editions, utcNs - dMs * 1_000_000L) ?: return 0L
     val n = Math.floorDiv(utcNs - dMs * 1_000_000L - ed.startNs, 1_000_000_000L)
     return if (n < 0) -n else 0L
 }
 
 /** What to show: the item at the ear, or while the library is silent, the first item of the edition, which is what plays next. */
 fun shownAt(editions: List<Edition>, dMs: Long, utcNs: Long): Pair<LibraryItem, Long>? {
-    if (silentForSeconds(editions, dMs, utcNs) > 0) return editionAt(editions, utcNs)?.items?.firstOrNull()?.let { it to 0L }
+    if (silentForSeconds(editions, dMs, utcNs) > 0) return editionAt(editions, utcNs - dMs * 1_000_000L)?.items?.firstOrNull()?.let { it to 0L }
     return playingAt(editions, dMs, utcNs)
+}
+
+/** One set still to come: when it starts at the ear, and, if a new running order put it there, what the old order had (hand-off 41). */
+class UpNext(val item: LibraryItem, val heardNs: Long, val newOrder: Boolean, val was: LibraryItem?)
+
+/**
+ * The next [count] sets at the ear from flowtime [utcNs], across a queued change of running order: at its start plus D the new order takes
+ * over, at a set boundary or, at a set time, part-way through whatever was playing.
+ */
+fun upNextAt(editions: List<Edition>, dMs: Long, utcNs: Long, count: Int): List<UpNext> {
+    val sec = 1_000_000_000L
+    val d = dMs * 1_000_000L
+    var t = Math.floorDiv(utcNs - d - STREAM_EPOCH_NS, sec)   // the segment at the ear now
+    val out = ArrayList<UpNext>()
+    var guard = 0
+    while (out.size < count && guard++ < count * 4 + 8) {
+        val (item, off) = segmentAt(editions, t) ?: return out
+        val tNs = STREAM_EPOCH_NS + t * sec
+        val switchNs = editions.filter { it.startNs > tNs }.minOfOrNull { it.startNs }
+        val boundary = t - off + item.seconds
+        val next = if (switchNs != null) minOf(boundary, Math.floorDiv(switchNs - STREAM_EPOCH_NS, sec)) else boundary
+        val (nextItem, _) = segmentAt(editions, next) ?: return out
+        val nextNs = STREAM_EPOCH_NS + next * sec
+        val changed = editionAt(editions, nextNs) !== editionAt(editions, tNs)
+        val old = if (changed) editionAt(editions, tNs)?.at(Math.floorDiv(nextNs - editionAt(editions, tNs)!!.startNs, sec))?.first else null
+        out.add(UpNext(nextItem, nextNs + d, changed, old?.takeIf { it.id != nextItem.id }))
+        t = next
+    }
+    return out
 }

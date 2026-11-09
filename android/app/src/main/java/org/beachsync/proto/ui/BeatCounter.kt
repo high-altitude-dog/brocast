@@ -25,7 +25,7 @@ import androidx.compose.ui.unit.sp
 import org.beachsync.proto.FlowTime
 import org.beachsync.proto.SetBeatAnalyser
 import org.beachsync.proto.Session
-import org.beachsync.proto.editionAt
+import org.beachsync.proto.segmentAt
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -45,9 +45,8 @@ fun BeatCounter(state: BenchState, open: () -> Unit) {
     val fit = FlowTime.fit() ?: return
     val utc = fit.utcAt(frame)
     val pos = (utc - m.startNs - m.dMs * 1_000_000L).toDouble() * 48000.0 / 1e9
-    val e = editionAt(lib.editions, utc) ?: return
     val n = Math.floorDiv(Math.floor(pos).toLong(), 48000L)
-    val (item, block) = e.at(n) ?: return
+    val (item, block) = segmentAt(lib.editions, n) ?: return
     val grid = lib.beats(item.id)
     val p = grid?.at(block * 48000.0 + (pos - n * 48000.0))
     // A new tempo shows in accent for one bar.

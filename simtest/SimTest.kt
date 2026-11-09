@@ -399,6 +399,20 @@ fun testNotOnAir() {
     check(silentForSeconds(listOf(ed), d, utc(60)) == 0L, "music is on air once the delay has passed")
     check(shownAt(listOf(ed), d, utc(10))?.first === a, "while silent the first set is shown, not a made-up one")
     check(shownAt(listOf(ed), d, utc(60 + 110))?.first === b, "once on air the set at the ear is shown")
+    // Hand-off 41: a new running order takes over inside the one stream, at its start plus D at the ear, with no silent gap.
+    val nx = Edition(ed.startNs + 120 * 1_000_000_000L, listOf(b, a), number = 2)
+    val eds = listOf(ed, nx)
+    fun seg(t: Long) = Math.floorDiv(t - STREAM_EPOCH_NS, 1_000_000_000L)
+    check(segmentAt(eds, seg(nx.startNs) - 1)?.first === b && segmentAt(eds, seg(nx.startNs) - 1)?.second == 19L, "the second before the switch is the old order's")
+    check(segmentAt(eds, seg(nx.startNs))?.first === b && segmentAt(eds, seg(nx.startNs))?.second == 0L, "the switch second starts the new order's first set")
+    check(segmentAt(eds, seg(ed.startNs) - 1) == null, "before the first edition, silence")
+    check(silentForSeconds(eds, d, nx.startNs + 30 * 1_000_000_000L) == 0L && playingAt(eds, d, nx.startNs + 30 * 1_000_000_000L)?.first === a, "no silence while the switch is on its way to the ear")
+    check(playingAt(eds, d, nx.startNs + d * 1_000_000L)?.first === b, "the ear hears the new order at its start plus D")
+    check(upcomingEdition(eds, d, nx.startNs + 59 * 1_000_000_000L) === nx && upcomingEdition(eds, d, nx.startNs + d * 1_000_000L) == null, "the change counts down until it's heard")
+    val ups = upNextAt(eds, d, ed.startNs + d * 1_000_000L + 10 * 1_000_000_000L, 3)
+    check(ups.size == 3 && ups[0].item === b && !ups[0].newOrder && ups[0].heardNs == ed.startNs + (100 + 60) * 1_000_000_000L, "up next: B after A, at its time at the ear")
+    check(ups[1].item === b && ups[1].newOrder && ups[1].was == null && ups[1].heardNs == nx.startNs + d * 1_000_000L, "then the new order at its set time, marked; no \"was\" when the old order had the same set there")
+    check(ups[2].item === a && !ups[2].newOrder, "and on through the new order")
     check(fmtDuration(0.0) == "0 µs" && fmtMillis(0.0) == "0 µs", "zero reads in µs")
     check(fmtMillis(0.4) == "400 µs" && fmtMillis(-0.4) == "-400 µs" && fmtMillis(3.0) == "3.0 ms", "under 1 ms in µs, 1 ms and up in ms")
 }
@@ -561,6 +575,7 @@ fun testLibrary() {
     check(editionAt(listOf(e, next), 4999L) === e && editionAt(listOf(e, next), 5000L) === next, "a new edition takes over exactly on time")
     check(editionAt(listOf(next), 10L) === next && editionAt(emptyList(), 10L) == null, "before the first edition starts, it's still the one to prepare")
     check(Edition(0L, emptyList()).at(4) == null, "an empty library has nothing to play")
+    check(Edition(1000L, listOf(a, b), fromS = 3).at(0)!!.first === b && Edition(1000L, listOf(a, b), fromS = 3).at(2)!!.first === a, "an edition can start part-way round its loop, at the set after the one that ended")
     // Ogg pages with a packet running across two of them.
     fun page(body: ByteArray, lacing: List<Int>) = "OggS".toByteArray() + ByteArray(22) + byteArrayOf(lacing.size.toByte()) + lacing.map { it.toByte() }.toByteArray() + body
     val tmp = java.io.File.createTempFile("opus", ".ogg")

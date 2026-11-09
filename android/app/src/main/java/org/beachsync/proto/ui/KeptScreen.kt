@@ -219,7 +219,7 @@ private fun KeptCard(lib: LibraryStore, item: LibraryItem, info: KeptInfo?, play
             ArtistThumb(lib, item) { openArtist(item.id) }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
-                BasicText(item.title, style = Tokens.Text.bodyStrong.style().copy(fontSize = 17.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                ScrollingName(item.title, Tokens.Text.bodyStrong.style().copy(fontSize = 17.sp))
                 BasicText(listOf(item.artist.ifEmpty { null } ?: lib.artistNames(item.id), "set").filterNotNull().joinToString(" · "), style = Tokens.Text.small.style(Ink.textSecondary), maxLines = 1)
                 BasicText("${clock(item.seconds)} · $bpm · ${mb(item.bytes)}", style = Tokens.Text.valueSmall.style(Ink.textSecondary).copy(fontSize = 11.sp), maxLines = 1)
             }

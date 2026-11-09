@@ -53,7 +53,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.beachsync.proto.FlowTime
 import org.beachsync.proto.Session
-import org.beachsync.proto.editionAt
+import org.beachsync.proto.upNextAt
 import java.time.Instant
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
@@ -331,7 +331,8 @@ fun BufferScreen(state: BenchState, back: () -> Unit, openSwarm: () -> Unit) {
     val item = nowPlayingItem(lib, boot)
     val utc = FlowTime.fit()?.utcAt(boot) ?: (System.currentTimeMillis() * 1_000_000L)
     var picked by remember { mutableStateOf<Int?>(null) }
-    val upNext = lib?.let { l -> editionAt(l.editions, utc)?.items?.let { items -> items.indexOf(item).let { i -> if (i < 0) emptyList() else items.drop(i + 1) + items.take(i) } } }.orEmpty().take(3)
+    // Across a queued change of running order (hand-off 41), with what the old order had there.
+    val upNext = lib?.let { upNextAt(it.editions, it.dMs, utc, 3) }.orEmpty()
     Box(Modifier.fillMaxSize()) {
     Column(
         Modifier.fillMaxSize().background(Ink.bg).safeDrawingPadding().verticalScroll(rememberScrollState())
@@ -403,9 +404,14 @@ fun BufferScreen(state: BenchState, back: () -> Unit, openSwarm: () -> Unit) {
             BasicText("UP NEXT", style = Tokens.Text.cardLabel.style())
             if (upNext.isEmpty()) BasicText("Nothing after this set yet.", style = Tokens.Text.small.style(Ink.textSecondary))
             for (u in upNext) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    BasicText(u.title, Modifier.weight(1f), Tokens.Text.body.style(), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    BasicText("✓ ready", style = Tokens.Text.small.style(Ink.accent))
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    BasicText(hhmm(u.heardNs), Modifier.width(56.dp), Tokens.Text.valueSmall.style())
+                    Column(Modifier.weight(1f)) {
+                        BasicText(u.item.title, style = Tokens.Text.body.style(), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        if (u.newOrder) BasicText("new order" + (u.was?.let { " · was ${it.title}" } ?: ""), style = Tokens.Text.small.style(org.beachsync.proto.Lane.NET.color()))
+                    }
+                    if (lib!!.file(u.item.id).exists()) BasicText("✓ ready", style = Tokens.Text.small.style(Ink.accent))
+                    else BasicText("downloading", style = Tokens.Text.small.style(Ink.textSecondary))
                 }
             }
         }
