@@ -48,7 +48,7 @@ class SetBeats(val windows: List<Win?>) {
         const val RATE = 48000.0
         const val WINDOW_S = 8L
         const val LENGTH_S = 16
-        private const val HEADER = "beats 3"   // 3: the bar start can move within a track (8 Nov); older files are resolved again from their raw results
+        private const val HEADER = "beats 4"   // 4: drops and breaks vote for bar 1 (9 Nov); 3: the bar start can move within a track (8 Nov); older files are resolved again from their raw results
         private const val REALIGN_COST = 4.5  // how much evidence a move of the bar start needs (tuned on 11 real sets, 8 Nov: no back-and-forth pairs)
         private const val FILL = 4            // a window with no beat borrows a good one up to this many windows away
         private const val SPAN = 8            // windows either side that vote on the bar start: about a minute each way
@@ -171,7 +171,18 @@ class SetBeats(val windows: List<Win?>) {
                     w = e
                 }
             }
-            val phaseOf = barPhases(n, track, filled.map { it != null }, change, winChange)
+            // EDM structure (hand-off research, 9 Nov): sections change on bar 1 of a phrase, and the clearest change is the low end (kick and bass)
+            // leaving for a break or coming back for the drop. Each such moment votes strongly for its own beat as bar 1.
+            val structural = HashMap<Int, DoubleArray>()
+            if (frames > 0) for (ev in lowEndChanges(feat)) {
+                if (STRUCT_MODE == 1 && !ev.second || STRUCT_MODE == 2 && ev.second || STRUCT_MODE == 0) continue
+                val sample = ev.first * RATE / BeatFeatures.PER_S + 1024
+                val w = windowAt(sample.toLong()).toInt()
+                if (w !in 0 until n || filled[w] == null) continue
+                val j = Math.round((sample - anchor[w]) / period[w])
+                structural.getOrPut(w) { DoubleArray(4) }[Math.floorMod(index[w] + j, 4L).toInt()] += 1.0
+            }
+            val phaseOf = barPhases(n, track, filled.map { it != null }, change, winChange, structural)
             val wins = arrayOfNulls<Win>(n)
             for (w in 0 until n) {
                 val g = filled[w] ?: continue
@@ -189,13 +200,47 @@ class SetBeats(val windows: List<Win?>) {
             return SetBeats(wins.toList())
         }
 
+        // Tuned on 11 real sets (9 Nov): drops and breaks then land on beat 1 far more often, and weaker changes not used as evidence do too.
+        @JvmField var STRUCT_MODE = 3        // 1: only the low end coming back, 2: only leaving, 3: both (for testing)
+        @JvmField var STRUCT_WEIGHT = 2.0    // each change's vote, in units of one window's relative evidence
+        @JvmField var STRUCT_REACH = 6       // windows either side it reaches (±48 s: across a breakdown)
+        @JvmField var STRUCT_THRESH = 0.8    // how big a low-end change must be to count
+
+        /**
+         * Where the low end (40–150 Hz: kick and bass) comes back after a break (true) or leaves for one (false), as feature frames: the steepest step
+         * near a point where the 4 s after differs from the 4 s before by more than [STRUCT_THRESH] of the set's usual low-end range.
+         */
+        internal fun lowEndChanges(feat: FloatArray): List<Pair<Int, Boolean>> {
+            val b = BeatFeatures.BANDS; val n = feat.size / b
+            if (n < 80) return emptyList()
+            val low = DoubleArray(n) { f -> (feat[f * b] + feat[f * b + 1] + feat[f * b + 2] + feat[f * b + 3]) / 4.0 }
+            val sorted = low.sorted(); val span = (sorted[(n * 0.75).toInt()] - sorted[(n * 0.05).toInt()]).coerceAtLeast(1e-6)
+            val half = 4 * BeatFeatures.PER_S
+            val out = ArrayList<Pair<Int, Boolean>>()
+            var f = half
+            while (f < n - half) {
+                var before = 0.0; var after = 0.0
+                for (k in f - half until f) before += low[k]
+                for (k in f until f + half) after += low[k]
+                val d = (after - before) / half / span
+                if (abs(d) > STRUCT_THRESH) {
+                    // The change's centre is where the before/after difference peaks, not where it first crosses; then the steepest step near it.
+                    fun diff(c: Int): Double { var a = 0.0; for (k in c until c + half) a += low[k] - low[k - half]; return a / half / span }
+                    val c = (f until minOf(f + half, n - half)).maxBy { if (d > 0) diff(it) else -diff(it) }
+                    val best = (c - 3..c + 3).maxBy { k -> if (d > 0) low[k] - low[k - 1] else low[k - 1] - low[k] }
+                    out.add(best to (d > 0)); f += 2 * half
+                } else f++
+            }
+            return out
+        }
+
         /**
          * The bar start (beat number mod 4) for each window, where the sound says: within each track, the path through the windows that best fits each
          * window's own evidence (how much the sound changes on each beat number, averaged over the window and the two either side), paying
          * [REALIGN_COST] for each move. A DJ's mix that lands the next record on another beat of the bar moves it; a noisy window doesn't.
          * Null where a window has no evidence or its track has none.
          */
-        internal fun barPhases(n: Int, track: IntArray, has: List<Boolean>, change: Map<Int, DoubleArray>, winChange: Map<Int, DoubleArray>): Array<Int?> {
+        internal fun barPhases(n: Int, track: IntArray, has: List<Boolean>, change: Map<Int, DoubleArray>, winChange: Map<Int, DoubleArray>, structural: Map<Int, DoubleArray> = emptyMap()): Array<Int?> {
             val out = arrayOfNulls<Int>(n)
             var w = 0
             while (w < n) {
@@ -209,6 +254,7 @@ class SetBeats(val windows: List<Win?>) {
                     val ev = ids.map { c ->
                         val acc = DoubleArray(4)
                         for (o in -2..2) winChange[c + o]?.takeIf { track[c + o] == tr }?.let { v -> val m = v.average().coerceAtLeast(1e-9); for (k in 0..3) acc[k] += v[k] / m - 1 }
+                        for (o in -STRUCT_REACH..STRUCT_REACH) structural[c + o]?.takeIf { track[c + o] == tr }?.let { v -> for (k in 0..3) acc[k] += STRUCT_WEIGHT * v[k] }
                         DoubleArray(4) { acc[it] + 0.1 * track4[it] }
                     }
                     val score = Array(ids.size) { DoubleArray(4) }
