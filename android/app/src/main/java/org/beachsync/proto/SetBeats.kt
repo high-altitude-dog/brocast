@@ -12,16 +12,17 @@ import kotlin.math.roundToLong
  *
  * The set is cut into the same windows as the live tracker (16 s from 8w, used for the 8 s from 8w + 4) and each is analysed by [BeatGrid]. Because the whole
  * set is in hand, [resolve] can then look both ways: a window locked onto a wrong multiple of the tempo is dropped, a drumless window borrows the nearest good
- * grid, one beat count runs through each track (a stretch of steady tempo), and the bar start is the vote of the whole track, so bars don't jump between
- * windows. Bars are numbered from the start of the set.
+ * grid, one beat count runs through each track (a stretch of steady tempo), and the bar start follows the sound through the track: a DJ who mixes the
+ * next record in on beat 3 moves it, and the grid follows once the evidence holds for about half a minute ([realigned] marks where). Bars are numbered
+ * from the start of the set.
  * It is a pure function of the file, so every phone holding the same file gets the same grid.
  */
 class SetBeats(val windows: List<Win?>) {
     /** Beats fall at [downbeat] + k × [period] (file samples at 48 kHz); k divisible by 4 starts a bar, and that bar is number [bar0] + k / 4. */
-    class Win(val period: Double, val downbeat: Double, val bar0: Long, val confidence: Float)
+    class Win(val period: Double, val downbeat: Double, val bar0: Long, val confidence: Float, val realigned: Boolean = false)
 
     /** Where [at] puts a file sample: tempo, beat 0 to 3 within the bar, how far through that beat, and the bar number from the set's start. */
-    class Pos(val bpm: Double, val beatInBar: Int, val beatFrac: Double, val bar: Long, val sinceBeatSamples: Double)
+    class Pos(val bpm: Double, val beatInBar: Int, val beatFrac: Double, val bar: Long, val sinceBeatSamples: Double, val realigned: Boolean = false)
 
     fun at(fileSample: Double): Pos? {
         if (windows.isEmpty()) return null
@@ -30,13 +31,15 @@ class SetBeats(val windows: List<Win?>) {
         val x = (fileSample - win.downbeat) / win.period
         val k = floor(x)
         val kl = k.toLong()
-        return Pos(60.0 * RATE / win.period, Math.floorMod(kl, 4L).toInt(), x - k, win.bar0 + Math.floorDiv(kl, 4L), (x - k) * win.period)
+        // For the first two bars after the bar start moved, so the counter can show it.
+        val fresh = win.realigned && fileSample - (WINDOW_S * w + 4) * RATE < 8 * win.period
+        return Pos(60.0 * RATE / win.period, Math.floorMod(kl, 4L).toInt(), x - k, win.bar0 + Math.floorDiv(kl, 4L), (x - k) * win.period, fresh)
     }
 
     /** The grid, then the raw window results it came from (so a better [resolve] later needs no new analysis). */
     fun encode(raw: List<BeatGrid.Result?> = emptyList()): String = buildString {
         append(HEADER).append('\n')
-        for (w in windows) append(if (w == null) "-" else "${w.period} ${w.downbeat} ${w.bar0} ${w.confidence}").append('\n')
+        for (w in windows) append(if (w == null) "-" else "${w.period} ${w.downbeat} ${w.bar0} ${w.confidence}" + if (w.realigned) " r" else "").append('\n')
         append("raw\n")
         for (r in raw) append(if (r == null) "-" else "${r.periodSamples} ${r.phaseSample} ${r.barOffset} ${r.confidence}").append('\n')
     }
@@ -45,7 +48,8 @@ class SetBeats(val windows: List<Win?>) {
         const val RATE = 48000.0
         const val WINDOW_S = 8L
         const val LENGTH_S = 16
-        private const val HEADER = "beats 2"   // 2: one lattice per track (7 Nov); version 1 files are worked out again
+        private const val HEADER = "beats 3"   // 3: the bar start can move within a track (8 Nov); older files are resolved again from their raw results
+        private const val REALIGN_COST = 4.5  // how much evidence a move of the bar start needs (tuned on 11 real sets, 8 Nov: no back-and-forth pairs)
         private const val FILL = 4            // a window with no beat borrows a good one up to this many windows away
         private const val SPAN = 8            // windows either side that vote on the bar start: about a minute each way
         private const val SAME_TEMPO = 0.02   // tempi within 2% count as the same track
@@ -66,7 +70,7 @@ class SetBeats(val windows: List<Win?>) {
             if (lines.firstOrNull() != HEADER) return null
             return try {
                 SetBeats(lines.drop(1).map { l ->
-                    if (l == "-") null else l.split(' ').let { Win(it[0].toDouble(), it[1].toDouble(), it[2].toLong(), it[3].toFloat()) }
+                    if (l == "-") null else l.split(' ').let { Win(it[0].toDouble(), it[1].toDouble(), it[2].toLong(), it[3].toFloat(), it.getOrNull(4) == "r") }
                 })
             } catch (_: RuntimeException) { null }
         }
@@ -122,10 +126,12 @@ class SetBeats(val windows: List<Win?>) {
             // Better, where the sound is known: bar 1 is where the sound changes most. For each beat, the change in band energies between the two beats
             // after it and the two before it; summed by beat number mod 4 over the whole track, the largest sum marks the bar start.
             val change = HashMap<Int, DoubleArray>()
+            val winChange = HashMap<Int, DoubleArray>()   // the same, per window
             val frames = feat.size / BeatFeatures.BANDS
             if (frames > 0) {
                 val perFrame = RATE / BeatFeatures.PER_S
                 val means = HashMap<Long, FloatArray>()   // per beat number, within the current track
+                val beatWin = HashMap<Long, Int>()          // which window each beat was measured in
                 fun mean(from: Double, to: Double): FloatArray? {
                     val a = (from / perFrame).toInt(); val b = (to / perFrame).toInt()
                     if (a < 0 || b > frames || b <= a) return null
@@ -137,7 +143,7 @@ class SetBeats(val windows: List<Win?>) {
                 var w = 0
                 while (w < n) {
                     val tr = track[w]
-                    means.clear()
+                    means.clear(); beatWin.clear()
                     var e = w
                     while (e < n && track[e] == tr) {
                         if (filled[e] != null) {
@@ -146,7 +152,7 @@ class SetBeats(val windows: List<Win?>) {
                             var j = Math.round((start - anchor[e]) / p)
                             while (anchor[e] + j * p < start + WINDOW_S * RATE) {
                                 val at = anchor[e] + j * p
-                                mean(at, at + p)?.let { means[index[e] + j] = it }
+                                mean(at, at + p)?.let { means[index[e] + j] = it; beatWin[index[e] + j] = e }
                                 j++
                             }
                         }
@@ -159,25 +165,66 @@ class SetBeats(val windows: List<Win?>) {
                         var d = 0.0
                         for (k in 0 until BeatFeatures.BANDS) d += abs((after[0]!![k] + after[1]!![k]) - (before[0]!![k] + before[1]!![k])) / 2
                         sums[Math.floorMod(i, 4L).toInt()] += d
+                        beatWin[i]?.let { ew -> winChange.getOrPut(ew) { DoubleArray(4) }[Math.floorMod(i, 4L).toInt()] += d }
                     }
                     if (sums.sum() > 0) change[tr] = sums
                     w = e
                 }
             }
+            val phaseOf = barPhases(n, track, filled.map { it != null }, change, winChange)
             val wins = arrayOfNulls<Win>(n)
             for (w in 0 until n) {
                 val g = filled[w] ?: continue
                 val p = period[w]
                 val v = change[track[w]] ?: votes[track[w]]
-                val phase = if (v == null) Math.floorMod(index[w] + g.barOffset, 4L).toInt() else (0..3).maxBy { v[it] }
+                val phase = phaseOf[w] ?: if (v == null) Math.floorMod(index[w] + g.barOffset, 4L).toInt() else (0..3).maxBy { v[it] }
                 // The downbeat at or just before the start of the 8 s this window is used for, and its bar number from the set's start.
                 var k = Math.floorMod(phase - index[w], 4L)
                 val start = (WINDOW_S * w + 4) * RATE
                 if (anchor[w] + k * p > start) k -= 4
                 val down = anchor[w] + k * p
-                wins[w] = Win(p, down, Math.floorDiv(index[w] + k - phase, 4L), g.confidence)
+                val moved = w > 0 && track[w - 1] == track[w] && phaseOf[w] != null && phaseOf[w - 1] != null && phaseOf[w] != phaseOf[w - 1]
+                wins[w] = Win(p, down, Math.floorDiv(index[w] + k - phase, 4L), g.confidence, moved)
             }
             return SetBeats(wins.toList())
+        }
+
+        /**
+         * The bar start (beat number mod 4) for each window, where the sound says: within each track, the path through the windows that best fits each
+         * window's own evidence (how much the sound changes on each beat number, averaged over the window and the two either side), paying
+         * [REALIGN_COST] for each move. A DJ's mix that lands the next record on another beat of the bar moves it; a noisy window doesn't.
+         * Null where a window has no evidence or its track has none.
+         */
+        internal fun barPhases(n: Int, track: IntArray, has: List<Boolean>, change: Map<Int, DoubleArray>, winChange: Map<Int, DoubleArray>): Array<Int?> {
+            val out = arrayOfNulls<Int>(n)
+            var w = 0
+            while (w < n) {
+                val tr = track[w]
+                var e = w
+                while (e < n && track[e] == tr) e++
+                val ids = (w until e).filter { has[it] }
+                if (change[tr] != null && ids.isNotEmpty()) {
+                    // Each window's evidence, relative to its own mean, smoothed over ±2 windows; the track's own sums as a gentle prior.
+                    val track4 = change[tr]!!.let { t -> val m = t.average().coerceAtLeast(1e-9); DoubleArray(4) { t[it] / m - 1 } }
+                    val ev = ids.map { c ->
+                        val acc = DoubleArray(4)
+                        for (o in -2..2) winChange[c + o]?.takeIf { track[c + o] == tr }?.let { v -> val m = v.average().coerceAtLeast(1e-9); for (k in 0..3) acc[k] += v[k] / m - 1 }
+                        DoubleArray(4) { acc[it] + 0.1 * track4[it] }
+                    }
+                    val score = Array(ids.size) { DoubleArray(4) }
+                    val from = Array(ids.size) { IntArray(4) }
+                    for (k in 0..3) score[0][k] = ev[0][k]
+                    for (i in 1 until ids.size) for (k in 0..3) {
+                        var best = score[i - 1][k]; var arg = k
+                        for (j in 0..3) if (j != k && score[i - 1][j] - REALIGN_COST > best) { best = score[i - 1][j] - REALIGN_COST; arg = j }
+                        score[i][k] = best + ev[i][k]; from[i][k] = arg
+                    }
+                    var k = (0..3).maxBy { score[ids.size - 1][it] }
+                    for (i in ids.indices.reversed()) { out[ids[i]] = k; k = from[i][k] }
+                }
+                w = e
+            }
+            return out
         }
     }
 }

@@ -20,7 +20,16 @@ class SetBeatAnalyser(private val store: LibraryStore) : Thread("set-beats") {
             for (item in store.editions.flatMap { it.items }.distinctBy { it.id }) {
                 val f = store.file(item.id)
                 val out = store.beatsFile(item.id)
-                if (!f.exists() || (out.exists() && store.beats(item.id, fresh = true) != null)) continue   // an old version's file is worked out again
+                if (!f.exists() || (out.exists() && store.beats(item.id, fresh = true) != null)) continue
+                // An older version's file: resolved again from its saved raw results and sound features, in seconds, with no new analysis.
+                if (out.exists() && store.featuresFile(item.id).exists()) {
+                    val raw = SetBeats.decodeRaw(out.readText())
+                    if (raw.isNotEmpty()) {
+                        val tmp = File(out.path + ".tmp")
+                        try { tmp.writeText(SetBeats.resolve(raw, readFloats(store.featuresFile(item.id))).encode(raw)); if (tmp.renameTo(out)) continue }
+                        catch (e: Exception) { Log.w(TAG, "re-resolve ${item.id}", e) }
+                    }
+                }
                 try { analyse(item, f, out) } catch (e: InterruptedException) { return } catch (e: Exception) { Log.w(TAG, "beats for ${item.id}", e) }
                 finally { working = null }
             }

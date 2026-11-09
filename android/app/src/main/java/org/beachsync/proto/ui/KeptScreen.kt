@@ -103,8 +103,8 @@ fun KeptScreen(state: BenchState, back: () -> Unit, openArtist: (String) -> Unit
     var sort by remember { mutableIntStateOf(0) }
     var open by remember { mutableStateOf<String?>(null) }
     val allBpm = kept.mapNotNull { infos[it.id]?.bpmMain }
-    val lowest = ((kept.mapNotNull { infos[it.id]?.bpmLow }.minOrNull() ?: 110) - 2)
-    val highest = ((kept.mapNotNull { infos[it.id]?.bpmHigh }.maxOrNull() ?: 130) + 2)
+    val lowest = ((kept.mapNotNull { infos[it.id]?.bpmLow }.minOrNull() ?: 110) - 3).let { it - Math.floorMod(it, 5) }
+    val highest = ((kept.mapNotNull { infos[it.id]?.bpmHigh }.maxOrNull() ?: 130) + 3).let { it + Math.floorMod(-it, 5) }
     var range by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     val (from, to) = range ?: (lowest to highest)
     // Only the BPM filter dims a card. A set with no tempo yet (still being worked out, or no steady beat) isn't on the map, so it never dims.
@@ -194,8 +194,12 @@ private fun TempoMap(kept: List<LibraryItem>, infos: Map<String, KeptInfo>, lo: 
         }
         val base = size.height - 16.dp.toPx()
         drawLine(Ink.grid, Offset(0f, base), Offset(size.width, base), 1.dp.toPx())
-        var t = (lo / 5 + 1) * 5
-        while (t < hi) { monoText("$t", x(t.toFloat()), size.height - 2.dp.toPx(), 9f, Ink.muted); t += 5 }
+        var t = lo
+        while (t <= hi) {
+            monoText("$t", x(t.toFloat()), size.height - 2.dp.toPx(), 9f, Ink.muted,
+                when (t) { lo -> android.graphics.Paint.Align.LEFT; hi -> android.graphics.Paint.Align.RIGHT; else -> android.graphics.Paint.Align.CENTER })
+            t += 5
+        }
     }
 }
 

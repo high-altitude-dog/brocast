@@ -61,13 +61,14 @@ fun BeatCounter(state: BenchState, open: () -> Unit) {
     val working = SetBeatAnalyser.current()?.working?.takeIf { it.first == item.title }?.second ?: 0
     Row(
         Modifier.fillMaxWidth().height(56.dp).background(Ink.surface, shape)
-            .border(if (flash) 2.dp else Tokens.Stroke.card.dp, if (flash) Ink.accent else Ink.border, shape)
+            .border(if (flash || p?.realigned == true) 2.dp else Tokens.Stroke.card.dp, if (flash || p?.realigned == true) Ink.accent else Ink.border, shape)
             .clickable(role = Role.Button, onClick = open).padding(horizontal = 14.dp)
             .semantics { contentDescription = if (p != null) "Bar ${p.bar + 1}, beat ${p.beatInBar + 1}, $bpm beats per minute. Opens Buffer." else if (grid == null) "Working out the beats, $working percent" else "No steady beat" },
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.width(64.dp)) {
-            BasicText(if (grid == null) "BEATS" else "BAR", style = Tokens.Text.cardLabel.style().copy(fontSize = 10.sp))
+            // For two bars after the bar start moved (a DJ mixed the next record in off the bar), the label says so, in accent.
+            BasicText(if (grid == null) "BEATS" else if (p?.realigned == true) "BAR ↻" else "BAR", style = Tokens.Text.cardLabel.style(if (p?.realigned == true) Ink.accent else Ink.textSecondary).copy(fontSize = 10.sp))
             BasicText(if (grid == null) "$working%" else p?.let { "${it.bar + 1}" } ?: "—", style = Tokens.Text.value.style().copy(fontSize = 18.sp))
         }
         Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
