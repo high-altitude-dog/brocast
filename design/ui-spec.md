@@ -1,4 +1,4 @@
-# UI spec (hand-off 49)
+# UI spec (hand-off 50)
 
 Field names come from Claude Code's "Fields that exist today" table in `feedback.md`, as of 1 Nov 2026. If one has been renamed since, use the new name.
 
@@ -31,7 +31,7 @@ Field names come from Claude Code's "Fields that exist today" table in `feedback
 
 | Element | Shows | Source | States and taps | Status |
 |---|---|---|---|---|
-| Header | Left: your colour-fruit-animal name as the eyebrow (`AMBER FIG HERON`), then `● ≈ 1.2 M listening`: the mesh's estimate of everyone listening, always with `≈` (accurate to about ±3%; user, 7 Nov). Inside an event, the event name replaces your name. The whole block opens Swarm. Right: icon buttons (44 × 44) for Time signals, Calibration, Archive and Settings | Listener key nym; mesh listener estimate | Taps open Swarm | later (demo data now) |
+| Header | Left, three lines (9 Nov): your nym as the eyebrow (`AMBER FIG HERON`); the **station name** `Beach Sync Radio ▾` (15 px bold, opens Stations); `● ≈ 1.2 M listening` (opens Swarm; the mesh's estimate, always with `≈`, ±3%). Inside an event, the event name replaces your nym. Right: icon buttons (44 × 44, 6 px apart) for Time signals, Calibration, Archive and Settings. Board grew 30 px. | Listener key nym; station name from its announcement; mesh listener estimate | Station line opens Stations; count opens Swarm | later (demo data now) |
 | Now playing | The **artist photo** (52 px square, rounded 12, cropped at the photo's focus point) with **Kept** as a small bookmark in its corner (keeping locked on for the beta; the bookmark is its own 44 px target that **opens Kept**, user 7 Nov), then track title (20 px, bold, one line) and `artist · set` (13 px, `textSecondary`), then the **channel chip** on the right (see Channel control), then the **library line**: `LIBRARY`, a thin bar and `38 of 52 sets` | Artist entry; file record and cue list; channel setting; library download state | The photo opens Artist photo. The chip needs press and hold. With no photo: the artist's initials in accent on a dark tile. | later |
 | Brocast clock | A dial. Along the top of the bezel, curved: `TEDDINGTON · GREENWICH`, with an accent meridian tick at 12 o'clock between the two names. Inside: the zone (GMT or BST), HH:MM:SS large, the **time-source pictogram**, then local time. Updates once a second; no sub-second dial and no ns digits. | Flowtime | See the Times rule | now |
 | Seconds sweep | The outer accent arc fills once per flowtime **minute**, like a second hand | Seconds of the current minute | Steps once a second at Reduced level | now |
@@ -278,7 +278,7 @@ User, 8 Nov, after seeing h42 on phones. Supersedes the sizes, lines and chip pl
 
 | State | Verdict |
 |---|---|
-| Very accurate (total under 1 ms) | `Your phone's GPS clock is accurate to about ±200 µs. Nothing is holding it back.` Accent tick, not amber; **no row is tagged LIMIT** and the bars are neutral grey. Asked for by Claude Code (Galaxy A16, 2 Nov). |
+| Very accurate (total under 1 ms) | `Your phone's GPS clock is accurate to about ±200 µs. Nothing is holding it back.` as one paragraph, no second line (user, 8 Nov: shorter box). Accent tick, not amber; **no row is tagged LIMIT** and the bars are neutral grey. Asked for by Claude Code (Galaxy A16, 2 Nov). |
 | Chip is the limit | See Satellites (the Moto G32 case: ±10 ms with 9 to 15 satellites) |
 | Signal is the limit | `Timing is limited by the satellite signal: about ±400 µs.` More satellites or a clearer sky will help |
 | Silver link | `Your phone links GPS time to its clock less directly: about ±2 ms.` More satellites won't change it |
@@ -583,7 +583,7 @@ User, 7 Nov: a full-screen card filmed by a third phone (slow motion if it can) 
 
 Your 13:48 ASK; design §11a: every station is a public key, global, no local-only mode; a phone can follow any number.
 
-**Entry:** on Now playing the station name becomes its own header line (`Beach Sync Radio ▾`, 15 px bold) under your nym, and opens Stations. The listener count line under it still opens Swarm. (Proposal: the header gains one line.)
+**Entry:** on Now playing the station name becomes its own header line (`Beach Sync Radio ▾`, 15 px bold) under your nym, and opens Stations. The listener count line under it still opens Swarm. (Applied to Now playing in hand-off 50.)
 
 | Stations element | Shows |
 |---|---|
@@ -792,7 +792,10 @@ User, 8 Nov: a colour per station, like the lights on silent-disco headphones, s
 | What doesn't | Amber warnings and LIMIT, red errors, cyan news, grey off/receive-only, white text. Status never depends on the colour alone. |
 | Phone | A toast at the top of Now playing when it changes (dot, `Beach Sync Radio is Violet now`, `Set by the station · fades in over 2 s`). Stations list: a bar of each station's colour by its name; the one you're on says `LISTENING` in its colour. |
 | Delivery | A field in the station's signed announcement, spread over the mesh like the running order, kept for offline. Missing or unknown: Lime. No flashing on: change is instant. Minimal level: only the beat cells and clock ring use it. |
-| Later | A colour per set (the At the next set option is the start of it). No listener override: the point is that the crowd matches. |
+| Colour per set (9 Nov) | Upload page running order gets a **COLOUR** column: a filled dot + name for a set with its own colour, a ring in the station colour + `Station` otherwise. Click opens a popover `Colour for Golden Hour Set` (times): `Use the station colour (Lime)`, the 21 swatches, a preview line (`Overpass ● → ● every phone changes on beat 1 of the first bar`). Goes into the draft like a move (`Golden Hour Set: Lemon`); live on Publish. Screen `screens/admin-set-colour.png`. |
+| Set colour on phones | On **beat 1 of the new set's first bar**, as the sound reaches the ears, the accent fades to the set's colour over 2 s (No flashing: instant), so the crowd changes together. Set colour if it has one, else station colour; never changes the station colour. No toast. Coming up and Stations list show the set's colour dot; Kept tracks keep the colour of their set. |
+| Station-wide change | Dialog option `At the next set` now reads `Sets with their own colour (Colour column in the running order) keep it.` |
+| Later | No listener override: the point is that the crowd matches. |
 
 ## Swarm · listener details
 
@@ -808,8 +811,8 @@ User, 8 Nov: tapping a peer on Swarm shows more about them, including their coun
 | Sheet | Bottom sheet, half height, drag up for all, down or × to close; numbers update each second. |
 | Header | Avatar (nym colour, animal initial), **nym** 19 px bold, `✓ verified` (accent) once their signature over the name checks out, else `checking name…`; `key 3f9a·c2e1…`. Same nym as another listener: 4 hex digits after it. No nym (older app): key as the title, `no name · older app`. |
 | Numbers | Three tiles: To you (kB/s), From you (kB/s or —), Round trip (ms). |
-| Rows | **Country**: flag emoji + name, `From their internet address, looked up on this phone. They allow it.`; same Wi-Fi: your country; `Not shown` (they keep Show my country off); `Unknown` when relayed (relay's address, never guessed) or not in the table. **Connection**: Direct / Hole-punched / Same Wi-Fi / Relayed via <key>, with since time. **Shared**: MB to you · from you, today. **Holding**: how far ahead they can pass on blocks. **App**: version and engine. |
-| Footer | `Their internet address is never shown. Only the country, and only if they allow it.` and **Block** (red outline): they can't connect to you and you take nothing from them; you still hear the station; undo in Settings › Sharing › Blocked; no report sent. |
+| Rows | **Country**: flag emoji + name, `From their internet address, looked up on this phone. They allow it.`; same Wi-Fi: your country; `Not shown` (they keep Show my country off); `Unknown` when relayed (relay's address, never guessed) or not in the table. **Connection**: Direct / Hole-punched / Same Wi-Fi / Relayed via <key>, with since time. **Shared**: MB to you · from you, since they connected (as built). **Holding**: `62% of the library`, from their hello every 10 s; compared with yours (as built). **App**: version and engine. |
+| Footer | `Their internet address is never shown. Only the country, and only if they allow it.` and **Block** (red outline): they can't connect to you and you take nothing from them; you still hear the station; undo: Settings › Delivery › **Blocked listeners** row (`1 blocked · they can't connect to you`, **Unblock all**; no per-listener list yet); no report sent. |
 | They left | Header greyed, tiles `—` with `left 40 s ago`; sheet stays until closed; resumes if they return. |
 | List rows (proposal) | Lead with avatar + nym, key and path underneath, flag if allowed, to-you rate, ›. |
 | Data | Nym and its signature from their announcement; country from the bundled country table (only with their permission flag); link path, RTT, rates, holding from the engine. Never the IP address on screen. |
@@ -830,7 +833,8 @@ User, 8 Nov: press play/pause on the headphones while listening → music fades 
 | Card on Now playing | Under the track row, above the clock. Cyan (news colour) gradient, `NEWS · BBC WORLD SERVICE`, `23:00 bulletin`; waveform fills as it plays, `2:41 / 5:02`; `Press your headphone button to stop · music at 25%`; **Stop**. States: Getting (spinner, MB, `music stays up until it starts`), Playing, Ending (`Music coming back up · 2 s`), then it slides away. |
 | Can't | No internet: toast `No news without internet`, low tone, music unchanged. No answer in 10 s: `News isn't answering right now`. Newest older than 2 h 30 m: treated as not answering; otherwise plays with its age (`21:00 · 2 h old`). |
 | Settings › Listening › News on the headphone button | Row `On · BBC World Service · music to 25%` → page: switch (on), **News from** (Station's choice · default / NPR News Now / Your own feed: any podcast RSS), Music under the news slider, Fade down, Fade back up, **Get the next one ready on Wi-Fi** (on: fetch each new bulletin when published, ~3 MB/hour), Play 10 s preview, fade diagram, privacy line. |
-| Source | The station picks BBC World Service (default), NPR News Now or None on the upload page; the feed URL travels in the **station's signed announcement** (kept in server config, not in code or git). Listener's `News from`: Station's choice / NPR News Now / Your own feed. Station chose None: the row reads `This station has no news · pick one below`; the switch stays on and uses the listener's pick, else the button behaves as before. |
+| Sources (9 Nov) | **BBC World Service and NPR News Now are built into the app** as listener options, always shown, plus `Your own feed`. The station's choice (BBC by default, NPR or None) only pre-selects one and is marked `the station's choice`. Station chose None: `This station has no news · pick one below`. Station hasn't sent a choice yet: BBC. So "hasn't chosen yet" and "not set up on the station" no longer appear. The BBC URL (with its key) is baked in at build time from a gitignored file (see `comms/news-feeds.local.md`), never committed. |
+| Finding the latest | On a press (or the Wi-Fi check), read the RSS, take the item with the **newest `pubDate`** (not just the first in the list), download its `<enclosure url>`; remember its `guid`: same guid as the cached copy → play that. Newer than 2 h 30 m required. Under the options: `Latest: 10:00 bulletin · 5:02` / `Found in the BBC feed at 10:04 · ready on this phone`. |
 | Ads | Played as sent, never cut. |
 | Privacy | `Your phone fetches the bulletin straight from the news service, which sees your internet address.` |
 
