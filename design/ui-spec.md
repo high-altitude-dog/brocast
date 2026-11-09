@@ -1,4 +1,4 @@
-# UI spec (hand-off 43)
+# UI spec (hand-off 46)
 
 Field names come from Claude Code's "Fields that exist today" table in `feedback.md`, as of 1 Nov 2026. If one has been renamed since, use the new name.
 
@@ -230,10 +230,10 @@ The user wants this to be a showcase for peer delivery (2 Nov), so the swarm get
 | Element | Shows | Source | Status |
 |---|---|---|---|
 | Verdict | Under 1 ms total: the Very accurate wording (Satellites states), with no LIMIT tag anywhere. Otherwise one plain sentence naming the largest limit and its size (`Your phone's GPS chip limits timing to about ±10 ms.`), then the reason in words. A neutral info mark, not a fault: amber outline for a hardware limit, accent tick when the signal is the limit. | Largest of the What limits it rows | now |
-| Your sky (3D, default) | **Your sky as a dome on the curved Earth**, 354 × 410, rounded. Camera behind and a little above you, north away from you, so **you sit at the top centre of the Earth's curve** (white dot, `You` tag). The Earth is a dark sphere with a dot-matrix land map, a faint 15° grid and a cyan atmosphere rim; stars behind. Over you, a glass dome: horizon ring (tinted disc), 30° and 60° rings dashed, N E S W at the rim. Each satellite sits on the dome at its **true direction and height in the sky**; its distance is squeezed (the dome is not to scale, chip bottom left says so). Marks and labels as before (GPS circle, Galileo diamond, GLONASS triangle, BeiDou square; accent when in use, grey outline when not); nearer marks slightly larger. A line from you to each satellite in use; the selected one bright with a distance tag (`21,140 km`). Overlays (all 44 px): `3D · Flat` switch top left; compass (taps to face north) and recentre top right; level chip `YOUR SKY` with three dots bottom left; `− +` bottom right. `10 in use of 14` above. | Per-satellite azimuth, elevation, system, used-in-fix; this phone's position (stays on the phone); bundled land outline | later |
+| Your sky (3D, default) | **Re-worked in hand-off 45 (see Satellites in 3D).** Full-width box, 470 tall, edge to edge. A sky dome **1.55 × the Earth's radius** standing on your horizon, camera 7° above it, so the dome is a wide bowl over the planet and the **whole Earth sits inside the box** (dot-matrix land, grid, cyan rim, stars). You at top centre. Horizon disc, 30° and 60° rings, N E S W. Marks as before. **No lines from you and no line per satellite: one path at a time** (the tour). Overlays in the box: `3D · Flat` top left, compass and recentre top right, `− +` bottom right. **Under the box:** `YOUR SKY` with three level dots left, `Dome not to scale · distances are real` right; while touring, a caption line under that. | Per-satellite azimuth, elevation, system, used-in-fix; this phone's position (stays on the phone); bundled land outline | later |
 | Touch | **Pinch** zooms through three levels (Your sky, Orbits, Whole Earth: Satellites in 3D). **One-finger drag** turns the scene round you. **Two-finger drag up or down** tilts; all the way down is the flat sky plot. **Tap** selects (44 px target round each mark). **Double tap** zooms in one step. Everything pivots on you, so you stay top centre. Momentum on release; Reduce motion turns it off. | — | later |
 | Flat | The old sky plot (see Satellites in 3D), kept as the `Flat` option; the choice is remembered. | as before | later |
-| Satellite card | Header: mark, label, system, `in use` or `in view, not used`, ×. Under it the craft and launch year (`GPS IIR-M · launched 2006`). **Distance from you, now**: big mono km figure, updating every second, with `▼ 0.4 km/s closer` (accent) or `▲ 0.2 km/s farther` (grey) and `Its signal left 70.5 ms ago; the phone allows for that.` Then height, direction and signal with its bar, as before. Then rows: **Country** (code chip and name, `Run by the US Space Force`), **Orbit** (`Medium Earth orbit · 20,180 km up`, period and tilt in words), **Speed** (km/s and km/h), **Weight** (kg at launch), **Fleet** (`one of 31 GPS satellites`). | Distance and rate: from each satellite's broadcast orbit and this phone's position, every second. The rest: a satellite table that ships with the app, keyed by system and number, updated over the mesh | later |
+| Satellite card | Header: mark, label, system, `in use` or `in view, not used`, ×. Under it the craft and launch year (`GPS IIR-M · launched 2006`). **Distance from you, now**: big mono km figure, updating every second, with `▼ 0.4 km/s closer` (accent) or `▲ 0.2 km/s farther` (grey) and `Its signal left 70.5 ms ago; the phone allows for that.` Then height, direction and signal with its bar, as before. Then rows: **Country** (code chip and name, `Run by the US Space Force`), **Orbit** (`Medium Earth orbit · 20,180 km up`, period and tilt in words), **Speed** (km/s and km/h), **Weight** (kg at launch), **Fleet** (`one of 31 GPS satellites`). | Distance and rate: SGP4 from CelesTrak `gnss` GP elements (fetched by the station, spread over the mesh) and this phone's position, every second; fallback: direction + orbit height. Craft, name, launch, mass, plane: `design/data/gnss_table.json` (IGS satellite metadata, credit the IGS in About). Country, operator, orbit facts: per system | later |
 | What limits it | Three rows, each with figure and a bar on a log scale (1 µs to 10 ms, labelled `log · 1 µs · 100 µs · 10 ms`), the largest tagged `LIMIT` in amber: **Chip time stamp** (the chip's declared uncertainty, `erUnc`), **Satellite signal** (how well the satellites agree), **Link to the Brocast clock** (Gold or Silver). A note says which figures are 95% ranges and which one standard deviation. | `erUnc`, `biasUnc`, `gold`, the fit | now |
 | Will more satellites help? | A direct answer: `No, not on this phone` when the chip or the link is the limit; `Yes` with open-sky advice when the signal is. | Which row is largest | now |
 | Gold or Silver | A `GOLD` or `SILVER` chip and plain words for both. Then the chip name, whether it gives raw clock reports, and where leap seconds came from. | `gnssHardwareModelName`, `gold`, leap-second source | now |
@@ -254,6 +254,23 @@ The user wants this to be a showcase for peer delivery (2 Nov), so the swarm get
 | Reduce motion | No drift or momentum; zoom jumps between the three levels; positions still update once a second without easing. |
 | Screen readers | The 3D view is one image with a summary (`14 satellites in view, 10 in use. G12 selected, 21,140 km away.`). Under it, a list of satellites by height, highest first, each row opening the card. |
 | Data rules | No map service and no network for the Earth: a low-detail land outline ships with the app. Nothing about your position leaves the phone. Sample craft names, years and weights on the boards are placeholders for the table. |
+
+## Satellites in 3D: re-work (hand-off 45)
+
+User, 8 Nov, after seeing h42 on phones. Supersedes the sizes, lines and chip placement above; zoom levels, gestures and card stay.
+
+| Part | Rule |
+|---|---|
+| Box | Full width, edge to edge (no side margin, hairlines top and bottom). 470 tall on Your sky, 420 on Orbits and Whole Earth. At every level the camera fits the whole Earth plus what that level shows; nothing of the Earth is cut off. |
+| Dome | Radius 1.55 × the Earth's (was 0.55), on your horizon plane. Camera 7° above the horizon, looking north. Low satellites sit beside the Earth, never on it. |
+| Under the box | Level chip (`YOUR SKY` + dots) left, `Dome not to scale · distances are real` right (Orbits and Whole Earth: `True scale`). Tour caption below it. Then the legend. |
+| The tour | Nothing tapped: one satellite's path at a time. Pick a satellite in use at random (never the one just shown; in-view ones join if fewer than 3 are in use). Each stays **6 s**. Switch: old path fades out 400 ms, new path draws rise → set over 800 ms, the pill `C21 · its path across your sky` slides to the new satellite (clamped inside the box). Caption under the box: a 6 s countdown ring, `Showing C21 · next in 4 s · tap a satellite to keep one`. Turning, tilting, pinching don't reset the clock. |
+| The path | Your sky: where the satellite's orbit crosses your sky. Dotted since it rose (`rose 2 h 13 m ago` at the horizon end), solid with an arrow from the satellite to where it sets (`sets in 2 h 43 m`). Orbits and Whole Earth: the same satellite's whole orbit, dotted behind the Earth. The orbit plane is inferred (tilt + heading north/south); if it flips in the first minute, cross-fade like a switch. |
+| Tap | Tour stops. Only that satellite's path; its pill becomes the distance tag (`21,140 km`, to its left); card opens below. Tap another satellite to switch. |
+| × or tap empty sky | Card closes; the path stays 3 s, then the tour resumes with a different satellite. |
+| Reduce motion / screen readers | No tour: the highest satellite's path stays until you tap another; changes are instant. Screen readers read the list. |
+| Kept from the user's h42 changes | Flat only from its switch; no snap after pinch or turn; flag emoji on the card's **Built in** row (Galileo: United Kingdom, Germany; run by the EU Space Programme). |
+| Whole Earth | Grey rest-of-fleet needs the h44 orbit data; until then only the satellites in view. |
 
 ## Satellites states
 
@@ -775,6 +792,26 @@ User, 8 Nov: a colour per station, like the lights on silent-disco headphones, s
 | Phone | A toast at the top of Now playing when it changes (dot, `Beach Sync Radio is Violet now`, `Set by the station · fades in over 2 s`). Stations list: a bar of each station's colour by its name; the one you're on says `LISTENING` in its colour. |
 | Delivery | A field in the station's signed announcement, spread over the mesh like the running order, kept for offline. Missing or unknown: Lime. No flashing on: change is instant. Minimal level: only the beat cells and clock ring use it. |
 | Later | A colour per set (the At the next set option is the start of it). No listener override: the point is that the crowd matches. |
+
+## Swarm · listener details
+
+| Sheet | States |
+|---|---|
+| ![](screens/swarm-peer.png) | ![](screens/swarm-peer-states.png) |
+
+User, 8 Nov: tapping a peer on Swarm shows more about them, including their country (if available) and their nym.
+
+| Part | Rule |
+|---|---|
+| Opens from | A listener node on the map (44 px target) or its row in the list. Node gets a white ring while open; map stays live. Tap another node to switch. Station nodes open a station sheet instead (name, station key ✓, to you, share, round trip; no nym, country or Block). |
+| Sheet | Bottom sheet, half height, drag up for all, down or × to close; numbers update each second. |
+| Header | Avatar (nym colour, animal initial), **nym** 19 px bold, `✓ verified` (accent) once their signature over the name checks out, else `checking name…`; `key 3f9a·c2e1…`. Same nym as another listener: 4 hex digits after it. No nym (older app): key as the title, `no name · older app`. |
+| Numbers | Three tiles: To you (kB/s), From you (kB/s or —), Round trip (ms). |
+| Rows | **Country**: flag emoji + name, `From their internet address, looked up on this phone. They allow it.`; same Wi-Fi: your country; `Not shown` (they keep Show my country off); `Unknown` when relayed (relay's address, never guessed) or not in the table. **Connection**: Direct / Hole-punched / Same Wi-Fi / Relayed via <key>, with since time. **Shared**: MB to you · from you, today. **Holding**: how far ahead they can pass on blocks. **App**: version and engine. |
+| Footer | `Their internet address is never shown. Only the country, and only if they allow it.` and **Block** (red outline): they can't connect to you and you take nothing from them; you still hear the station; undo in Settings › Sharing › Blocked; no report sent. |
+| They left | Header greyed, tiles `—` with `left 40 s ago`; sheet stays until closed; resumes if they return. |
+| List rows (proposal) | Lead with avatar + nym, key and path underneath, flag if allowed, to-you rate, ›. |
+| Data | Nym and its signature from their announcement; country from the bundled country table (only with their permission flag); link path, RTT, rates, holding from the engine. Never the IP address on screen. |
 
 ## New running order on the phone
 
