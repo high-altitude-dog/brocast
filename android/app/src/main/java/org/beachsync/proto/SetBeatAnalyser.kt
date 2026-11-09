@@ -30,6 +30,14 @@ class SetBeatAnalyser(private val store: LibraryStore) : Thread("set-beats") {
                         catch (e: Exception) { Log.w(TAG, "re-resolve ${item.id}", e) }
                     }
                 }
+                // Features from before 32 frames a second: the beat analysis is kept and only the sound features are worked out again.
+                if (out.exists() && !store.featuresFile(item.id).exists()) {
+                    val raw = SetBeats.decodeRaw(out.readText())
+                    if (raw.isNotEmpty()) {
+                        try { featuresOnly(item, f, out, raw); continue } catch (e: InterruptedException) { return } catch (e: Exception) { Log.w(TAG, "features for ${item.id}", e) }
+                        finally { working = null }
+                    }
+                }
                 try { analyse(item, f, out) } catch (e: InterruptedException) { return } catch (e: Exception) { Log.w(TAG, "beats for ${item.id}", e) }
                 finally { working = null }
             }
@@ -81,6 +89,31 @@ class SetBeatAnalyser(private val store: LibraryStore) : Thread("set-beats") {
         part.delete()
         Log.i(TAG, "${item.id}: ${raw.size} windows (from $resumedAt), ${raw.count { it != null }} with a beat, in ${(System.nanoTime() - started) / 1_000_000_000L} s: " +
             "decode ${decodeNs / 1_000_000_000L} s, analysis ${analyseNs / 1_000_000_000L} s")
+    }
+
+    /** Works out only the sound features (decode and band energies, no beat analysis), then resolves the grid from the saved raw results. */
+    private fun featuresOnly(item: LibraryItem, f: File, out: File, raw: List<BeatGrid.Result?>) {
+        val featFile = store.featuresFile(item.id)
+        val part = File(featFile.path + ".part")
+        val decoder = OpusDecoder()
+        val features = BeatFeatures()
+        val started = System.nanoTime()
+        try {
+            java.io.DataOutputStream(java.io.BufferedOutputStream(java.io.FileOutputStream(part))).use { featOut ->
+                OpusFile(f).use { file ->
+                    for (b in 0 until item.seconds) {
+                        for (v in features.block(decoder.decode(file.block(b)))) featOut.writeFloat(v)
+                        if (b % 10 == 0L) working = item.title to (100 * b / item.seconds.coerceAtLeast(1)).toInt()
+                    }
+                }
+            }
+        } finally { decoder.close() }
+        if (!part.renameTo(featFile)) throw IllegalStateException("couldn't save ${featFile.name}")
+        val tmp = File(out.path + ".tmp")
+        tmp.writeText(SetBeats.resolve(raw, readFloats(featFile)).encode(raw))
+        if (!tmp.renameTo(out)) throw IllegalStateException("couldn't save ${out.name}")
+        store.oldFeaturesFile(item.id).delete()
+        Log.i(TAG, "${item.id}: features again at ${BeatFeatures.PER_S}/s in ${(System.nanoTime() - started) / 1_000_000_000L} s")
     }
 
     private fun readFloats(f: File): FloatArray {

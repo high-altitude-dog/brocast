@@ -93,7 +93,9 @@ class LibraryStore private constructor(ctx: Context) : Thread("library") {
 
     /** The set's beat and bar grid, saved by [SetBeatAnalyser]. */
     fun beatsFile(id: String) = File(dir, "$id.beats")
-    fun featuresFile(id: String) = File(dir, "$id.feat")
+    /** The set's sound features at [BeatFeatures.PER_S] frames a second; `.feat` held the older 8-a-second ones. */
+    fun featuresFile(id: String) = File(dir, "$id.f32")
+    fun oldFeaturesFile(id: String) = File(dir, "$id.feat")
 
     private val beatCache = java.util.concurrent.ConcurrentHashMap<String, SetBeats>()
     private val beatLooked = java.util.concurrent.ConcurrentHashMap<String, Long>()

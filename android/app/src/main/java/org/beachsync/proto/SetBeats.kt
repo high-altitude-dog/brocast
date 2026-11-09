@@ -48,7 +48,7 @@ class SetBeats(val windows: List<Win?>) {
         const val RATE = 48000.0
         const val WINDOW_S = 8L
         const val LENGTH_S = 16
-        private const val HEADER = "beats 4"   // 4: drops and breaks vote for bar 1 (9 Nov); 3: the bar start can move within a track (8 Nov); older files are resolved again from their raw results
+        private const val HEADER = "beats 5"   // 5: features at 32 frames a second (9 Nov); 4: drops and breaks vote for bar 1 (9 Nov); 3: the bar start can move within a track (8 Nov); older files are resolved again from their raw results
         private const val REALIGN_COST = 4.5  // how much evidence a move of the bar start needs (tuned on 11 real sets, 8 Nov: no back-and-forth pairs)
         private const val FILL = 4            // a window with no beat borrows a good one up to this many windows away
         private const val SPAN = 8            // windows either side that vote on the bar start: about a minute each way
@@ -182,6 +182,7 @@ class SetBeats(val windows: List<Win?>) {
                 val j = Math.round((sample - anchor[w]) / period[w])
                 structural.getOrPut(w) { DoubleArray(4) }[Math.floorMod(index[w] + j, 4L).toInt()] += 1.0
             }
+            // (A clap-on-2-and-4 cue was tried on 9 Nov, at 8 and 32 frames a second: it added nothing to this evidence.)
             val phaseOf = barPhases(n, track, filled.map { it != null }, change, winChange, structural)
             val wins = arrayOfNulls<Win>(n)
             for (w in 0 until n) {
@@ -227,7 +228,8 @@ class SetBeats(val windows: List<Win?>) {
                     // The change's centre is where the before/after difference peaks, not where it first crosses; then the steepest step near it.
                     fun diff(c: Int): Double { var a = 0.0; for (k in c until c + half) a += low[k] - low[k - half]; return a / half / span }
                     val c = (f until minOf(f + half, n - half)).maxBy { if (d > 0) diff(it) else -diff(it) }
-                    val best = (c - 3..c + 3).maxBy { k -> if (d > 0) low[k] - low[k - 1] else low[k - 1] - low[k] }
+                    val r = 3 * BeatFeatures.PER_S / 8
+                    val best = (c - r..c + r).maxBy { k -> if (d > 0) low[k] - low[k - 1] else low[k - 1] - low[k] }
                     out.add(best to (d > 0)); f += 2 * half
                 } else f++
             }
@@ -276,13 +278,13 @@ class SetBeats(val windows: List<Win?>) {
 }
 
 /**
- * How the sound changes over the set, for finding bar starts: 8 frames a second, each the log energy in 16 bands from 40 Hz to 8 kHz. Plain Kotlin.
+ * How the sound changes over the set, for finding bar starts: [PER_S] frames a second, each the log energy in 16 bands from 40 Hz to 8 kHz. Plain Kotlin.
  * In dance music the kick lands on every beat, so it can't tell beat 1 from beat 3; what marks a bar start is the sound changing there (a chord, a bass
  * note, a new part coming in), which these frames show.
  */
 class BeatFeatures {
     companion object {
-        const val PER_S = 8
+        const val PER_S = 32   // 32 since 9 Nov (was 8): frames overlap, so a change is placed to within about 30 ms
         const val BANDS = 16
         private const val N = 2048
     }
