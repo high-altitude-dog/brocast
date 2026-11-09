@@ -20,3 +20,8 @@ Work agreed but not started. Newest first. Move an item out when it is built.
 ## Phone side, waiting on the Pears spike
 
 - Real nym from the listener's keypair, listener count and Swarm; Buffer from per-block arrival data. These are built with marked demo data until then.
+
+## Backlog: tests on the phones (user, 9 Nov)
+
+- **Pass it on, a real transfer** (hand-off 53): remove one set from the Galaxy (keep a copy), show its code on the Pixel, scan it on the Galaxy (camera app and in-app Scan), and check the set comes straight from the Pixel, is byte-identical and plays. Then the can't-reach case (different networks, no internet).
+- **Silent reactions between phones**: send from one, see it land on the next beat 1 on the other and pulse on Swarm; the 3 s limit and a blocked sender on the phones (laptop test: `pears/tools/react-test.js`).
