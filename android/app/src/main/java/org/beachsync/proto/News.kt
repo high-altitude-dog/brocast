@@ -92,8 +92,13 @@ object News {
     fun feed(lib: LibraryStore?): Pair<String, String>? = when (source) {
         Source.NPR -> "NPR News Now" to NPR_URL
         Source.OWN -> ownUrl.trim().takeIf { it.startsWith("http") }?.let { "Your feed" to it }
-        Source.STATION -> lib?.news?.takeIf { it.choice != "none" && it.url.isNotEmpty() }?.let { it.name to it.url }
+        Source.STATION -> stationNews(lib).takeIf { it.choice != "none" && it.url.isNotEmpty() }?.let { it.name to it.url }
     }
+
+    /** The station's choice, or until it sends one, the station default: BBC World Service (hand-off 49). */
+    fun stationNews(lib: LibraryStore?): StationNews =
+        lib?.news?.let { if (it.choice == "bbc" && it.url.isEmpty()) it.copy(url = BuildConfig.NEWS_BBC_URL) else it }
+            ?: StationNews("bbc", "BBC World Service", BuildConfig.NEWS_BBC_URL)
 
     /**
      * The headphone button while a run is live. Returns false when it should act as before (stop the music):

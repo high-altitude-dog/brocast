@@ -1,3 +1,4 @@
+import java.util.Properties
 import groovy.json.JsonSlurper
 
 plugins {
@@ -17,6 +18,9 @@ android {
         versionCode = 1
         versionName = "0.1"
         ndk { abiFilters += "arm64-v8a" }   // the engine's native add-ons are built for arm64 only; every test phone is arm64
+        // The default station news feed (hand-off 47). The BBC URL carries a key, so it comes from local.properties (gitignored), never this file.
+        val local = Properties().apply { rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use { load(it) } }
+        buildConfigField("String", "NEWS_BBC_URL", "\"" + (local.getProperty("news.bbc.url") ?: "") + "\"")
     }
 
     // The Pears engine's native add-ons and the C++ runtime they need, made by the tasks below.
@@ -48,7 +52,7 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    buildFeatures { compose = true }
+    buildFeatures { compose = true; buildConfig = true }
 }
 
 kotlin { compilerOptions { jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17) } }

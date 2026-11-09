@@ -45,7 +45,7 @@ private val newsInk get() = Lane.NET.color()
 /** Settings › Listening row: `On · BBC World Service · music to 25%`. */
 internal fun newsSummary(lib: LibraryStore?): String {
     if (!News.on) return "Off · the button stops the music"
-    val st = lib?.news
+    val st = News.stationNews(lib)
     if (News.source == News.Source.STATION && st?.choice == "none") return "This station has no news · pick one below"
     val name = News.feed(lib)?.first ?: "No feed yet"
     return "On · $name · music to ${News.underPct}%"
@@ -147,9 +147,8 @@ fun NewsSettingsScreen(lib: LibraryStore?, back: () -> Unit) {
             SwitchRow("News on the headphone button", "On: play/pause gets the news. Off: the button stops the music, as before.", News.on) { News.on = it; save() }
             BasicText("News from", Modifier.padding(top = 6.dp), Tokens.Text.bodyStrong.style())
             Column(Modifier.selectableGroup(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                val st = lib?.news
+                val st = News.stationNews(lib)
                 val stationLine = when {
-                    st == null -> "Station’s choice" to "This station hasn’t chosen yet"
                     st.choice == "none" -> "Station’s choice · none" to "This station has no news · pick one below"
                     st.url.isEmpty() -> "Station’s choice · ${st.name}" to "Not set up on the station yet"
                     else -> "Station’s choice · ${st.name}" to "Set by the station · hourly, about 5 min"
