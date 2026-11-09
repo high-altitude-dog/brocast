@@ -91,6 +91,17 @@ private const val FOV_DEG = 45.0
 private const val TILT0 = 7f
 private const val TOUR_MS = 6000L
 private val LEVELS = listOf("YOUR SKY", "ORBITS", "WHOLE EARTH")
+private const val HINT_MS = 8000L                 // the gesture hint: 4 s, played twice (hand-off 48)
+
+private fun ease(x: Float) = x.coerceIn(0f, 1f).let { it * it * (3 - 2 * it) }
+
+/** The hint's scripted camera at [t] ms into one 4 s loop: extra zoom (about 15 % farther) and extra tilt (+17°), back to nothing by the end. */
+private fun hintCamera(t: Long): Pair<Float, Float> {
+    val s = t / 1000f
+    val z = 0.17f * when { s < 0.4f -> 0f; s < 1.6f -> ease((s - 0.4f) / 1.2f); s < 3.4f -> 1f; else -> 1f - ease((s - 3.4f) / 0.6f) }
+    val tl = 17f * when { s < 2.2f -> 0f; s < 3.4f -> ease((s - 2.2f) / 1.2f); else -> 1f - ease((s - 3.4f) / 0.6f) }
+    return z to tl
+}
 
 /** The land map's dots as unit vectors in the scene frame, for a phone at [lat], [lon]. */
 private fun landInScene(raw: ShortArray, lat: Double, lon: Double): FloatArray {
@@ -242,9 +253,35 @@ internal fun Sky3D(sats: List<Sat>, position: Pair<Double, Double>?, picked: Str
             if (abs(lat - first) > 0.3) rising[s.label] = lat > first
         }
     }
-    // The tour (hand-off 45): one satellite's path at a time, 6 s each, until one is tapped. Reduce motion: the highest one, no tour.
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) { while (true) withFrameMillis { now = System.currentTimeMillis() } }
+    // The gesture hint (hand-off 48): opening 1 always; opening 3 if no two-finger gesture yet. An opening counts after 2 s in 3D.
+    val prefs = remember { ctx.getSharedPreferences("ui", Context.MODE_PRIVATE) }
+    val opening = remember { prefs.getInt("sat3d_opens", 0) + 1 }
+    var gestureUsed by remember { mutableStateOf(prefs.getBoolean("sat3d_two_finger", false)) }
+    var hintAt by remember { mutableStateOf<Long?>(null) }
+    var hintEndedAt by remember { mutableStateOf<Long?>(null) }
+    var stillCard by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        val wantHint = opening == 1 || (opening == 3 && !gestureUsed)
+        kotlinx.coroutines.delay(600)
+        if (wantHint) { if (reduceMotion) stillCard = true else hintAt = System.currentTimeMillis() }
+        kotlinx.coroutines.delay(1400)
+        prefs.edit().putInt("sat3d_opens", opening).apply()
+    }
+    val hintT = hintAt?.let { now - it }?.takeIf { it < HINT_MS }
+    if (hintAt != null && hintT == null) { hintAt = null; hintEndedAt = now }
+    val (hintZoom, hintTilt) = hintT?.let { hintCamera(it % 4000) } ?: (0f to 0f)
+    fun twoFingers() { if (!gestureUsed) { gestureUsed = true; prefs.edit().putBoolean("sat3d_two_finger", true).apply() } }
+    /** Any touch stops the hint; the view stays where the hint had it, and the user's gesture carries on from there. */
+    fun stopHint() {
+        val at = hintAt ?: return
+        val t = System.currentTimeMillis()
+        val (z, tl) = if (t - at < HINT_MS) hintCamera((t - at) % 4000) else (0f to 0f)
+        pinching = true; zoomTarget = (zoomTarget + z).coerceIn(0f, 2f); tilt = (tilt + tl).coerceIn(2f, 85f)
+        hintAt = null; hintEndedAt = t
+    }
+    // The tour (hand-off 45): one satellite's path at a time, 6 s each, until one is tapped. Reduce motion: the highest one, no tour.
     var tour by remember { mutableStateOf<String?>(null) }
     var prevTour by remember { mutableStateOf<String?>(null) }
     var tourAt by remember { mutableLongStateOf(0L) }
@@ -256,6 +293,7 @@ internal fun Sky3D(sats: List<Sat>, position: Pair<Double, Double>?, picked: Str
     }
     val pool = sats.filter { it.used }.let { u -> if (u.size >= 3) u else sats }
     if (reduceMotion) tour = sats.maxByOrNull { it.elevationDeg }?.label
+    else if (hintAt != null) tour = null
     else if (picked == null && (tour == null || now - tourAt >= TOUR_MS || pool.none { it.label == tour })) {
         val next = pool.filter { it.label != tour }.randomOrNull() ?: pool.firstOrNull()
         prevTour = tour; tour = next?.label; tourAt = now
@@ -265,7 +303,7 @@ internal fun Sky3D(sats: List<Sat>, position: Pair<Double, Double>?, picked: Str
     val used = sats.count { it.used }
     val sel = sats.firstOrNull { it.label == picked }
     val level = zoom.roundToInt().coerceIn(0, 2)
-    val summary = "${sats.size} satellites in view, $used in use." + (sel?.let { " ${it.label} selected, ${"%,d".format(rangeOf(it).roundToInt())} km away." } ?: "")
+    val summary = (if (opening == 1) "Pinch with two fingers to zoom, slide two fingers up or down to tilt, or use the zoom buttons. " else "") + "${sats.size} satellites in view, $used in use." + (sel?.let { " ${it.label} selected, ${"%,d".format(rangeOf(it).roundToInt())} km away." } ?: "")
     val slop = LocalViewConfiguration.current.touchSlop
     val side = Tokens.Space.screenPaddingSide.dp
     val boxHeight by animateDpAsState(if (zoom < 0.5f) 470.dp else 420.dp, if (reduceMotion) snap() else tween(300), label = "box")
@@ -283,12 +321,13 @@ internal fun Sky3D(sats: List<Sat>, position: Pair<Double, Double>?, picked: Str
                 .pointerInput(Unit) {
                     awaitEachGesture {
                         awaitFirstDown(requireUnconsumed = false)
+                        stopHint(); stillCard = false
                         var turning = false; var acc = Offset.Zero
                         do {
                             val ev = awaitPointerEvent()
                             val down = ev.changes.count { it.pressed }
                             if (down >= 2) {
-                                pinching = true
+                                pinching = true; twoFingers()
                                 val z = ev.calculateZoom(); val pan = ev.calculatePan()
                                 zoomTarget = (zoomTarget - ln(z.toDouble()).toFloat() * 1.8f).coerceIn(0f, 2f)
                                 tilt = (tilt + pan.y * 0.25f).coerceIn(2f, 85f)
@@ -314,7 +353,7 @@ internal fun Sky3D(sats: List<Sat>, position: Pair<Double, Double>?, picked: Str
         ) {
             drawLine(Ink.border, Offset(0f, 0f), Offset(size.width, 0f), 1.dp.toPx())
             drawLine(Ink.border, Offset(0f, size.height - 1), Offset(size.width, size.height - 1), 1.dp.toPx())
-            val cam = Cam(heading.toDouble(), tilt.toDouble(), zoom.toDouble(), size.width, size.height)
+            val cam = Cam(heading.toDouble(), (tilt + hintTilt).coerceAtMost(85f).toDouble(), (zoom + hintZoom).coerceAtMost(2f).toDouble(), size.width, size.height)
             val p = FloatArray(3)
             val q = FloatArray(3)
             val s1 = (zoom.coerceIn(0f, 1f)).let { it * it * (3 - 2 * it) }
@@ -492,6 +531,16 @@ internal fun Sky3D(sats: List<Sat>, position: Pair<Double, Double>?, picked: Str
             val ym = measurer.measure("You", TextStyle(color = Ink.text, fontSize = 10.sp))
             drawRoundRect(Color(0xCC000000), Offset(you.x - ym.size.width / 2f - 5.dp.toPx(), you.y + 8.dp.toPx()), androidx.compose.ui.geometry.Size(ym.size.width + 10.dp.toPx(), ym.size.height + 2.dp.toPx()), CornerRadius(4.dp.toPx()))
             drawText(ym, topLeft = Offset(you.x - ym.size.width / 2f, you.y + 9.dp.toPx()))
+            hintT?.let { t -> drawHint(t, measurer) }
+            if (stillCard) drawRect(Color.Black.copy(alpha = 0.35f))
+        }
+        if (stillCard) androidx.compose.foundation.layout.Column(
+            Modifier.align(Alignment.Center).padding(24.dp).background(Color(0xF0101418), RoundedCornerShape(14.dp)).border(1.dp, Ink.border, RoundedCornerShape(14.dp)).padding(20.dp),
+            horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            BasicText("◯◯", style = Tokens.Text.bodyStrong.style().copy(fontSize = 22.sp))
+            BasicText("Pinch to zoom · slide two fingers to tilt", style = Tokens.Text.bodyStrong.style())
+            BasicText("Got it", Modifier.border(1.dp, Ink.border, RoundedCornerShape(20.dp)).clickable(role = Role.Button) { stillCard = false; hintEndedAt = now }.padding(horizontal = 20.dp, vertical = 10.dp), Tokens.Text.body.style())
         }
         // Controls stay in the box, all 44 dp.
         Row(Modifier.align(Alignment.TopStart).padding(10.dp).background(Color(0xCC0B0F14), RoundedCornerShape(10.dp)).border(1.dp, Ink.border, RoundedCornerShape(10.dp)).padding(3.dp)) {
@@ -512,6 +561,10 @@ internal fun Sky3D(sats: List<Sat>, position: Pair<Double, Double>?, picked: Str
         BasicText(LEVELS[level], style = Tokens.Text.cardLabel.style(Ink.text))
         for (i in 0..2) Box(Modifier.padding(start = if (i == 0) 8.dp else 3.dp).size(if (i == level) 14.dp else 6.dp, 6.dp).background(if (i == level) Ink.accent else Ink.muted, RoundedCornerShape(3.dp)))
         BasicText(if (zoom < 0.5f) "Dome not to scale · distances are real" else "True scale", Modifier.weight(1f), Tokens.Text.small.style(Ink.textSecondary).copy(textAlign = androidx.compose.ui.text.style.TextAlign.End, fontSize = 11.sp))
+    }
+    if (hintEndedAt != null && !gestureUsed && now - hintEndedAt!! < 20_000) Row(verticalAlignment = Alignment.CenterVertically) {
+        BasicText("◯◯", style = Tokens.Text.small.style(Ink.textSecondary))
+        BasicText("Two fingers: pinch to zoom, slide to tilt · or use − +", Modifier.padding(start = 8.dp), Tokens.Text.small.style(Ink.textSecondary))
     }
     if (position == null) BasicText("The map and paths wait for a position fix. Your position stays on this phone.", style = Tokens.Text.small.style(Ink.textSecondary))
     else if (picked == null) Row(verticalAlignment = Alignment.CenterVertically) {
@@ -569,4 +622,46 @@ private fun DrawScope.mark3d(s: Sat, p: Offset, color: Color, filled: Boolean, k
         else -> path.addOval(Rect(p.x - k, p.y - k, p.x + k, p.y + k))
     }
     if (filled) drawPath(path, color) else { drawPath(path, Color(0xFF05070A)); drawPath(path, color, style = Stroke(1.5.dp.toPx())) }
+}
+
+/**
+ * The gesture hint's overlay at [t] ms (hand-off 48): the scene dimmed 35 %, two finger marks (white ring, soft fill) that spread with dashed arrows
+ * (Pinch to zoom), come together lower, then slide up together (Slide up or down to tilt), and fade. No accent colour: it's a hint, not data.
+ */
+private fun DrawScope.drawHint(t: Long, measurer: androidx.compose.ui.text.TextMeasurer) {
+    val s = (t % 4000) / 1000f
+    drawRect(Color.Black.copy(alpha = 0.35f))
+    val alpha = when { s < 0.4f -> s / 0.4f; s > 3.4f -> 1f - (s - 3.4f) / 0.6f; else -> 1f }.coerceIn(0f, 1f)
+    val cx = size.width / 2; val cy = size.height * 0.55f
+    val dp = 1.dp.toPx()
+    val (gap, y) = when {
+        s < 0.4f -> 30 * dp to cy
+        s < 1.6f -> (30 + 70 * ease((s - 0.4f) / 1.2f)) * dp to cy
+        s < 2.2f -> (100 - 75 * ease((s - 1.6f) / 0.6f)) * dp to cy + 30 * dp * ease((s - 1.6f) / 0.6f)
+        else -> 25 * dp to cy + 30 * dp - 90 * dp * ease((s - 2.2f) / 1.2f)
+    }
+    val r = 16 * dp
+    for (x in listOf(cx - gap, cx + gap)) {
+        drawCircle(Color.White.copy(alpha = 0.18f * alpha), r, Offset(x, y))
+        drawCircle(Color.White.copy(alpha = 0.9f * alpha), r, Offset(x, y), style = Stroke(2 * dp))
+    }
+    val dash = PathEffect.dashPathEffect(floatArrayOf(5 * dp, 4 * dp))
+    val white = Color.White.copy(alpha = 0.8f * alpha)
+    if (s in 0.4f..1.6f) for (dir in listOf(-1, 1)) {
+        val x0 = cx + dir * (gap + r + 4 * dp); val x1 = x0 + dir * 40 * dp
+        drawLine(white, Offset(x0, y), Offset(x1, y), 1.5f * dp, pathEffect = dash)
+        drawLine(white, Offset(x1, y), Offset(x1 - dir * 6 * dp, y - 5 * dp), 1.5f * dp); drawLine(white, Offset(x1, y), Offset(x1 - dir * 6 * dp, y + 5 * dp), 1.5f * dp)
+    }
+    if (s in 2.2f..3.4f) for (x in listOf(cx - gap, cx + gap)) {
+        val y0 = y - r - 4 * dp; val y1 = y0 - 36 * dp
+        drawLine(white, Offset(x, y0), Offset(x, y1), 1.5f * dp, pathEffect = dash)
+        drawLine(white, Offset(x, y1), Offset(x - 5 * dp, y1 + 6 * dp), 1.5f * dp); drawLine(white, Offset(x, y1), Offset(x + 5 * dp, y1 + 6 * dp), 1.5f * dp)
+    }
+    val pill = when { s in 0.4f..2.0f -> "Pinch to zoom"; s in 2.2f..3.6f -> "Slide up or down to tilt"; else -> null } ?: return
+    val m = measurer.measure(pill, TextStyle(color = Color.White.copy(alpha = alpha), fontSize = 12.sp))
+    val pw = m.size.width + 24 * dp; val ph = m.size.height + 12 * dp
+    val top = Offset(cx - pw / 2, cy + 56 * dp)
+    drawRoundRect(Color(0xE6101418).copy(alpha = 0.9f * alpha), top, androidx.compose.ui.geometry.Size(pw, ph), CornerRadius(ph / 2))
+    drawRoundRect(Color.White.copy(alpha = 0.6f * alpha), top, androidx.compose.ui.geometry.Size(pw, ph), CornerRadius(ph / 2), style = Stroke(dp))
+    drawText(m, topLeft = Offset(top.x + 12 * dp, top.y + 6 * dp))
 }
