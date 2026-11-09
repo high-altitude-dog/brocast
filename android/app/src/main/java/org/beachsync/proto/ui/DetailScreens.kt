@@ -39,6 +39,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
@@ -399,7 +400,7 @@ fun TimeSignalsScreen(state: BenchState, actions: BenchActions, openSatellites: 
                 )
             }
             SourcesField(s, boot, picked) { picked = it }
-            BasicText("Node size = accuracy. Tap a node to see what it is.", style = Tokens.Text.small.style())
+            BasicText("Tap the satellites, the mast or the hourglass to see what each is. Sunrise and sunset for where you are, worked out on this phone.", style = Tokens.Text.small.style())
         }
         Card {
             BasicText("SKY", style = Tokens.Text.cardLabel.style())
@@ -448,52 +449,142 @@ fun TimeSignalsScreen(state: BenchState, actions: BenchActions, openSatellites: 
 
 @Composable
 private fun SourcesField(s: Session?, boot: Long, picked: Int?, onPick: (Int) -> Unit) {
-    val resources = LocalContext.current.resources
+    // Hand-off 52: a picture, not a node diagram. Satellites (GPS), a far-too-tall Alexandra Palace-style mast (NTP), the phone on the
+    // ground (FLOWTIME) with an hourglass (hold), and the sun on its arc between this place's sunrise and sunset.
+    val ctx = LocalContext.current
+    val resources = ctx.resources
     val paint = remember { Paint(Paint.ANTI_ALIAS_FLAG).apply { typeface = resources.getFont(R.font.jetbrains_mono); textAlign = Paint.Align.CENTER } }
     val chosen = if (s != null) FlowTime.chosen else null
     val holding = chosen == Source.GPS && s?.sourceName(boot) != "GPS"
-    val gps = if (s != null && !holding) FlowTime.gps?.errAt(boot) else null
-    val hold = if (s != null && holding) FlowTime.gps?.errAt(boot) else null
-    val ntp = if (s != null) FlowTime.ntp?.errAt(boot) else null
-    val host = s?.ntp?.host?.substringBefore(".co.uk") ?: "NTP"
-    Canvas(Modifier.fillMaxWidth().height(190.dp).semantics { contentDescription = "Time sources, with ${chosen?.name ?: "none"} in charge. Tap a node to see what it is." }
+    val gps = FlowTime.gps?.takeIf { !holding }?.errAt(boot)
+    val hold = FlowTime.gps?.takeIf { holding }?.errAt(boot)
+    val ntp = FlowTime.ntp?.errAt(boot)
+    val gpsLit = chosen == Source.GPS && !holding
+    val ntpLit = chosen == Source.NTP
+    // Where the sun is: the last known position (it never leaves the phone), else the time zone's main city, "approx.".
+    val minute = System.currentTimeMillis() / 60_000L
+    val place = remember(minute / 10) { lastPosition(ctx) }
+    val (lat, lon) = place ?: org.beachsync.proto.Sun.zonePlace(java.util.TimeZone.getDefault())
+    val nowMs = minute * 60_000L
+    val zone = java.time.ZoneId.systemDefault()
+    val localMidnightUtc = java.time.LocalDate.now(zone).atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toEpochMilli()
+    val day = remember(minute) { org.beachsync.proto.Sun.day(localMidnightUtc, lat, lon) }
+    val hhmm = { ms: Long -> java.time.Instant.ofEpochMilli(ms).atZone(zone).toLocalTime().toString().take(5) }
+    val sunFrac: Float? = when (day) {
+        is org.beachsync.proto.Sun.Day.Times -> if (nowMs in day.riseMs..day.setMs) ((nowMs - day.riseMs).toFloat() / (day.setMs - day.riseMs)) else null
+        org.beachsync.proto.Sun.Day.AlwaysUp -> ((nowMs - localMidnightUtc) % 86_400_000L) / 86_400_000f
+        org.beachsync.proto.Sun.Day.NeverUp -> null
+    }
+    val night = sunFrac == null
+    val warm = Color(0xFFFFD27A)
+    // Tap places, as fractions: phone, satellites, hourglass, mast.
+    val spots = listOf(0.45f to 0.74f, 0.2f to 0.22f, 0.33f to 0.8f, 0.8f to 0.45f)
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Canvas(Modifier.fillMaxWidth().height(236.dp).clip(RoundedCornerShape(12.dp)).semantics { contentDescription = "Time sources as a picture, with ${chosen?.name ?: "none"} in charge. Tap the satellites, the mast or the hourglass." }
         .pointerInput(Unit) {
             detectTapGestures { p ->
-                // Flowtime, GPS, Hold, NTP: the same places as the drawing below; each node with its label is about a 44 px target.
-                val at = listOf(0.5f to 0.45f, 0.16f to 0.2f, 0.16f to 0.68f, 0.84f to 0.4f).map { (fx, fy) -> Offset(size.width * fx, size.height * fy) }
+                val at = spots.map { (fx, fy) -> Offset(size.width * fx, size.height * fy) }
                 val i = at.indices.minByOrNull { (at[it] - p).getDistance() }
-                if (i != null && (at[i] - p).getDistance() < 44.dp.toPx()) onPick(i)
+                if (i != null && (at[i] - p).getDistance() < 54.dp.toPx()) onPick(i)
             }
         }) {
-        val flow = Offset(size.width * 0.5f, size.height * 0.45f)
-        fun node(name: String, err: Double?, at: Offset, lit: Boolean) {
-            val r = (22f - (if (err == null) 1f else ((log10(err.coerceAtLeast(1e3)) - 3.0) / 4.0).coerceIn(0.0, 1.0).toFloat()) * 10f).dp.toPx()
-            drawLine(if (lit) Ink.accent else Ink.faint, at, flow, if (lit) 2.dp.toPx() else 1.dp.toPx(), pathEffect = if (lit) null else PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 4.dp.toPx())))
-            drawCircle(Ink.surface, r, at)
-            if (lit) drawCircle(Ink.accent.copy(alpha = 0.2f), r, at)
-            drawCircle(if (lit) Ink.accent else Ink.faint, r, at, style = Stroke(1.5.dp.toPx()))
-            drawIntoCanvas { c ->
-                paint.textSize = 10.sp.toPx()
-                paint.color = Ink.text.toArgb()
-                c.nativeCanvas.drawText(name, at.x, at.y + r + 14.dp.toPx(), paint)
-                paint.color = (if (lit) Ink.accent else Ink.muted).toArgb()
-                c.nativeCanvas.drawText(if (err != null) "±" + fmtDuration(err) else "—", at.x, at.y + r + 28.dp.toPx(), paint)
-            }
+        val w = size.width; val h = size.height; val ground = h * 0.86f
+        drawRect(androidx.compose.ui.graphics.Brush.verticalGradient(if (night) listOf(Color(0xFF05070C), Color(0xFF0D121A)) else listOf(Color(0xFF0F2236), Color(0xFF1B3550))))
+        if (night) {
+            for (k in 0 until 40) drawCircle(Color.White.copy(alpha = 0.25f + (k % 3) * 0.2f), (if (k % 7 == 0) 1.4f else 0.9f).dp.toPx(), Offset(((k * 73) % 97) / 97f * w, ((k * 37) % 61) / 61f * ground * 0.8f))
+            val m = Offset(w * 0.9f, h * 0.18f)
+            drawCircle(Color(0xFFDDE3EA), 10.dp.toPx(), m); drawCircle(Color(0xFF05070C), 9.dp.toPx(), Offset(m.x + 5.dp.toPx(), m.y - 3.dp.toPx()))
         }
-        val ring = listOf(0.5f to 0.45f, 0.16f to 0.2f, 0.16f to 0.68f, 0.84f to 0.4f)
-        picked?.let { val (fx, fy) = ring[it]; drawCircle(Ink.text, if (it == 0) 40.dp.toPx() else 27.dp.toPx(), Offset(size.width * fx, size.height * fy), style = Stroke(2.dp.toPx())) }
-        node("GPS", gps, Offset(size.width * 0.16f, size.height * 0.2f), chosen == Source.GPS && !holding)
-        node("HOLD", hold, Offset(size.width * 0.16f, size.height * 0.68f), holding)
-        node(host, ntp, Offset(size.width * 0.84f, size.height * 0.4f), chosen == Source.NTP)
-        if (chosen != null) drawCircle(Ink.accent.copy(alpha = 0.2f), 36.dp.toPx(), flow)
-        drawCircle(Ink.bg, 29.dp.toPx(), flow)
-        drawCircle(if (chosen != null) Ink.accent else Ink.faint, 29.dp.toPx(), flow, style = Stroke(2.dp.toPx()))
+        // The sun's dotted arc, sunrise on the left, sunset on the right; the sun placed by the time of day.
+        val arcC = Offset(w * 0.5f, ground); val arx = w * 0.42f; val ary = h * 0.62f
+        drawArc(Color.White.copy(alpha = 0.25f), 180f, 180f, false, Offset(arcC.x - arx, arcC.y - ary), Size(arx * 2, ary * 2), style = Stroke(1.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(2.dp.toPx(), 5.dp.toPx()))))
+        sunFrac?.let { f ->
+            val a = Math.PI * (1 - f)
+            val sp = Offset(arcC.x + arx * kotlin.math.cos(a).toFloat(), arcC.y - ary * kotlin.math.sin(a).toFloat())
+            drawCircle(warm.copy(alpha = 0.25f), 15.dp.toPx(), sp); drawCircle(warm, 9.dp.toPx(), sp)
+        }
+        // Ground, slightly curved.
+        drawPath(androidx.compose.ui.graphics.Path().apply { moveTo(0f, ground + 4.dp.toPx()); quadraticTo(w / 2, ground - 6.dp.toPx(), w, ground + 4.dp.toPx()); lineTo(w, h); lineTo(0f, h); close() }, Color(0xFF0A0C0F))
+        val phone = Offset(w * 0.45f, h * 0.72f)
+        fun link(from: Offset, lit: Boolean) = drawLine(if (lit) Ink.accent else Ink.faint, from, phone, if (lit) 1.8.dp.toPx() else 1.dp.toPx(), pathEffect = if (lit) null else PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 4.dp.toPx())))
+        // Satellites: four, top left.
+        val sats = listOf(0.1f to 0.3f, 0.2f to 0.14f, 0.32f to 0.08f, 0.38f to 0.22f).map { (fx, fy) -> Offset(w * fx, h * fy) }
+        for (sat in sats) {
+            link(sat, gpsLit)
+            val c = if (gpsLit) Ink.accent else Ink.faint
+            drawRect(c, Offset(sat.x - 3.dp.toPx(), sat.y - 3.dp.toPx()), Size(6.dp.toPx(), 6.dp.toPx()))
+            drawRect(c.copy(alpha = 0.7f), Offset(sat.x - 12.dp.toPx(), sat.y - 2.dp.toPx()), Size(7.dp.toPx(), 4.dp.toPx()))
+            drawRect(c.copy(alpha = 0.7f), Offset(sat.x + 5.dp.toPx(), sat.y - 2.dp.toPx()), Size(7.dp.toPx(), 4.dp.toPx()))
+        }
+        // The mast: brick tower with arched windows, a lattice far too tall, aerial and three wave arcs.
+        val mx = w * 0.8f
+        val mc = if (ntpLit) Ink.accent else Ink.muted
+        val towerTop = ground - 26.dp.toPx(); val tw = 34.dp.toPx()
+        drawRect(Color(0xFF3A3F47), Offset(mx - tw / 2, towerTop), Size(tw, ground - towerTop))
+        drawRect(mc, Offset(mx - tw / 2, towerTop), Size(tw, ground - towerTop), style = Stroke(1.dp.toPx()))
+        for (k in 0..2) { val wx = mx - tw / 2 + 6.dp.toPx() + k * 9.dp.toPx(); drawRoundRect(Color(0xFF0A0C0F), Offset(wx, towerTop + 9.dp.toPx()), Size(5.dp.toPx(), 13.dp.toPx()), androidx.compose.ui.geometry.CornerRadius(2.5f.dp.toPx())) }
+        val mastTop = h * 0.14f; val baseHalf = 12.dp.toPx()
+        val l = Offset(mx - baseHalf, towerTop); val r = Offset(mx + baseHalf, towerTop); val tip = Offset(mx, mastTop)
+        drawLine(mc, l, tip, 1.4.dp.toPx()); drawLine(mc, r, tip, 1.4.dp.toPx())
+        val rungs = 9
+        for (k in 1 until rungs) {
+            val t0 = k / rungs.toFloat(); val t1 = (k + 1) / rungs.toFloat()
+            fun at(side: Offset, t: Float) = Offset(side.x + (tip.x - side.x) * t, side.y + (tip.y - side.y) * t)
+            drawLine(mc, at(l, t0), at(r, t0), 0.8.dp.toPx())
+            if (k < rungs - 1) { drawLine(mc, at(l, t0), at(r, t1), 0.6.dp.toPx()); drawLine(mc, at(r, t0), at(l, t1), 0.6.dp.toPx()) }
+        }
+        drawLine(mc, tip, Offset(tip.x, tip.y - 12.dp.toPx()), 1.4.dp.toPx())
+        for (k in 1..3) { val rr = k * 7.dp.toPx(); drawArc(mc.copy(alpha = if (ntpLit) 1f else 0.6f), 220f, 100f, false, Offset(tip.x - rr, tip.y - 12.dp.toPx() - rr), Size(rr * 2, rr * 2), style = Stroke(1.2.dp.toPx())) }
+        link(tip, ntpLit)
+        // Hourglass: the phone's own clock carrying on.
+        val hg = Offset(w * 0.33f, h * 0.79f); val hc = if (holding) Ink.accent else Ink.faint
+        val hh = 9.dp.toPx(); val hw = 6.dp.toPx()
+        drawPath(androidx.compose.ui.graphics.Path().apply { moveTo(hg.x - hw, hg.y - hh); lineTo(hg.x + hw, hg.y - hh); lineTo(hg.x - hw, hg.y + hh); lineTo(hg.x + hw, hg.y + hh); close() }, hc, style = Stroke(1.5.dp.toPx()))
+        // The phone, with a soft halo.
+        if (chosen != null) drawCircle(Ink.accent.copy(alpha = 0.15f), 32.dp.toPx(), phone)
+        val pw = 26.dp.toPx(); val ph = 44.dp.toPx()
+        drawRoundRect(Color(0xFF0A0C0F), Offset(phone.x - pw / 2, phone.y - ph / 2), Size(pw, ph), androidx.compose.ui.geometry.CornerRadius(5.dp.toPx()))
+        drawRoundRect(if (chosen != null) Ink.accent else Ink.faint, Offset(phone.x - pw / 2, phone.y - ph / 2), Size(pw, ph), androidx.compose.ui.geometry.CornerRadius(5.dp.toPx()), style = Stroke(2.dp.toPx()))
+        picked?.let { val (fx, fy) = spots[it]; drawCircle(Color.White, 30.dp.toPx(), Offset(w * fx, h * fy), style = Stroke(2.dp.toPx())) }
         drawIntoCanvas { c ->
-            paint.textSize = 10.sp.toPx(); paint.color = Ink.text.toArgb()
-            c.nativeCanvas.drawText("FLOW", flow.x, flow.y - 2.dp.toPx(), paint)
-            c.nativeCanvas.drawText("TIME", flow.x, flow.y + 11.dp.toPx(), paint)
+            val nc = c.nativeCanvas
+            paint.textSize = 7.5f.sp.toPx(); paint.color = Ink.text.toArgb()
+            nc.drawText("FLOW", phone.x, phone.y - 1.dp.toPx(), paint); nc.drawText("TIME", phone.x, phone.y + 8.dp.toPx(), paint)
+            paint.textSize = 9.sp.toPx()
+            fun label(t1: String, t2: String, x: Float, y: Float, lit: Boolean, align: Paint.Align = Paint.Align.CENTER) {
+                paint.textAlign = align
+                paint.color = (if (lit) Ink.accent else Ink.muted).toArgb(); nc.drawText(t1, x, y, paint)
+                paint.color = (if (lit) Ink.text else Ink.muted).toArgb(); nc.drawText(t2, x, y + 11.sp.toPx(), paint)
+                paint.textAlign = Paint.Align.CENTER
+            }
+            label("GPS", gps?.let { "±" + fmtDuration(it) } ?: "—", w * 0.2f, h * 0.43f, gpsLit)
+            label("NTP", ntp?.let { "±" + fmtDuration(it) } ?: "—", mx + 18.dp.toPx(), h * 0.42f, ntpLit, Paint.Align.LEFT)
+            label("HOLD", hold?.let { "±" + fmtDuration(it) } ?: "—", hg.x - 2.dp.toPx(), ground + 3.dp.toPx(), holding)
+            // Sunrise and sunset under the ground line, warm yellow.
+            paint.color = warm.toArgb(); paint.textSize = 9.sp.toPx()
+            val approx = if (place == null) " approx." else ""
+            when (day) {
+                is org.beachsync.proto.Sun.Day.Times -> {
+                    paint.textAlign = Paint.Align.LEFT; nc.drawText("↑ ${hhmm(day.riseMs)} SUNRISE$approx", 8.dp.toPx(), h - 6.dp.toPx(), paint)
+                    paint.textAlign = Paint.Align.RIGHT; nc.drawText("↓ ${hhmm(day.setMs)} SUNSET$approx", w - 8.dp.toPx(), h - 6.dp.toPx(), paint)
+                }
+                org.beachsync.proto.Sun.Day.AlwaysUp -> { paint.textAlign = Paint.Align.LEFT; nc.drawText("Sun up all day$approx", 8.dp.toPx(), h - 6.dp.toPx(), paint) }
+                org.beachsync.proto.Sun.Day.NeverUp -> { paint.textAlign = Paint.Align.LEFT; nc.drawText("Sun doesn't rise today$approx", 8.dp.toPx(), h - 6.dp.toPx(), paint) }
+            }
+            paint.textAlign = Paint.Align.CENTER
         }
     }
+    }
+}
+
+/** The phone's last known position, if it has one and may read it: used only to place the sun, never sent anywhere. */
+private fun lastPosition(ctx: android.content.Context): Pair<Double, Double>? {
+    if (ctx.checkSelfPermission(android.Manifest.permission.ACCESS_COARSE_LOCATION) != android.content.pm.PackageManager.PERMISSION_GRANTED &&
+        ctx.checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION) != android.content.pm.PackageManager.PERMISSION_GRANTED) return null
+    val lm = ctx.getSystemService(android.location.LocationManager::class.java)
+    return try {
+        lm.getProviders(true).mapNotNull { lm.getLastKnownLocation(it) }.maxByOrNull { it.time }?.let { it.latitude to it.longitude }
+    } catch (_: SecurityException) { null }
 }
 
 /** Tap a source (user, 5 Nov): what the node is, in plain words, then its live details. */

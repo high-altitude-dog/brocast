@@ -514,6 +514,11 @@ private fun SourceGlyph(gps: org.beachsync.proto.GpsTime?, boot: Long, open: () 
                     val h = size.height - 4.dp.toPx()
                     drawLine(tint, Offset(c.x, c.y - h / 2), Offset(c.x - 5.dp.toPx(), c.y + h / 2), 1.5.dp.toPx())
                     drawLine(tint, Offset(c.x, c.y - h / 2), Offset(c.x + 5.dp.toPx(), c.y + h / 2), 1.5.dp.toPx())
+                    if (kind == "NTP") {
+                        // Internet time in charge (hand-off 52): the aerial becomes a mini mast, as on Time signals: rungs and a brick base.
+                        for (k in 1..3) { val y = c.y - h / 2 + h * k / 4f; val half = 5.dp.toPx() * k / 4f; drawLine(tint, Offset(c.x - half, y), Offset(c.x + half, y), 1.dp.toPx()) }
+                        drawRect(tint, Offset(c.x - 4.dp.toPx(), c.y + h / 2), Size(8.dp.toPx(), 3.dp.toPx()))
+                    }
                     if (kind == "NTP") for (k in 1..2) {
                         val r = k * 5.dp.toPx()
                         drawArc(tint, -50f, 100f, false, Offset(c.x - r, c.y - h / 2 - r + 3.dp.toPx()), Size(r * 2, r * 2), style = Stroke(1.dp.toPx()))
