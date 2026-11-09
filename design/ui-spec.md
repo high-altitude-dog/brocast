@@ -1,4 +1,4 @@
-# UI spec (hand-off 46)
+# UI spec (hand-off 49)
 
 Field names come from Claude Code's "Fields that exist today" table in `feedback.md`, as of 1 Nov 2026. If one has been renamed since, use the new name.
 
@@ -766,6 +766,7 @@ User, 8 Nov: redesign the page; reorder sets; announce to listeners. 1440 wide, 
 | Track order | `TRACK ORDER · LATER`: once sets have track lists, a set opens to its tracks and reorders the same way. |
 | Upload | Drop zone (FLAC, WAV, MP3, up to 4 GB); file with three-step progress Uploaded → Converting % → Signing; Title, Artist (from the artist list; a new name held to confirm), Set name (optional), Goes (At the end of the order ▾). A finished upload joins the draft. |
 | Disk | Bar: sets, this upload's need (accent), 3 GB kept free (hatched red); refused before starting if it wouldn't leave 3 GB. |
+| News bulletin (user, 9 Nov) | `NEWS BULLETIN` card under Station colour, cyan: radio list **BBC World Service** (hourly · about 5 min · default; URL shown with the key masked), **NPR News Now** (`feeds.npr.org/500005/podcast.xml`), **None**. Top right: the live choice. Note: each phone fetches straight from the source; nothing through this server; changes reach phones with the next announcement. Rail gets **News · BBC World Service**. Full URLs: `comms/news-feeds.local.md` (gitignored). |
 | Station colour | `STATION COLOUR` card under Artists: the current colour's dot and name, then the 21 swatches (7 × 3, 40 px, the current one ringed with a tick). Picking one opens the colour dialog (Station colour section). |
 | Artists | Thumbnails, Open artists ›, confirm prompt (`"2 Lanes" on an upload: same as [Artist C]?` Yes / New artist). |
 
@@ -812,6 +813,41 @@ User, 8 Nov: tapping a peer on Swarm shows more about them, including their coun
 | They left | Header greyed, tiles `—` with `left 40 s ago`; sheet stays until closed; resumes if they return. |
 | List rows (proposal) | Lead with avatar + nym, key and path underneath, flag if allowed, to-you rate, ›. |
 | Data | Nym and its signature from their announcement; country from the bundled country table (only with their permission flag); link path, RTT, rates, holding from the engine. Never the IP address on screen. |
+
+## News on the headphone button
+
+| Now playing | Settings | States |
+|---|---|---|
+| ![](screens/news-now-playing.png) | ![](screens/news-settings.png) | ![](screens/news-states.png) |
+
+User, 8 Nov: press play/pause on the headphones while listening → music fades to 20–30%, the latest hourly news bulletin plays over it, music fades back up. Needs internet. **On by default**; music level and fade speed in Settings. Brocast is non-commercial and open source.
+
+| Part | Rule |
+|---|---|
+| Button | Media-session play/pause **while music plays**: soft two-note chime at once, then fetch (or use the ready one), fade down, play. Press during the bulletin: stop it, fade up. Brocast stopped: the button starts the music as before. Setting off: play/pause stops/starts as before. Next/previous do nothing. On-screen Stop always stops the music. |
+| Volume | Music under the news: slider 0–50 %, default **25 %** (≈ −12 dB). Fade down: Quick 0.5 s / **Gentle 1.5 s** / Slow 3 s. Fade back up: Quick 0.5 s / **Gentle 2 s** / Slow 4 s. Equal-power curve. Music fades only once the bulletin is ready to play. |
+| Sync | Only the music's gain changes; the set keeps its synced place, beat counter and clock carry on. |
+| Card on Now playing | Under the track row, above the clock. Cyan (news colour) gradient, `NEWS · BBC WORLD SERVICE`, `23:00 bulletin`; waveform fills as it plays, `2:41 / 5:02`; `Press your headphone button to stop · music at 25%`; **Stop**. States: Getting (spinner, MB, `music stays up until it starts`), Playing, Ending (`Music coming back up · 2 s`), then it slides away. |
+| Can't | No internet: toast `No news without internet`, low tone, music unchanged. No answer in 10 s: `News isn't answering right now`. Newest older than 2 h 30 m: treated as not answering; otherwise plays with its age (`21:00 · 2 h old`). |
+| Settings › Listening › News on the headphone button | Row `On · BBC World Service · music to 25%` → page: switch (on), **News from** (Station's choice · default / NPR News Now / Your own feed: any podcast RSS), Music under the news slider, Fade down, Fade back up, **Get the next one ready on Wi-Fi** (on: fetch each new bulletin when published, ~3 MB/hour), Play 10 s preview, fade diagram, privacy line. |
+| Source | The station picks BBC World Service (default), NPR News Now or None on the upload page; the feed URL travels in the **station's signed announcement** (kept in server config, not in code or git). Listener's `News from`: Station's choice / NPR News Now / Your own feed. Station chose None: the row reads `This station has no news · pick one below`; the switch stays on and uses the listener's pick, else the button behaves as before. |
+| Ads | Played as sent, never cut. |
+| Privacy | `Your phone fetches the bulletin straight from the news service, which sees your internet address.` |
+
+## Satellites · gesture hint
+
+![](screens/satellites-hint.png)
+
+User, 8 Nov: on first opening of Satellites, or the 3rd opening without using gestures, show an effect that prompts two-finger navigation.
+
+| Part | Rule |
+|---|---|
+| When | Opening 1, always. Opening 3, only if openings 1–2 had no pinch and no two-finger tilt. Never after. An opening counts once the screen has been up 2 s in 3D. Opened in Flat: waits for the first switch to 3D. |
+| Effect (4 s, played twice) | Scene dims 35 %. 0–0.4 s: two finger marks fade in (white ring, soft fill). 0.4–1.6 s: they spread with dashed arrows and the view really zooms out ~15 %; pill `Pinch to zoom`. 1.6–2.2 s: they come together, lower. 2.2–3.4 s: they slide up together and the view really tilts +17°; pill `Slide up or down to tilt`. 3.4–4 s: marks fade; view eases back exactly to where it was. No accent colour. |
+| After | Caption under the box: two-ring icon, `Two fingers: pinch to zoom, slide to tilt · or use − +`, until the first two-finger gesture or 20 s. The orbit tour starts when the hint ends. |
+| Stops | Any touch on the box: marks fade in 150 ms, the user's gesture takes over from the view on screen (no snap). |
+| Reduce motion | Still card over the dimmed box: two finger marks, `Pinch to zoom · slide two fingers to tilt`, Got it. Same when-rules. |
+| Screen readers | No animation; the box label gains `Pinch with two fingers to zoom, slide two fingers up or down to tilt, or use the zoom buttons.` once, on opening 1. |
 
 ## New running order on the phone
 
