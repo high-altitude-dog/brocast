@@ -329,9 +329,9 @@ private fun SatCard(s: Sat, rateKmS: Double?, close: () -> Unit) {
         }
         fleet?.let { f ->
             FactRow("COUNTRY") {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    BasicText(f.code, Modifier.border(1.dp, Ink.border, RoundedCornerShape(4.dp)).padding(horizontal = 5.dp, vertical = 1.dp), Tokens.Text.cardLabel.style(Ink.text))
-                    BasicText("  ${f.country}", style = Tokens.Text.body.style())
+                for ((code, name) in f.countries) Row(verticalAlignment = Alignment.CenterVertically) {
+                    BasicText(org.beachsync.proto.flagOf(code), style = Tokens.Text.body.style().copy(fontSize = 20.sp))
+                    BasicText("  $name", style = Tokens.Text.body.style())
                 }
                 BasicText(f.operator, style = Tokens.Text.small.style(Ink.textSecondary))
             }

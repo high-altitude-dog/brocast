@@ -154,6 +154,40 @@ private class Cam(heading: Double, tilt: Double, zoom: Double, val w: Float, val
     }
 }
 
+/**
+ * A circular orbit through [r] (scene frame, km from the Earth's centre) tilted [tiltDeg] to the equator, whose pole is [axis]: 120 points.
+ * Of the two such orbits, [rising] picks the one where the satellite is heading north. Null if the tilt can't reach its latitude.
+ */
+private fun orbitRing(r: DoubleArray, axis: DoubleArray, tiltDeg: Int, rising: Boolean): DoubleArray? {
+    val rl = sqrt(r[0] * r[0] + r[1] * r[1] + r[2] * r[2])
+    val rh = DoubleArray(3) { r[it] / rl }
+    val sinLat = rh[0] * axis[0] + rh[1] * axis[1] + rh[2] * axis[2]
+    val cosLat = sqrt((1 - sinLat * sinLat).coerceAtLeast(1e-9))
+    // e1: towards the pole, square to r; e2 = r × e1, towards the east.
+    val e1 = DoubleArray(3) { (axis[it] - sinLat * rh[it]) / cosLat }
+    val e2 = doubleArrayOf(rh[1] * e1[2] - rh[2] * e1[1], rh[2] * e1[0] - rh[0] * e1[2], rh[0] * e1[1] - rh[1] * e1[0])
+    val a = (cos(Math.toRadians(tiltDeg.toDouble())) / cosLat).coerceIn(-1.0, 1.0)
+    val b = sqrt(1 - a * a) * (if (rising) 1 else -1)
+    val n = DoubleArray(3) { a * e1[it] + b * e2[it] }                         // the orbit's pole
+    val v = doubleArrayOf(n[1] * rh[2] - n[2] * rh[1], n[2] * rh[0] - n[0] * rh[2], n[0] * rh[1] - n[1] * rh[0])
+    val out = DoubleArray(360)
+    for (i in 0 until 120) {
+        val t = i * 2 * Math.PI / 120
+        for (k in 0..2) out[3 * i + k] = rl * (rh[k] * cos(t) + v[k] * sin(t))
+    }
+    return out
+}
+
+/** True when the Earth stands between the camera and the point. */
+private fun behindEarth(cam: Cam, x: Double, y: Double, z: Double): Boolean {
+    val dx = x - cam.px; val dy = y - cam.py; val dz = z - cam.pz
+    val dd = dx * dx + dy * dy + dz * dz
+    val t = -(cam.px * dx + cam.py * dy + cam.pz * dz) / dd                  // nearest approach to the centre along the ray
+    if (t <= 0 || t >= 1) return false
+    val cx = cam.px + dx * t; val cy = cam.py + dy * t; val cz = cam.pz + dz * t
+    return cx * cx + cy * cy + cz * cz < R * R
+}
+
 /** A satellite's direction from you as a unit vector: x east, y north, z up. */
 private fun look(s: Sat): DoubleArray {
     val e = Math.toRadians(s.elevationDeg.toDouble()); val a = Math.toRadians(s.azimuthDeg.toDouble())
@@ -177,6 +211,18 @@ internal fun Sky3D(sats: List<Sat>, position: Pair<Double, Double>?, picked: Str
     val posKey = position?.let { (it.first * 10).roundToInt() to (it.second * 10).roundToInt() }
     val land = remember(posKey) { posKey?.let { landInScene(raw, it.first / 10.0, it.second / 10.0) } }
     val hits = remember { ArrayList<Pair<String, Offset>>() }
+    val firstLat = remember { HashMap<String, Double>() }
+    val rising = remember { HashMap<String, Boolean>() }
+    position?.let { pos ->
+        val axis = ecefToScene(90.0, 0.0, pos.first, pos.second)
+        for (s in sats) {
+            val u = look(s); val d = rangeOf(s)
+            val x = u[0] * d; val y = u[1] * d; val z = R + u[2] * d
+            val lat = Math.toDegrees(asin(((x * axis[0] + y * axis[1] + z * axis[2]) / sqrt(x * x + y * y + z * z)).coerceIn(-1.0, 1.0)))
+            val first = firstLat.getOrPut(s.label) { lat }
+            if (abs(lat - first) > 0.3) rising[s.label] = lat > first
+        }
+    }
     val stars = remember { val r = java.util.Random(7); FloatArray(160) { r.nextFloat() } }
     val dotPaint = remember { android.graphics.Paint().apply { isAntiAlias = true; strokeCap = android.graphics.Paint.Cap.ROUND } }
     val used = sats.count { it.used }
@@ -200,8 +246,7 @@ internal fun Sky3D(sats: List<Sat>, position: Pair<Double, Double>?, picked: Str
                                 val z = ev.calculateZoom(); val pan = ev.calculatePan()
                                 zoomTarget = (zoomTarget - ln(z.toDouble()).toFloat() * 1.8f).coerceIn(0f, 2f)
                                 // Two fingers down the screen tilt towards the flat plot, up towards the horizon.
-                                tilt = (tilt + pan.y * 0.25f).coerceIn(5f, 89f)
-                                if (tilt >= 88f) { tilt = 22f; flat() }
+                                tilt = (tilt + pan.y * 0.25f).coerceIn(5f, 85f)
                                 ev.changes.forEach { it.consume() }
                             } else if (down == 1) {
                                 val pan = ev.calculatePan()
@@ -210,7 +255,7 @@ internal fun Sky3D(sats: List<Sat>, position: Pair<Double, Double>?, picked: Str
                                 if (turning) { heading = ((heading - pan.x * 0.3f) % 360f + 360f) % 360f; ev.changes.forEach { it.consume() } }
                             }
                         } while (ev.changes.any { it.pressed })
-                        if (pinching) { pinching = false; zoomTarget = zoomTarget.roundToInt().toFloat() }
+                        pinching = false
                     }
                 }
                 .pointerInput(sats) {
@@ -313,7 +358,33 @@ internal fun Sky3D(sats: List<Sat>, position: Pair<Double, Double>?, picked: Str
                 cam.project(u[0] * d, u[1] * d, R + u[2] * d, p)
                 Triple(s, Offset(p[0], p[1]), p[2])
             }.filter { it.third > 0 }.sortedByDescending { it.third }
-            for ((s, at, _) in drawn) if (s.used) drawLine(if (s.label == picked) Ink.accent else Ink.accent.copy(alpha = 0.3f), you, at, (if (s.label == picked) 2 else 1).dp.toPx())
+            // Each satellite's orbit: true scale once zoomed out; on the dome, its path across your sky.
+            if (position != null) {
+                val axis = ecefToScene(90.0, 0.0, position.first, position.second)
+                for ((s, _, _) in drawn) {
+                    val orbit = SatFacts.orbit(s.system, s.svid)
+                    val u = look(s); val d = rangeOf(s)
+                    val ring = orbitRing(doubleArrayOf(u[0] * d, u[1] * d, R + u[2] * d), axis, orbit.tiltDeg, rising[s.label] ?: true) ?: continue
+                    val color = when { s.label == picked -> Ink.accent; s.used -> Ink.accent.copy(alpha = 0.35f); else -> Ink.muted.copy(alpha = 0.3f) }
+                    val width = (if (s.label == picked) 2f else 1f) * 1.dp.toPx()
+                    var prev: Offset? = null; var prevHidden = false
+                    for (j in 0..ring.size / 3) {
+                        val i = j % (ring.size / 3)
+                        val x = ring[3 * i]; val y = ring[3 * i + 1]; val z = ring[3 * i + 2] - R      // from you
+                        val len = sqrt(x * x + y * y + z * z)
+                        val above = z > 0
+                        if (!above && s1 < 0.5f) { prev = null; continue }
+                        val k = (DOME + (len - DOME) * s1) / len
+                        val wx = x * k; val wy = y * k; val wz = R + z * k
+                        cam.project(wx, wy, wz, p)
+                        if (p[2] <= 0) { prev = null; continue }
+                        val hidden = behindEarth(cam, wx, wy, wz)
+                        val pt = Offset(p[0], p[1])
+                        prev?.let { a -> drawLine(if (hidden || prevHidden) color.copy(alpha = color.alpha * 0.35f) else color, a, pt, width) }
+                        prev = pt; prevHidden = hidden
+                    }
+                }
+            }
             for ((s, at, depth) in drawn) {
                 val near = (cam.dist / depth).toFloat().coerceIn(0.8f, 1.25f)
                 mark3d(s, at, if (s.used) Ink.accent else Ink.muted, s.used, near)
@@ -330,7 +401,7 @@ internal fun Sky3D(sats: List<Sat>, position: Pair<Double, Double>?, picked: Str
             // The selected satellite's distance, halfway along its line.
             sel?.let { s -> drawn.firstOrNull { it.first === s }?.let { (_, at, _) ->
                 val m = measurer.measure("%,d km".format(rangeOf(s).roundToInt()), TextStyle(color = Ink.text, fontSize = 10.sp))
-                val mid = Offset((you.x + at.x) / 2, (you.y + at.y) / 2)
+                val mid = Offset(at.x, at.y + 26.dp.toPx())
                 val box = Rect(mid.x - m.size.width / 2f - 6.dp.toPx(), mid.y - m.size.height / 2f - 3.dp.toPx(), mid.x + m.size.width / 2f + 6.dp.toPx(), mid.y + m.size.height / 2f + 3.dp.toPx())
                 drawRoundRect(Color(0xE6101418), box.topLeft, box.size, androidx.compose.ui.geometry.CornerRadius(8.dp.toPx()))
                 drawRoundRect(Ink.accent, box.topLeft, box.size, androidx.compose.ui.geometry.CornerRadius(8.dp.toPx()), style = Stroke(1.dp.toPx()))
