@@ -187,7 +187,15 @@ private fun Verdict(limit: Limit, total: Double, stamp: Double, accurate: Boolea
     val edge = if (signal) Ink.accent else Ink.warn
     Row(Modifier.fillMaxWidth().border(1.dp, edge, RoundedCornerShape(12.dp)).background(Ink.surface, RoundedCornerShape(12.dp)).padding(12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         BasicText(if (signal) "✓" else "!", style = Tokens.Text.bodyStrong.style(edge))
-        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        // Very accurate: one paragraph, "Nothing is holding it back." running on after the figure (user, 8 Nov), so the box is shorter.
+        if (accurate) BasicText(
+            androidx.compose.ui.text.buildAnnotatedString {
+                append(title); append(" ")
+                pushStyle(androidx.compose.ui.text.SpanStyle(color = Ink.textSecondary, fontWeight = androidx.compose.ui.text.font.FontWeight.Normal)); append(reason); pop()
+            },
+            style = Tokens.Text.bodyStrong.style(),
+        )
+        else Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             BasicText(title, style = Tokens.Text.bodyStrong.style())
             BasicText(reason, style = Tokens.Text.body.style(Ink.textSecondary))
         }
