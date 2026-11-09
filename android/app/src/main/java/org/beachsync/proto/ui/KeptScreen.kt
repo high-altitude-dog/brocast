@@ -90,7 +90,7 @@ private fun mb(b: Long) = if (b >= 1_000_000_000) "%.2f GB".format(b / 1e9) else
 private val DAY = SimpleDateFormat("d MMM", Locale.UK)
 
 @Composable
-fun KeptScreen(state: BenchState, back: () -> Unit, openArtist: (String) -> Unit) {
+fun KeptScreen(state: BenchState, back: () -> Unit, openArtist: (String) -> Unit, passOn: (String) -> Unit = {}, scan: () -> Unit = {}) {
     val lib = state.library
     val items = lib?.editions?.flatMap { it.items }?.distinctBy { it.id }.orEmpty()
     val kept = items.filter { lib!!.file(it.id).exists() }
@@ -117,7 +117,10 @@ fun KeptScreen(state: BenchState, back: () -> Unit, openArtist: (String) -> Unit
         else -> kept.sortedByDescending { lib!!.file(it.id).lastModified() }
     }
     Screen {
-        ScreenHeader("Kept", back)
+        ScreenHeader("Kept", back) {
+            // Pass it on (hand-off 53): Scan a code someone shows you.
+            BasicText("Scan", Modifier.heightIn(min = 44.dp).clickable(role = Role.Button, onClick = scan).wrapContentHeight().padding(horizontal = 8.dp), Tokens.Text.body.style(Ink.accent))
+        }
         BasicText("Everything you've kept, whole and verified on this phone. It plays with no network at all.", style = Tokens.Text.body.style(Ink.textSecondary))
         if (kept.isEmpty()) {
             Column(
@@ -150,7 +153,7 @@ fun KeptScreen(state: BenchState, back: () -> Unit, openArtist: (String) -> Unit
                 BasicText("▬ energy", style = Tokens.Text.small.style(Ink.accent.copy(alpha = 0.6f)))
                 BasicText("— tempo", style = Tokens.Text.small.style(Ink.text))
             }
-            for (item in sorted) KeptCard(lib!!, item, infos[item.id], item.id == playing, inRange(item), open == item.id, { open = if (open == item.id) null else item.id }, openArtist)
+            for (item in sorted) KeptCard(lib!!, item, infos[item.id], item.id == playing, inRange(item), open == item.id, { open = if (open == item.id) null else item.id }, openArtist, passOn)
         }
         if (finishing.isNotEmpty()) Row(
             Modifier.fillMaxWidth().border(1.dp, Ink.grid, RoundedCornerShape(Tokens.Radius.card.dp)).padding(14.dp),
@@ -204,7 +207,7 @@ private fun TempoMap(kept: List<LibraryItem>, infos: Map<String, KeptInfo>, lo: 
 }
 
 @Composable
-private fun KeptCard(lib: LibraryStore, item: LibraryItem, info: KeptInfo?, playing: Boolean, inside: Boolean, expanded: Boolean, toggle: () -> Unit, openArtist: (String) -> Unit) {
+private fun KeptCard(lib: LibraryStore, item: LibraryItem, info: KeptInfo?, playing: Boolean, inside: Boolean, expanded: Boolean, toggle: () -> Unit, openArtist: (String) -> Unit, passOn: (String) -> Unit = {}) {
     val shape = RoundedCornerShape(Tokens.Radius.card.dp)
     val working = SetBeatAnalyser.current()?.working?.takeIf { it.first == item.title }?.second
     val bpm = when {
@@ -239,6 +242,7 @@ private fun KeptCard(lib: LibraryStore, item: LibraryItem, info: KeptInfo?, play
             BasicText("TRACK LIST NOT PUBLISHED YET", style = Tokens.Text.cardLabel.style())
             BasicText("The station hasn't published this set's track list. Tempo and energy come from the audio itself; track lines and titles appear when the list arrives.", style = Tokens.Text.small.style(Ink.textSecondary))
             BasicText("Replay · not synced comes with the Archive.", style = Tokens.Text.small.style(Ink.muted))
+            BasicText("Pass it on ›", Modifier.heightIn(min = 44.dp).clickable(role = Role.Button) { passOn(item.id) }.wrapContentHeight(), Tokens.Text.bodyStrong.style(Ink.accent))
         }
         if (playing) BasicText("● Playing now", style = Tokens.Text.small.style(Ink.accent))
         else BasicText("✓ verified · plays offline · kept ${DAY.format(Date(lib.file(item.id).lastModified()))}", style = Tokens.Text.small.style(Ink.textSecondary))

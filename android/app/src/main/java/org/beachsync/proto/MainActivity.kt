@@ -30,6 +30,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -66,6 +67,13 @@ class MainActivity : ComponentActivity(), BenchActions {
     private var listenFromLibrary = false
     private var earcupOutput: AudioOutput? = null
     private var earcupRuns = 3
+    /** Pass it on (hand-off 53): a brocast://pass link, from the camera app or the in-app scan. */
+    private var incomingPass by mutableStateOf<org.beachsync.proto.ui.PassLink?>(null)
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        org.beachsync.proto.ui.PassLink.parse(intent.dataString)?.let { incomingPass = it }
+    }
 
     /** Asked only from Now playing's card or Calibration's row, once Bluetooth headphones are connected, because their name is the only reason the app wants this. */
     private val askForHeadsetName = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -138,6 +146,7 @@ class MainActivity : ComponentActivity(), BenchActions {
         if (!testScript) applyStation()
         window.decorView.post(newsTicker)
         state.eventLog = eventLog
+        org.beachsync.proto.ui.PassLink.parse(intent?.dataString)?.let { incomingPass = it }
         setContent {
             val fromTestScript = intent?.hasExtra("tickPattern") == true || intent?.hasExtra("soloSlot") == true
             val home = if (fromTestScript) Page.BENCH else Page.NOW
@@ -146,15 +155,21 @@ class MainActivity : ComponentActivity(), BenchActions {
             var logLane by remember { mutableStateOf<Lane?>(null) }
             var artistFrom by remember { mutableStateOf(home) }
             org.beachsync.proto.ui.StationColour.Driver(state.library)
+            var passGive by remember { mutableStateOf<String?>(null) }
+            LaunchedEffect(incomingPass) { if (incomingPass != null) page = Page.PASS_RECEIVE }
             var artistItem by remember { mutableStateOf<String?>(null) }
             var cardSetup by remember { mutableStateOf<org.beachsync.proto.ui.TestCardSetup?>(null) }
             BackHandler(page != home) {
                 if (page == Page.EARCUP) cancelEarcup()
-                page = when (page) { Page.LOG, Page.NUDGE -> from; Page.EARCUP -> Page.CALIBRATION; Page.ADVANCED, Page.DATALOG -> Page.DATA; Page.SYNC_LINE -> Page.SYNC; Page.DATA, Page.IDENTITY, Page.CARD_SETUP, Page.NEWS -> Page.SETTINGS; Page.CARD -> Page.CARD_SETUP; Page.ARTIST -> if (artistFrom == Page.KEPT) Page.KEPT else home; else -> home }
+                page = when (page) { Page.LOG, Page.NUDGE -> from; Page.EARCUP -> Page.CALIBRATION; Page.ADVANCED, Page.DATALOG -> Page.DATA; Page.SYNC_LINE -> Page.SYNC; Page.DATA, Page.IDENTITY, Page.CARD_SETUP, Page.NEWS -> Page.SETTINGS; Page.CARD -> Page.CARD_SETUP; Page.PASS_GIVE -> Page.KEPT; Page.ARTIST -> if (artistFrom == Page.KEPT) Page.KEPT else home; else -> home }
             }
             when (page) {
                 Page.NOW -> NowPlaying(state, this, { logLane = null; from = Page.NOW; page = Page.LOG }, { from = Page.NOW; page = Page.NUDGE }, { page = Page.BENCH }, { page = Page.SETTINGS }, { page = Page.SIGNALS }, { page = Page.CALIBRATION }, { page = Page.SATELLITES }, { page = Page.STEREO }, { page = Page.ARTIST }, { page = Page.SWARM }, { page = Page.BUFFER }) { page = Page.KEPT }
-                Page.KEPT -> KeptScreen(state, { page = home }) { id -> artistFrom = Page.KEPT; artistItem = id; page = Page.ARTIST }
+                Page.KEPT -> KeptScreen(state, { page = home }, { id -> artistFrom = Page.KEPT; artistItem = id; page = Page.ARTIST }, { id -> passGive = id; page = Page.PASS_GIVE }) {
+                    org.beachsync.proto.ui.scanPassCode(this) { link -> if (link != null) incomingPass = link else android.widget.Toast.makeText(this, "That isn't a Brocast code", android.widget.Toast.LENGTH_SHORT).show() }
+                }
+                Page.PASS_GIVE -> passGive?.let { org.beachsync.proto.ui.PassGiveScreen(state.library, it, state.stationKey.trim().lowercase()) { page = Page.KEPT } }
+                Page.PASS_RECEIVE -> incomingPass?.let { link -> org.beachsync.proto.ui.PassReceiveScreen(state.library, link, state.stationKey.trim().lowercase(), { st -> state.stationKey = st; save(); applyStation() }) { incomingPass = null; page = home } }
                 Page.CALIBRATION -> CalibrationPage(state, this, { page = home }, { resetEarcup(); page = Page.EARCUP })
                 Page.EARCUP -> EarcupPage(state, this) { page = Page.CALIBRATION }
                 Page.SIGNALS -> TimeSignalsScreen(state, this, { page = Page.SATELLITES }) { page = home }
@@ -413,7 +428,7 @@ class MainActivity : ComponentActivity(), BenchActions {
         if (state.library != null) applyStation()
     }
 
-    private enum class Page { NOW, BENCH, LOG, NUDGE, SETTINGS, SIGNALS, CALIBRATION, EARCUP, SATELLITES, SYNC, SYNC_LINE, BEAT, STEREO, ARTIST, SWARM, BUFFER, DATA, ADVANCED, DATALOG, IDENTITY, KEPT, CARD_SETUP, CARD, NEWS }
+    private enum class Page { NOW, BENCH, LOG, NUDGE, SETTINGS, SIGNALS, CALIBRATION, EARCUP, SATELLITES, SYNC, SYNC_LINE, BEAT, STEREO, ARTIST, SWARM, BUFFER, DATA, ADVANCED, DATALOG, IDENTITY, KEPT, CARD_SETUP, CARD, NEWS, PASS_GIVE, PASS_RECEIVE }
 
     companion object {
         /** Kept outside the activity, so a test run survives the screen being rebuilt. */

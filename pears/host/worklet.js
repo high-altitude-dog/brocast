@@ -16,7 +16,7 @@ import { hedge } from '../engine/hedge.js'
 import { nymFrom, nymProof, nymText } from '../engine/nym.js'
 import { PACKETS } from '../engine/blocks.js'
 
-const CMD = { hello: 1, start: 2, subscribe: 3, status: 4, stop: 5, block: 6, prefs: 7, react: 8 }
+const CMD = { hello: 1, start: 2, subscribe: 3, status: 4, stop: 5, block: 6, prefs: 7, react: 8, want: 9 }
 const EV = { status: 100, built: 102, warning: 103, fatal: 104, catalog: 105 }
 
 const t0 = Date.now()
@@ -67,6 +67,13 @@ rpc = new RPC(Bare.IPC, async (req) => {
     case CMD.react: // a silent reaction from this listener (hand-off 53)
       if (!run) refuse('NOT_STARTED', 'start first')
       return reply({ sent: run.mesh.react(body.e | 0) })
+    case CMD.want: { // Pass it on (hand-off 53): connect straight to the giver by key, and fetch their set first
+      if (!run) refuse('NOT_STARTED', 'start first')
+      if (/^[0-9a-f]{64}$/.test(String(body.peer || ''))) { try { run.mesh.swarm.joinPeer(b4a.from(body.peer, 'hex')) } catch {} }
+      const s = body.setId ? run.byId?.get(body.setId) : null
+      if (s) run.focus(s)
+      return reply({ known: !!s, built: !!s?.builder?.done })
+    }
     case CMD.stop:
       if (run) await run.stop()
       reply({})

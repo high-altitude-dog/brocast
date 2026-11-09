@@ -90,6 +90,10 @@ dependencies {
     implementation("androidx.compose.foundation:foundation")
     implementation("androidx.compose.ui:ui")
     implementation("androidx.activity:activity-compose:1.9.3")
+    // Pass it on (hand-off 53): drawing the QR code (ZXing, plain Java) and scanning one (Google's code scanner: no camera permission,
+    // Play services fetch it on first use). Screens only.
+    implementation("com.google.zxing:core:3.5.3")
+    implementation("com.google.android.gms:play-services-code-scanner:16.1.0")
 }
 
 /*

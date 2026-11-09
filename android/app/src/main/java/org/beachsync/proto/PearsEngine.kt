@@ -286,6 +286,15 @@ object PearsEngine {
 
     private fun appVersion(ctx: Context) = "Brocast " + runCatching { ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName }.getOrNull().orEmpty()
 
+    /** Pass it on (hand-off 53): connect straight to [peer] (a listener's key) and fetch [setId] first. [done] gets whether the engine knows the set. */
+    fun want(setId: String, peer: String?, done: (Boolean) -> Unit = {}) {
+        if (worklet == null) { done(false); return }
+        call(CMD_WANT, JSONObject().put("setId", setId).apply { if (peer != null) put("peer", peer) }) { done(it.optBoolean("known")) }
+    }
+
+    /** This phone's own mesh key, once the engine has said. */
+    val myKey get() = status?.optJSONObject("me")?.optString("publicKey")?.ifEmpty { null }
+
     /** Sends a silent reaction (0–5) over the mesh. The engine refuses one sooner than 3 s after the last. */
     fun react(emoji: Int) {
         if (worklet != null) call(CMD_REACT, JSONObject().put("e", emoji)) {}
@@ -347,6 +356,7 @@ object PearsEngine {
     private const val CMD_BLOCK = 6
     private const val CMD_PREFS = 7
     private const val CMD_REACT = 8
+    private const val CMD_WANT = 9
     private const val EV_STATUS = 100
     private const val EV_BUILT = 102
     private const val EV_WARNING = 103
