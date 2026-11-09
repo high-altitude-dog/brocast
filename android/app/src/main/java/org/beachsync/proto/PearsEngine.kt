@@ -45,9 +45,10 @@ class MeshPeer(val key: String, val station: Boolean, val path: String?, val toY
  */
 class MeshMoments(
     val startedMs: Long, val stageS: List<Double?>, val elapsedS: Double, val heldPct: Int,
-    val stationOfflineSinceMs: Long?, val allRelayed: Boolean,
+    val stationOfflineSinceMs: Long?, val allRelayed: Boolean, val musicOnPhone: Boolean = false,
 ) {
-    val firstMusicDone get() = stageS[2] != null
+    /** First listen is over once the first music arrives, or straight away when the set due now is already on the phone. */
+    val firstMusicDone get() = stageS[2] != null || musicOnPhone
 }
 
 /** What the screens show of the mesh, parsed once per status (once a second). Null while the engine isn't running. */
@@ -121,14 +122,17 @@ object PearsEngine {
         watchNetwork()
     }
 
+    /** [fresh] is false for a restart on a network change: first listen keeps its stages, so its card doesn't come back. */
     @Synchronized
-    private fun begin() {
+    private fun begin(fresh: Boolean = true) {
         val ctx = app ?: return
         val lib = library ?: return
         error = null
         sharing = !metered(ctx)
-        startBoot = android.os.SystemClock.elapsedRealtime(); startWallMs = System.currentTimeMillis()
-        stages.fill(null); stationSeen = false; stationGoneAt = null; offlineSinceMs = null
+        if (fresh) {
+            startBoot = android.os.SystemClock.elapsedRealtime(); startWallMs = System.currentTimeMillis()
+            stages.fill(null); stationSeen = false; stationGoneAt = null; offlineSinceMs = null
+        }
         val w = Worklet(ctx)
         w.start("engine.bundle")   // from the app's assets
         val io = Ipc(w)
@@ -215,7 +219,9 @@ object PearsEngine {
             if (offlineSinceMs == null && nowBoot - gone >= OFFLINE_AFTER_MS) offlineSinceMs = System.currentTimeMillis() - (nowBoot - gone)
         }
         val pct = if (total > 0) 100 * held / total else if (allHeld) 100 else 0
-        return MeshMoments(startWallMs, stages.toList(), t, pct, offlineSinceMs, n > 0 && relayed == n)
+        // The set due now is already whole on the phone (from an earlier listen): nothing to wait for, whatever the mesh is doing.
+        val onPhone = library?.let { l -> shownAt(l.editions, l.dMs, System.currentTimeMillis() * 1_000_000L)?.first?.let { l.file(it.id).exists() } } == true
+        return MeshMoments(startWallMs, stages.toList(), t, pct, offlineSinceMs, n > 0 && relayed == n, onPhone)
     }
 
     private val pending = ArrayList<Event>()
@@ -270,7 +276,7 @@ object PearsEngine {
         val cb = object : ConnectivityManager.NetworkCallback() {
             override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) {
                 val share = caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)
-                synchronized(this@PearsEngine) { if (worklet != null && share != sharing) { halt(); begin() } }
+                synchronized(this@PearsEngine) { if (worklet != null && share != sharing) { halt(); begin(fresh = false) } }
             }
         }
         cm.registerDefaultNetworkCallback(cb)
