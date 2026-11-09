@@ -1,4 +1,4 @@
-# UI spec (hand-off 41)
+# UI spec (hand-off 43)
 
 Field names come from Claude Code's "Fields that exist today" table in `feedback.md`, as of 1 Nov 2026. If one has been renamed since, use the new name.
 
@@ -37,7 +37,7 @@ Field names come from Claude Code's "Fields that exist today" table in `feedback
 | Seconds sweep | The outer accent arc fills once per flowtime **minute**, like a second hand | Seconds of the current minute | Steps once a second at Reduced level | now |
 | Time-source pictogram | **Satellites:** a mini constellation: the sky squashed into a small ellipse, one dot per satellite in view, lit in accent for each one in use, the ones in use joined by faint lines (the same shortest-path pattern as the Satellites screen), no labels; then `GPS · 10 of 14`. Tapping it opens Satellites. **Hold:** an accent hourglass beside the same sky gone dark, `HOLDING · 41 s`. **NTP:** a cell tower with radio waves, `NTP · stratum 1` (Privacy mode shows this one). **First second:** the tower with dashed waves, `NTP · getting time`, until the first fit (never a 'no time' state). | `FlowTime.chosen`, `GpsTime.used`, `seen`, `lastBoot`, `NtpClient.stratum`; per-satellite positions **later** (until then, place dots evenly) | Updates once a second | partly |
 | Precision ring | A glow whose width shows the sync error on the budget's log scale; its figure is on the bottom bezel | Sync error | | now |
-| Beat counter (user, 7 Nov) | A 44 px strip **under the clock**: `BAR 212` left, four beat cells, `BPM 124` right (mono). Beat 1's cell is wider and keeps an accent outline. The current beat's cell is filled accent, with a dark line inside it filling as the beat's phase runs to the next beat; beats already played this bar stay faintly lit. No flash on beat 1 by default; **Settings › Screen › Flash on each new bar** (off by default, user 7 Nov) lights the strip's border in accent for 120 ms on beat 1, never while No flashing is on. Beats change when the sound **reaches your ears** (flowtime plus output lag), so every phone in a crowd lights beat 1 together. States: Working out the beats (dashed cells, `BEATS 62%`), No steady beat (`—`, dashed), Tempo change (new BPM in accent for one bar), New set (bar 1). | `SetBeats`: bar from set start, beat 1–4, bpm, beat phase; per set, after download | Tap opens Buffer. Reduced motion: no phase line, no flash, the cell steps. Reduced level: updates on the beat only. Minimal: hidden. | now (after analysis) |
+| Beat counter (user, 7 Nov; full width 8 Nov) | A card **under the clock**, full width. A line on top: `BAR 212` left, `BPM 124` right (label 9.5 px, value mono 14 px). Under it four beat cells **across the whole card, 44 px tall** (beat 1's cell 1.35× wider, keeps an outline at 55% station colour). The current beat's cell is filled with the station colour, with a dark line inside it filling as the beat's phase runs to the next beat; beats already played this bar stay lit at 22% (outline 35%). No flash on beat 1 by default; **Settings › Screen › Flash on each new bar** (off by default) lights the card's border in the station colour for 120 ms on beat 1, never while No flashing is on. Beats change when the sound **reaches your ears** (flowtime plus output lag), so every phone in a crowd lights beat 1 together. States: Working out the beats (dashed cells, `BEATS 62%` / `working them out`), No steady beat (`BAR —` / `no steady beat`, dashed), Tempo change (new BPM in the station colour for one bar), New set (bar 1). | `SetBeats`: bar from set start, beat 1–4, bpm, beat phase; per set, after download | Tap opens Buffer. Reduced motion: no phase line, no flash, the cell steps. Reduced level: updates on the beat only. Minimal: hidden. | now (after analysis) |
 | Mesh card (user, 8 Nov) | Under the Auto row, above the three tiles: `MESH` and a status (`SHARING` / `RECEIVING` / `RECEIVE-ONLY` grey / `FROM LISTENERS` / `STARTING`). A 104 × 62 live map (you centred, station top-left as a square, listeners around, same-Wi-Fi filled, blocks moving in and out) and three lines: Connected (`12 · 3 relayed`, or `2 · station + 3f9a`), In (`1.8 MB/s 64% listeners`), Passed on (`1.2 GB today`, or `86 MB since 09:14`). Station offline: accent border and tint, station dashed, `all listeners`. Tap opens Swarm. Never names the engine or library. Reduced: numbers without moving blocks. Minimal: hidden. Board now 1030 tall (scrolls). | Live mesh: peers, paths, rates, passed on | Opens Swarm | now |
 | Play control and sync badge | A 52 px round button left of the badge: **Stop** (a white square, outlined) while playing; **Play** (an accent-filled circle with a dark triangle) when stopped; dashed and disabled while the set due now is downloading. The badge shows words, the ± figure and the source. | See Badge states | Play starts in sync at once. Tapping the badge opens the error budget detail. | now |
 | Latest event | Time, lane mark and name, and the event text, **directly under the badge**. The text wraps onto as many lines as it needs, with no ellipsis, and the row grows (the user's decision, 2 Nov). | `EventLog.latest()` | Tapping opens the Event log. A banner elsewhere links to its own event. | now |
@@ -230,12 +230,30 @@ The user wants this to be a showcase for peer delivery (2 Nov), so the swarm get
 | Element | Shows | Source | Status |
 |---|---|---|---|
 | Verdict | Under 1 ms total: the Very accurate wording (Satellites states), with no LIMIT tag anywhere. Otherwise one plain sentence naming the largest limit and its size (`Your phone's GPS chip limits timing to about ±10 ms.`), then the reason in words. A neutral info mark, not a fault: amber outline for a hardware limit, accent tick when the signal is the limit. | Largest of the What limits it rows | now |
-| Your sky | Sky view: horizon circle, 30° and 60° rings, N E S W. One mark per satellite in view, shaped by system (GPS circle, Galileo diamond, GLONASS triangle, BeiDou square), filled accent when in use, outlined grey when not, each labelled (`G12`, `E05`, `R07`, `C21`). The satellites in use are joined into a **constellation**: faint accent lines along the shortest tree that links them. `10 in use of 14` top right. | Per-satellite azimuth, elevation, system, used-in-fix | later |
-| Tap a satellite | A 44 px target round each mark. The tapped one gets a white ring, and a card below shows label, system, in use or not, height (elevation), direction (azimuth and compass word), signal (dB-Hz) with a bar, and one line in words. Close with ×. | Per-satellite C/N0 | later |
+| Your sky (3D, default) | **Your sky as a dome on the curved Earth**, 354 × 410, rounded. Camera behind and a little above you, north away from you, so **you sit at the top centre of the Earth's curve** (white dot, `You` tag). The Earth is a dark sphere with a dot-matrix land map, a faint 15° grid and a cyan atmosphere rim; stars behind. Over you, a glass dome: horizon ring (tinted disc), 30° and 60° rings dashed, N E S W at the rim. Each satellite sits on the dome at its **true direction and height in the sky**; its distance is squeezed (the dome is not to scale, chip bottom left says so). Marks and labels as before (GPS circle, Galileo diamond, GLONASS triangle, BeiDou square; accent when in use, grey outline when not); nearer marks slightly larger. A line from you to each satellite in use; the selected one bright with a distance tag (`21,140 km`). Overlays (all 44 px): `3D · Flat` switch top left; compass (taps to face north) and recentre top right; level chip `YOUR SKY` with three dots bottom left; `− +` bottom right. `10 in use of 14` above. | Per-satellite azimuth, elevation, system, used-in-fix; this phone's position (stays on the phone); bundled land outline | later |
+| Touch | **Pinch** zooms through three levels (Your sky, Orbits, Whole Earth: Satellites in 3D). **One-finger drag** turns the scene round you. **Two-finger drag up or down** tilts; all the way down is the flat sky plot. **Tap** selects (44 px target round each mark). **Double tap** zooms in one step. Everything pivots on you, so you stay top centre. Momentum on release; Reduce motion turns it off. | — | later |
+| Flat | The old sky plot (see Satellites in 3D), kept as the `Flat` option; the choice is remembered. | as before | later |
+| Satellite card | Header: mark, label, system, `in use` or `in view, not used`, ×. Under it the craft and launch year (`GPS IIR-M · launched 2006`). **Distance from you, now**: big mono km figure, updating every second, with `▼ 0.4 km/s closer` (accent) or `▲ 0.2 km/s farther` (grey) and `Its signal left 70.5 ms ago; the phone allows for that.` Then height, direction and signal with its bar, as before. Then rows: **Country** (code chip and name, `Run by the US Space Force`), **Orbit** (`Medium Earth orbit · 20,180 km up`, period and tilt in words), **Speed** (km/s and km/h), **Weight** (kg at launch), **Fleet** (`one of 31 GPS satellites`). | Distance and rate: from each satellite's broadcast orbit and this phone's position, every second. The rest: a satellite table that ships with the app, keyed by system and number, updated over the mesh | later |
 | What limits it | Three rows, each with figure and a bar on a log scale (1 µs to 10 ms, labelled `log · 1 µs · 100 µs · 10 ms`), the largest tagged `LIMIT` in amber: **Chip time stamp** (the chip's declared uncertainty, `erUnc`), **Satellite signal** (how well the satellites agree), **Link to the Brocast clock** (Gold or Silver). A note says which figures are 95% ranges and which one standard deviation. | `erUnc`, `biasUnc`, `gold`, the fit | now |
 | Will more satellites help? | A direct answer: `No, not on this phone` when the chip or the link is the limit; `Yes` with open-sky advice when the signal is. | Which row is largest | now |
 | Gold or Silver | A `GOLD` or `SILVER` chip and plain words for both. Then the chip name, whether it gives raw clock reports, and where leap seconds came from. | `gnssHardwareModelName`, `gold`, leap-second source | now |
 | Use satellites | The same switch as everywhere, never locked, with `Off: Privacy mode. Brocast uses internet time instead.` and a link to Time signals | `GpsTime.active` | now |
+
+## Satellites in 3D
+
+![](screens/satellites-3d.png)
+
+| Part | Rule |
+|---|---|
+| Your sky (zoom 1) | On the Satellites screen. Directions and heights exact; distances squeezed onto a dome so it fits. |
+| Orbits (zoom 2) | True scale. The dome fades and each satellite slides out along its own line to its real place; the Earth shrinks below you. The selected satellite shows its whole orbit as a ring, dashed where the Earth hides it. Labels on the ones in use only. |
+| Whole Earth (zoom 3) | True scale, all four fleets. The 14 in view lit as before; every other satellite small, grey, dimmed further when behind the Earth. Faint rings for the three orbit heights; the geostationary belt as a dashed cyan ring. Only the selected one is labelled. Tapping one below the horizon opens its card in the below-horizon state. |
+| Below your horizon | Card says `below your horizon`, why in words (`On the far side of the Earth, so its signal can't reach this phone`), when it rises and where, distance through the Earth, country and orbit. |
+| Tilted flat | Two-finger tilt all the way down, or `Flat`, shows the original sky plot. |
+| Gestures | Pinch, drag, two-finger tilt, tap, double tap; also `− +`, compass, recentre buttons for anyone who can't pinch. |
+| Reduce motion | No drift or momentum; zoom jumps between the three levels; positions still update once a second without easing. |
+| Screen readers | The 3D view is one image with a summary (`14 satellites in view, 10 in use. G12 selected, 21,140 km away.`). Under it, a list of satellites by height, highest first, each row opening the card. |
+| Data rules | No map service and no network for the Earth: a low-detail land outline ships with the app. Nothing about your position leaves the phone. Sample craft names, years and weights on the boards are placeholders for the table. |
 
 ## Satellites states
 
@@ -725,19 +743,38 @@ User, 8 Nov: redesign the page; reorder sets; announce to listeners. 1440 wide, 
 
 | Area | Shows |
 |---|---|
-| Left rail | `BEACH SYNC RADIO · STATION`; Running order (6 sets), Upload (1 in progress), Artists (5 · 1 to confirm), Disk (41 GB free); footer: tunnel only, no login. |
+| Left rail | `BEACH SYNC RADIO · STATION`; Running order (6 sets), Upload (1 in progress), Artists (5 · 1 to confirm), Disk (41 GB free), **Colour** (a dot and the colour's name); footer: tunnel only, no login. |
 | Running order | Title, `Live: edition 14 since 09:00 · loops every 7:54:53`. Table: drag handle, #, thumbnail, set, artist, length, plays (UK, for the next loop), status (`played` muted, `● on air` accent, `ready`), ⋯ (Move up / Move down / Move to…). The on-air set can't be moved. Moved rows: amber tint and `MOVED ↑`. |
 | Draft bar | Amber, `DRAFT`: what changed and that nothing reaches listeners until published; Discard; **Publish order…** |
 | Track order | `TRACK ORDER · LATER`: once sets have track lists, a set opens to its tracks and reorders the same way. |
 | Upload | Drop zone (FLAC, WAV, MP3, up to 4 GB); file with three-step progress Uploaded → Converting % → Signing; Title, Artist (from the artist list; a new name held to confirm), Set name (optional), Goes (At the end of the order ▾). A finished upload joins the draft. |
 | Disk | Bar: sets, this upload's need (accent), 3 GB kept free (hatched red); refused before starting if it wouldn't leave 3 GB. |
-| Artists | Thumbnails, Open artists ›, confirm prompt (`"2 Lanes" on an upload: same as Two Lanes?` Yes / New artist). |
+| Station colour | `STATION COLOUR` card under Artists: the current colour's dot and name, then the 21 swatches (7 × 3, 40 px, the current one ringed with a tick). Picking one opens the colour dialog (Station colour section). |
+| Artists | Thumbnails, Open artists ›, confirm prompt (`"2 Lanes" on an upload: same as [Artist C]?` Yes / New artist). |
 
 | Publishing | Shows |
 |---|---|
 | Dialog | Now (edition 14) → New (edition 15) side by side, moved set highlighted. **When it takes effect:** `When Overpass ends · 12:31` (default: next set boundary ≥ 10 min away, nothing cut off) or `At a set time` (cuts what's playing; earliest now + 10 min). **Message to listeners** (optional, 140 chars): shown on every phone until the change, then in the event log. `Publish · takes effect 12:31`. |
 | Queued bar | Top of Running order: `QUEUED · Edition 15 takes effect at 12:31, in 29 m. Phones fetching it: 71% of those seen in the last hour.` Edit message, Change order, Cancel edition (red). |
 | Rules | Change order before it starts → a new edition at the same time if still ≥ 10 min away, else the next boundary. Cancel withdraws it; phones drop it and say so. Last 10 min: locked. |
+
+## Station colour
+
+| Upload page | Phone |
+|---|---|
+| ![](screens/admin-colour.png) | ![](screens/station-colour.png) |
+
+User, 8 Nov: a colour per station, like the lights on silent-disco headphones, set on the upload page. It **replaces the lime accent** on every listener's phone. 21 colours, all chosen to work with the dark design.
+
+| Part | Rule |
+|---|---|
+| Palette | Lime `#C8FF4D` (default), Chartreuse `#DEFF5C`, Lemon `#F4F56A`, Pistachio `#B8F2A0`, Spring `#7DFF7A`, Mint `#6BFFB8`, Seafoam `#5CF2D0`, Ice `#A6E4FF`, Sky `#7CC8FF`, Bluebell `#86A8FF`, Hyacinth `#A2A6FF`, Lavender `#BCA8FF`, Purple `#A98BFF`, Violet `#C483FF`, Orchid `#DE8CFF`, Lilac `#E6B3FF`, Magenta `#FF7AE0`, Pink `#FF8FC8`, Bubblegum `#FFB0D9`, Blush `#FFC4CF`, Iris `#9E95FF`. Each is at least 7 : 1 against `#0A0C0F` (the dark text on filled buttons) and against the card colour. None is amber, red or the news cyan. |
+| Dialog | Picking a swatch opens `Change the station colour to Violet?` with Now playing in the current colour and the new one side by side; **When**: Now (fades over 2 s on every phone; offline phones get it on reconnect) or At the next set; **Tell listeners**: `Beach Sync Radio is Violet now` for 4 s (on by default); the contrast figures; Cancel / Change to Violet (filled in the new colour). |
+| What takes it | Everything accent today: beat cells, clock ring and FLOWTIME arc, constellation, in-sync pill, buttons, switches, links, mesh card, Kept highlights, lock-screen and notification accents. **Every tint is the station colour at an alpha** (past beats 22%, outlines 35–55%, glows 14–22%); today some boards hard-code `rgba(200,255,77,…)`, so make it one token. |
+| What doesn't | Amber warnings and LIMIT, red errors, cyan news, grey off/receive-only, white text. Status never depends on the colour alone. |
+| Phone | A toast at the top of Now playing when it changes (dot, `Beach Sync Radio is Violet now`, `Set by the station · fades in over 2 s`). Stations list: a bar of each station's colour by its name; the one you're on says `LISTENING` in its colour. |
+| Delivery | A field in the station's signed announcement, spread over the mesh like the running order, kept for offline. Missing or unknown: Lime. No flashing on: change is instant. Minimal level: only the beat cells and clock ring use it. |
+| Later | A colour per set (the At the next set option is the start of it). No listener override: the point is that the crowd matches. |
 
 ## New running order on the phone
 
