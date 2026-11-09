@@ -3,7 +3,11 @@ package org.beachsync.proto
 import android.content.Context
 import android.media.AudioAttributes
 import android.media.AudioManager
+import android.media.MediaCodec
+import android.media.MediaExtractor
+import android.media.MediaFormat
 import android.media.MediaPlayer
+import android.media.audiofx.LoudnessEnhancer
 import android.media.ToneGenerator
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
@@ -160,6 +164,8 @@ object News {
                 setDataSource(file.path); prepare()
             }
         } catch (e: Exception) { Log.w(TAG, "player: $e"); fail("News isn't answering right now"); return }
+        // Speech is mastered far quieter than music: bring the bulletin up (or down) to the set's own loudness.
+        val enhancer = try { matchLoudness(ctx, player, file) } catch (e: Exception) { Log.w(TAG, "loudness: $e"); null }
         durationMs = if (limitMs > 0) minOf(limitMs, player.duration) else player.duration
         phase = Phase.PLAYING
         val low = underPct / 100f
@@ -176,12 +182,96 @@ object News {
         }
         try { player.stop() } catch (_: Exception) { }
         player.release()
+        enhancer?.release()
         if (withMusic && MainActivity.session != null) {
             phase = Phase.ENDING
             ramp(low, 1f, UP_S[fadeUp], down = false)
         }
         MainActivity.session?.setGain(1f)
         if (my == gen) phase = Phase.IDLE
+    }
+
+    private val musicDb = java.util.concurrent.ConcurrentHashMap<String, Double>()
+    private val newsDb = java.util.concurrent.ConcurrentHashMap<String, Double>()
+    @Volatile private var lastMusicDb = -14.0
+    /** The gain applied to the last bulletin, in dB, for the log. */
+    @Volatile var matchDb = 0.0
+
+    /**
+     * Sets the bulletin's level so it sounds as loud as the set on air did at full volume. Louder: Android's
+     * LoudnessEnhancer (it limits peaks), as a player can't go above 100%. Quieter: the player's own volume.
+     */
+    private fun matchLoudness(ctx: Context, player: MediaPlayer, file: File): LoudnessEnhancer? {
+        val music = currentMusicDb(ctx) ?: lastMusicDb
+        val news = newsDb.getOrPut(file.name) { bulletinDb(file) }
+        if (news.isNaN() || music.isNaN()) return null
+        matchDb = (music - news).coerceIn(-20.0, 18.0)
+        Log.i(TAG, "loudness: music %.1f dBFS, news %.1f dBFS, gain %+.1f dB".format(music, news, matchDb))
+        if (matchDb < 0) { val v = Math.pow(10.0, matchDb / 20).toFloat(); player.setVolume(v, v); return null }
+        return LoudnessEnhancer(player.audioSessionId).apply { setTargetGain((matchDb * 100).toInt()); enabled = true }
+    }
+
+    /** The loudness of the set on air now, from 24 one-second blocks spread through it, worked out once per set. */
+    private fun currentMusicDb(ctx: Context): Double? {
+        val lib = LibraryStore.get(ctx)
+        val item = playingAt(lib.editions, lib.dMs, System.currentTimeMillis() * 1_000_000L)?.first ?: return null
+        val f = lib.file(item.id)
+        if (!f.exists() || item.seconds < 1) return null
+        return musicDb.getOrPut(item.id) {
+            val meter = Meter()
+            val dec = OpusDecoder()
+            try {
+                OpusFile(f).use { of -> for (i in 0 until 24) { dec.reset(); meter.add(dec.decode(of.block(item.seconds * (2 * i + 1) / 48))) } }
+            } finally { dec.close() }
+            meter.db()
+        }.also { if (!it.isNaN()) lastMusicDb = it }
+    }
+
+    /** The bulletin's loudness from its first 90 s, decoded with Android's own decoder. */
+    private fun bulletinDb(file: File): Double {
+        val ex = MediaExtractor()
+        ex.setDataSource(file.path)
+        val track = (0 until ex.trackCount).first { ex.getTrackFormat(it).getString(MediaFormat.KEY_MIME)?.startsWith("audio/") == true }
+        val fmt = ex.getTrackFormat(track)
+        ex.selectTrack(track)
+        val codec = MediaCodec.createDecoderByType(fmt.getString(MediaFormat.KEY_MIME)!!)
+        val meter = Meter()
+        try {
+            codec.configure(fmt, null, null, 0); codec.start()
+            val info = MediaCodec.BufferInfo()
+            var inDone = false
+            val t0 = SystemClock.uptimeMillis()
+            while (SystemClock.uptimeMillis() - t0 < 5000) {
+                if (!inDone) {
+                    val i = codec.dequeueInputBuffer(5000)
+                    if (i >= 0) {
+                        val n = ex.readSampleData(codec.getInputBuffer(i)!!, 0)
+                        if (n < 0 || ex.sampleTime > 90_000_000L) { codec.queueInputBuffer(i, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM); inDone = true }
+                        else { codec.queueInputBuffer(i, 0, n, ex.sampleTime, 0); ex.advance() }
+                    }
+                }
+                val o = codec.dequeueOutputBuffer(info, 5000)
+                if (o >= 0) {
+                    val b = codec.getOutputBuffer(o)!!.order(java.nio.ByteOrder.LITTLE_ENDIAN).asShortBuffer()
+                    val pcm = ShortArray(b.remaining()); b.get(pcm); meter.add(pcm)
+                    codec.releaseOutputBuffer(o, false)
+                    if (info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) break
+                }
+            }
+        } finally { codec.release(); ex.release() }
+        return meter.db()
+    }
+
+    /** Gated loudness in dBFS: the power mean of 4800-sample windows louder than −50 dBFS, so pauses don't count. */
+    private class Meter {
+        private var sum = 0.0; private var windows = 0; private var acc = 0.0; private var count = 0
+        fun add(pcm: ShortArray) {
+            for (v in pcm) {
+                val x = v / 32768.0; acc += x * x
+                if (++count == 4800) { val p = acc / count; if (p > 1e-5) { sum += p; windows++ }; acc = 0.0; count = 0 }
+            }
+        }
+        fun db(): Double = if (windows == 0) Double.NaN else 10 * Math.log10(sum / windows)
     }
 
     /** Equal-power-shaped ramp of the music's level, about 50 steps a second. */
@@ -293,7 +383,7 @@ object News {
             val ctx = app
             if (ctx != null && on && prefetch && phase == Phase.IDLE && MainActivity.session != null && unmetered(ctx)) {
                 try {
-                    feed(LibraryStore.get(ctx))?.let { f -> newest(f.second)?.let { item -> fetch(ctx, item.first) { phase == Phase.IDLE } } }
+                    feed(LibraryStore.get(ctx))?.let { f -> newest(f.second)?.let { item -> fetch(ctx, item.first) { phase == Phase.IDLE }?.let { b -> newsDb.getOrPut(b.name) { bulletinDb(b) }; currentMusicDb(ctx) } } }   // measured ahead, so a press starts at once
                 } catch (e: Exception) { Log.w(TAG, "prefetch: $e") }
                 if (phase == Phase.IDLE) { gotBytes = 0; totalBytes = -1 }
             }
