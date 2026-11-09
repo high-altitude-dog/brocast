@@ -4,6 +4,8 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -140,12 +142,24 @@ fun EarcupPage(state: BenchState, actions: BenchActions, back: () -> Unit) {
                 BasicText("1 · PLACE THE CUP", style = Tokens.Text.cardLabel.style())
                 BasicText("Testing ${output.name}", style = Tokens.Text.bodyStrong.style())
                 BasicText("Hold one ear cup, or a bud, against the bottom of the phone, over the mic. The phone clicks through its speaker, then your headphones. Turn the volume up first.", style = Tokens.Text.body.style())
-                BasicText("Needs the mic for about 15 s. Nothing is recorded or sent.", style = Tokens.Text.small.style(Ink.textSecondary))
+                BasicText("Three runs, about 50 s. Needs the mic; nothing is recorded or sent.", style = Tokens.Text.small.style(Ink.textSecondary))
                 Pill("Start", true, output.external) { actions.startEarcup(output) }
+                if (output.external) BasicText("Quick test: one run (Unsteady at best)", Modifier.clickable(role = androidx.compose.ui.semantics.Role.Button) { actions.startEarcup(output, 1) }.padding(vertical = 8.dp), Tokens.Text.small.style(Ink.accent))
             }
             outcome == null -> Card {
                 BasicText("2 · LISTENING", style = Tokens.Text.cardLabel.style())
                 val phase = run.phase
+                // Three runs (hand-off 51): done ones with their gap, the one going with its stage, the rest waiting.
+                if (run.count > 1) for (i in 0 until run.count) {
+                    val r = run.results.getOrNull(i)
+                    val line = when {
+                        i < run.results.size && r != null -> "Run ${i + 1} ✓ ${wholeMs(r)} ${dirWord(r, "later", "earlier")}"
+                        i < run.results.size -> "Run ${i + 1} ✕ didn't hear the clicks · repeating it"
+                        i == run.results.size -> "Run ${i + 1} ● ${if (phase == EarcupRun.Phase.SPEAKER) "speaker clicks" else if (phase == EarcupRun.Phase.HEADPHONES) "headphone clicks" else "working it out"}"
+                        else -> "Run ${i + 1} ○ next"
+                    }
+                    BasicText(line, style = Tokens.Text.body.style(if (i == run.results.size) Ink.accent else if (r != null) Ink.text else Ink.textSecondary))
+                }
                 Stage("Speaker clicks", phase == EarcupRun.Phase.SPEAKER, phase != EarcupRun.Phase.SPEAKER)
                 Stage("Headphone clicks", phase == EarcupRun.Phase.HEADPHONES, phase == EarcupRun.Phase.ANALYSING)
                 val total = 2 * EarcupRun.legSeconds()
@@ -188,6 +202,29 @@ private fun Stage(label: String, now: Boolean, done: Boolean) {
     BasicText((if (done) "✓ " else if (now) "● " else "○ ") + label, style = Tokens.Text.body.style(if (now || done) Ink.text else Ink.muted).copy(color = if (now || done) Ink.text else tint))
 }
 
+/** The runs as numbered dots on a line, the band they span and the average marked (hand-off 51). */
+@Composable
+private fun RunStrip(runs: List<Double>, avg: Double, tint: androidx.compose.ui.graphics.Color) {
+    val lo = runs.min(); val hi = runs.max()
+    val pad = maxOf(5.0, (hi - lo) * 0.6)
+    val from = lo - pad; val to = hi + pad
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        androidx.compose.foundation.Canvas(Modifier.fillMaxWidth().height(34.dp)) {
+            val x = { v: Double -> ((v - from) / (to - from) * size.width).toFloat() }
+            val y = size.height / 2
+            drawLine(Ink.grid, androidx.compose.ui.geometry.Offset(0f, y), androidx.compose.ui.geometry.Offset(size.width, y), 2f)
+            drawRect(tint.copy(alpha = 0.22f), androidx.compose.ui.geometry.Offset(x(lo), y - 8.dp.toPx()), androidx.compose.ui.geometry.Size((x(hi) - x(lo)).coerceAtLeast(2f), 16.dp.toPx()))
+            drawLine(Ink.text, androidx.compose.ui.geometry.Offset(x(avg), y - 13.dp.toPx()), androidx.compose.ui.geometry.Offset(x(avg), y + 13.dp.toPx()), 2.dp.toPx())
+            val p = android.graphics.Paint().apply { color = android.graphics.Color.BLACK; textSize = 9.dp.toPx(); textAlign = android.graphics.Paint.Align.CENTER; isFakeBoldText = true; isAntiAlias = true }
+            runs.forEachIndexed { i, v ->
+                drawCircle(tint, 8.dp.toPx(), androidx.compose.ui.geometry.Offset(x(v), y))
+                drawContext.canvas.nativeCanvas.drawText("${i + 1}", x(v), y + 3.dp.toPx(), p)
+            }
+        }
+        BasicText("runs agree within ${org.beachsync.proto.fmtMillis(hi - lo)} · average ${wholeMs(avg)} ${dirWord(avg, "later", "earlier")}", style = Tokens.Text.small.style(Ink.textSecondary))
+    }
+}
+
 private fun dirWord(v: Double, pos: String, neg: String) = if (v >= 0) pos else neg
 private fun wholeMs(v: Double) = org.beachsync.proto.fmtMillis(abs(v), 0)
 
@@ -224,15 +261,20 @@ private fun EarcupResult(outcome: EarcupOutcome.Pass, output: AudioOutput, actio
         append(" than the phone's ${if (portable) "own " else ""}speaker.")
     }
     BasicText(headline, style = Tokens.Text.bodyStrong.style().copy(fontSize = Tokens.Text.clock.size.sp() * 0.7f))
+    // Confidence from the spread between runs (hand-off 51): Good ≤ 10 ms, Unsteady 10–30 ms or a single run, Try again above 30 ms.
+    val spread = outcome.spreadMs
     val (mark, word, markColor) = when {
         unusual -> Triple("▲", "UNUSUAL RESULT", Ink.warn)
-        pm > 15.0 -> Triple("✕", "TRY AGAIN", Ink.warn)
-        pm >= 5.0 -> Triple("▲", "UNSTEADY", Ink.warn)
+        spread.isNaN() -> if (pm > 15.0) Triple("✕", "TRY AGAIN", Ink.warn) else Triple("▲", "UNSTEADY", Ink.warn)
+        spread > 30.0 -> Triple("✕", "TRY AGAIN", Ink.warn)
+        spread > 10.0 -> Triple("▲", "UNSTEADY", Ink.warn)
         else -> Triple("●", "GOOD", Ink.accent)
     }
     BasicText("$mark $word  ±" + org.beachsync.proto.fmtMillis(pm), style = Tokens.Text.bodyStrong.style(markColor))
+    if (outcome.runs.size > 1) RunStrip(outcome.runs, outcome.laterMs, tint)
     GapTimeline(outcome.laterMs, tint)
     if (unusual) BasicText("Bluetooth headphones are almost always later. Press the cup flat over the mic and try again.", style = Tokens.Text.body.style(Ink.warn))
+    BasicText("Each time headphones connect they agree a codec and a buffer with the phone, and each has its own delay; LDAC's adaptive mode and SBC can drift during a session. Test again if sync sounds off, after the codec changes, or with a new phone.", style = Tokens.Text.small.style(Ink.textSecondary))
     Card {
         BasicText(if (unusual) "WHAT SAVING WOULD DO" else "WHAT GETS SAVED", style = Tokens.Text.cardLabel.style())
         SavedRow("Phone speaker's own delay", if (speakerRow.source == CalSource.TABLE) "from the shared table for ${android.os.Build.MODEL}" else "not in the shared table", msText(speakerLag), false)

@@ -119,7 +119,7 @@ interface BenchActions {
     fun tableCalibration(o: org.beachsync.proto.AudioOutput): org.beachsync.proto.Calibration
     fun saveCalibration(o: org.beachsync.proto.AudioOutput, c: org.beachsync.proto.Calibration)
     fun earcupValue(pass: org.beachsync.proto.EarcupOutcome.Pass): org.beachsync.proto.Calibration
-    fun startEarcup(o: org.beachsync.proto.AudioOutput)
+    fun startEarcup(o: org.beachsync.proto.AudioOutput, runs: Int = 3)
     fun cancelEarcup()
     fun resetEarcup()
     fun setNudgeMode(mode: NudgeMode)

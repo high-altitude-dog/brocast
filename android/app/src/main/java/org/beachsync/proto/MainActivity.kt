@@ -65,6 +65,7 @@ class MainActivity : ComponentActivity(), BenchActions {
     private var listenLag: Double? = null
     private var listenFromLibrary = false
     private var earcupOutput: AudioOutput? = null
+    private var earcupRuns = 3
 
     /** Asked only from Now playing's card or Calibration's row, once Bluetooth headphones are connected, because their name is the only reason the app wants this. */
     private val askForHeadsetName = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -347,14 +348,15 @@ class MainActivity : ComponentActivity(), BenchActions {
         return Calibration(speaker.lagMs + pass.laterMs, speaker.plusMinusMs + 1.0 + pass.scatterMs, CalSource.EARCUP, System.currentTimeMillis())
     }
 
-    override fun startEarcup(o: AudioOutput) {
+    override fun startEarcup(o: AudioOutput, runs: Int) {
+        earcupRuns = runs
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) beginEarcup(o)
         else { earcupOutput = o; askForMic.launch(Manifest.permission.RECORD_AUDIO) }
     }
 
     private fun beginEarcup(o: AudioOutput) {
         if (session != null || state.earcup != null) return
-        state.earcup = EarcupRun(applicationContext, o).also { it.start() }
+        state.earcup = EarcupRun(applicationContext, o, earcupRuns).also { it.start() }
     }
 
     override fun cancelEarcup() {

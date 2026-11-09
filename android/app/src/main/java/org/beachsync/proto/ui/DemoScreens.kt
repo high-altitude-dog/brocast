@@ -159,6 +159,29 @@ fun SwarmScreen(back: () -> Unit) {
     val lastSeen = remember { HashMap<String, Pair<org.beachsync.proto.MeshPeer, Long>>() }
     live?.peers?.forEach { lastSeen[it.key] = it to System.currentTimeMillis() }
     val nodeHits = remember { ArrayList<Pair<String, Offset>>() }
+    // Busy swarm (hand-off 51): with 8 or more, the 6 busiest are drawn (same-Wi-Fi and an open sheet always), the rest as one +N node.
+    // A listener swaps in only after being busier for 10 s; rates are smoothed over about 10 s.
+    val smooth = remember { HashMap<String, Float>() }
+    val busierSince = remember { HashMap<String, Long>() }
+    val shown = remember { mutableListOf<String>() }
+    val nowMs = System.currentTimeMillis()
+    peers.forEach { p -> val r = (p.toYouKbps + p.fromYouKbps).toFloat(); smooth[p.key] = (smooth[p.key] ?: r) * 0.9f + r * 0.1f }
+    val rateOf = { k: String -> smooth[k] ?: 0f }
+    val drawn = if (peers.size < 8) peers else {
+        val keep = peers.filter { it.lan || (it.full != null && it.full.key == openKey) }.map { it.key }
+        shown.retainAll(peers.map { it.key }.toSet())
+        for (k in keep) if (k !in shown) shown.add(0, k)
+        for (k in peers.map { it.key }.filter { it !in shown }.sortedByDescending(rateOf)) {
+            if (shown.size < 6) { shown.add(k); continue }
+            val weakest = shown.filter { it !in keep }.minByOrNull(rateOf) ?: break
+            if (rateOf(k) > rateOf(weakest)) { if (nowMs - busierSince.getOrPut(k) { nowMs } >= 10_000) { shown.remove(weakest); shown.add(k); busierSince.remove(k) } }
+            else busierSince.remove(k)
+        }
+        peers.filter { it.key in shown }
+    }
+    val rest = peers.filter { it !in drawn }
+    val top3 = drawn.sortedByDescending { rateOf(it.key) }.take(3).map { it.key }.toSet()
+    val maxRate = drawn.maxOfOrNull { rateOf(it.key) }?.coerceAtLeast(1f) ?: 1f
     Box(Modifier.fillMaxSize()) {
     Column(
         Modifier.fillMaxSize().background(Ink.bg).safeDrawingPadding().verticalScroll(rememberScrollState())
@@ -186,18 +209,18 @@ fun SwarmScreen(back: () -> Unit) {
             nodeHits.clear()
             val rx = size.width * (if (sparse) 0.30f else 0.40f); val ry = (if (sparse) 60 else 100).dp.toPx()
             val node = (if (sparse) 13 else 9).dp.toPx()
-            fun lane(from: Offset, to: Offset, perp: Float, active: Boolean, relayed: Boolean, filled: Boolean, k: Int, startGap: Float = 24.dp.toPx()) {
+            fun lane(from: Offset, to: Offset, perp: Float, active: Boolean, relayed: Boolean, filled: Boolean, k: Int, startGap: Float = 24.dp.toPx(), weight: Float = 1f, moving: Boolean = true) {
                 val dx = to.x - from.x; val dy = to.y - from.y; val len = hypot(dx, dy)
                 val ux = dx / len; val uy = dy / len
                 val ox = -uy * perp; val oy = ux * perp
                 val a = Offset(from.x + ux * startGap + ox, from.y + uy * startGap + oy)
                 val b = Offset(to.x - ux * (node + 3.dp.toPx()) + ox, to.y - uy * (node + 3.dp.toPx()) + oy)
-                val col = if (active) Ink.accent else Ink.faint
-                drawLine(col, a, b, 1.5.dp.toPx(), pathEffect = if (relayed) PathEffect.dashPathEffect(floatArrayOf(5.dp.toPx(), 4.dp.toPx())) else null)
+                val col = if (active) Ink.accent.copy(alpha = 0.45f + 0.55f * weight) else Ink.faint
+                drawLine(col, a, b, (1f + 1.5f * weight).dp.toPx(), pathEffect = if (relayed) PathEffect.dashPathEffect(floatArrayOf(5.dp.toPx(), 4.dp.toPx())) else null)
                 val head = 5.dp.toPx()
                 drawLine(col, b, Offset(b.x - ux * head - uy * head * 0.6f, b.y - uy * head + ux * head * 0.6f), 1.5.dp.toPx(), StrokeCap.Round)
                 drawLine(col, b, Offset(b.x - ux * head + uy * head * 0.6f, b.y - uy * head - ux * head * 0.6f), 1.5.dp.toPx(), StrokeCap.Round)
-                if (active) {
+                if (active && moving) {
                     val t = (phase + k * 0.17f) % 1f
                     val p = Offset(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t)
                     val alpha = if (t < 0.15f) t / 0.15f else if (t > 0.85f) (1f - t) / 0.15f else 1f
@@ -228,18 +251,31 @@ fun SwarmScreen(back: () -> Unit) {
                 val a = Math.toRadians(200.0 + i * 28.0)
                 drawCircle(Ink.faint, 3.dp.toPx(), Offset(me.x + (rx + 26.dp.toPx()) * cos(a).toFloat(), me.y + (ry + 26.dp.toPx()) * sin(a).toFloat() * 0.95f))
             }
-            peers.forEachIndexed { i, p ->
-                val a = if (sparse) Math.toRadians(if (connected == 1) 20.0 else if (i == 0) 20.0 else 160.0) else Math.toRadians(-90.0 + 15.0 + i * (330.0 / connected))
+            val slots = drawn.size + if (rest.isEmpty()) 0 else 1
+            drawn.forEachIndexed { i, p ->
+                val a = if (sparse) Math.toRadians(if (connected == 1) 20.0 else if (i == 0) 20.0 else 160.0) else Math.toRadians(-90.0 + 15.0 + i * (330.0 / slots))
+                val w = if (rest.isEmpty()) 1f else 0.3f + 0.7f * rateOf(p.key) / maxRate
+                val moving = rest.isEmpty() || p.key in top3
                 val near = if (p.lan && !sparse) 0.72f else 1f
                 val pos = Offset(me.x + rx * near * cos(a).toFloat(), me.y + ry * near * sin(a).toFloat())
-                lane(pos, me, 3.dp.toPx(), p.toYouKbps > 0, p.relayed, true, i, node + 3.dp.toPx())           // inner lane: to you
-                if (!receiveOnly) lane(me, pos, -3.dp.toPx(), p.fromYouKbps > 0, p.relayed, false, i + 5, 24.dp.toPx()) // outer lane: from you
+                lane(pos, me, 3.dp.toPx(), p.toYouKbps > 0, p.relayed, true, i, node + 3.dp.toPx(), w, moving)           // inner lane: to you
+                if (!receiveOnly) lane(me, pos, -3.dp.toPx(), p.fromYouKbps > 0, p.relayed, false, i + 5, 24.dp.toPx(), w, moving) // outer lane: from you
                 drawCircle(if (p.lan) Ink.accent.copy(alpha = 0.15f) else Ink.surface, node, pos)
                 drawCircle(if (p.lan) Ink.accent else Ink.textSecondary, node, pos, style = Stroke(1.5.dp.toPx()))
                 if (p.lan) wifiMark(pos, node * 0.55f)
                 label(p.key.take(4), pos.x, pos.y + node + 13.dp.toPx(), 9f, Ink.textSecondary)
                 p.full?.let { f -> nodeHits.add(f.key to pos); if (f.key == openKey) { drawCircle(Ink.text, node + 6.dp.toPx(), pos, style = Stroke(2.dp.toPx())); drawCircle(Ink.text.copy(alpha = 0.3f), node + 11.dp.toPx(), pos, style = Stroke(1.dp.toPx())) } }
                 if (p.lan) label("same Wi-Fi", pos.x, pos.y - node - 6.dp.toPx(), 9f, Ink.accent)   // above the peer, clear of your halo
+            }
+            if (rest.isNotEmpty()) {
+                // +N: everyone not drawn, as one dashed node with their total rate.
+                val a = Math.toRadians(-90.0 + 15.0 + drawn.size * (330.0 / slots))
+                val pos = Offset(me.x + rx * cos(a).toFloat(), me.y + ry * sin(a).toFloat())
+                drawLine(Ink.faint, pos, me, 1.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 4.dp.toPx())))
+                drawCircle(Ink.bg, node + 4.dp.toPx(), pos)
+                drawCircle(Ink.textSecondary, node + 4.dp.toPx(), pos, style = Stroke(1.5.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 3.dp.toPx()))))
+                label("+${rest.size}", pos.x, pos.y + 4.dp.toPx(), 11f, Ink.text)
+                label(kBs(rest.sumOf { it.toYouKbps + it.fromYouKbps }), pos.x, pos.y + node + 17.dp.toPx(), 9f, Ink.textSecondary)
             }
             drawCircle(Ink.accent.copy(alpha = 0.18f), (if (sparse) 30 else 24).dp.toPx(), me)
             drawCircle(Ink.accent, (if (sparse) 15 else 12).dp.toPx(), me)
@@ -519,7 +555,13 @@ fun BufferScreen(state: BenchState, back: () -> Unit, openSwarm: () -> Unit) {
             drawLine(Ink.accent, Offset(x(330f), mid - h / 2 - 8.dp.toPx()), Offset(x(330f), mid + h / 2 + 8.dp.toPx()), 1.5.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 3.dp.toPx())))
             drawLine(Ink.text, Offset(x(60f), mid - h / 2 - 10.dp.toPx()), Offset(x(60f), mid + h / 2 + 8.dp.toPx()), 2.dp.toPx())
             label(CLOCK_FMT.format(Instant.ofEpochSecond(0, utc)), x(60f), mid - h / 2 - 16.dp.toPx(), 9f, Ink.text)
-            label("FRONTIER +$ahead", size.width, mid - h / 2 - 16.dp.toPx(), 9f, Ink.accent, Paint.Align.RIGHT)
+            // On a dark backing, so lines never cross it (hand-off 51).
+            run {
+                val tp = Paint().apply { textSize = 9.sp.toPx(); isAntiAlias = true }
+                val wText = tp.measureText("FRONTIER +$ahead")
+                drawRoundRect(Ink.bg, Offset(size.width - wText - 8.dp.toPx(), mid - h / 2 - 27.dp.toPx()), Size(wText + 8.dp.toPx(), 15.dp.toPx()), androidx.compose.ui.geometry.CornerRadius(3.dp.toPx()))
+            }
+            label("FRONTIER +$ahead", size.width - 4.dp.toPx(), mid - h / 2 - 16.dp.toPx(), 9f, Ink.accent, Paint.Align.RIGHT)
             // Blocks in flight: from the station (solid) and from listeners (outline), easing onto the frontier.
             for (k in 0 until 3) {
                 val t = (phase + k / 3f) % 1f
@@ -530,9 +572,18 @@ fun BufferScreen(state: BenchState, back: () -> Unit, openSwarm: () -> Unit) {
                 else drawRect(Ink.accent, Offset(cx - s / 2, y - s / 2), Size(s, s), style = Stroke(1.dp.toPx()))
             }
             // Axis labels: seconds in the near zone, then log.
-            val axis = listOf(0f to "−5 s", 120f to "+5 s", 180f to "+10 s", 225f to "1 m", 262f to "10 m", 300f to "1 h", 322f to "6 h")
-            for ((v, text) in axis) label(text, x(v), size.height - 6.dp.toPx(), 8.5f, Ink.textSecondary, if (v == 0f) Paint.Align.LEFT else Paint.Align.CENTER)
-            label("24 h", size.width, size.height - 6.dp.toPx(), 8.5f, Ink.textSecondary, Paint.Align.RIGHT)
+            // Labels only where there's room (hand-off 51): 10 m keeps its tick unlabelled; 6 h only 40 px clear of 24 h; none within 24 px of the frontier.
+            val axisY = size.height - 6.dp.toPx()
+            val frontierX = x(330f)
+            val wide = Paint().apply { textSize = 8.5f.sp.toPx() }.measureText("24 h")
+            val axis = listOf(0f to "−5 s", 120f to "+5 s", 180f to "+10 s", 225f to "1 m", 262f to "", 300f to "1 h", 322f to "6 h")
+            for ((v, text) in axis) {
+                drawLine(Ink.faint, Offset(x(v), axisY - 14.dp.toPx()), Offset(x(v), axisY - 10.dp.toPx()), 1.dp.toPx())
+                if (text.isEmpty() || (v > 0f && kotlin.math.abs(x(v) - frontierX) < 24.dp.toPx())) continue
+                if (text == "6 h" && size.width - wide - x(v) < 40.dp.toPx()) continue
+                label(text, x(v), axisY, 8.5f, Ink.textSecondary, if (v == 0f) Paint.Align.LEFT else Paint.Align.CENTER)
+            }
+            label("24 h", size.width, axisY, 8.5f, Ink.textSecondary, Paint.Align.RIGHT)
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             BasicText("▮ played", style = Tokens.Text.small.style(Ink.muted)); BasicText("▮ downloaded", style = Tokens.Text.small.style(Ink.accent))

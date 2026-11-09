@@ -170,7 +170,11 @@ fun analyseLeg(rec: FloatArray, expected: LongArray, click: FloatArray = Earcup.
 enum class EarcupFault { TOO_QUIET, TOO_NOISY, DISAGREE }
 
 sealed class EarcupOutcome {
-    class Pass(val laterMs: Double, val speaker: EarcupLeg, val headphones: EarcupLeg, val scatterMs: Double) : EarcupOutcome()
+    /** [runs]: each run's gap when several were averaged (hand-off 51); [scatterMs] is then half their spread. */
+    class Pass(val laterMs: Double, val speaker: EarcupLeg, val headphones: EarcupLeg, val scatterMs: Double, val runs: List<Double> = emptyList()) : EarcupOutcome() {
+        /** Max − min of the runs, or NaN for a single run. */
+        val spreadMs get() = if (runs.size > 1) runs.max() - runs.min() else Double.NaN
+    }
     class Fail(val fault: EarcupFault, val lowMs: Double = 0.0, val highMs: Double = 0.0) : EarcupOutcome()
     class Problem(val text: String) : EarcupOutcome()
 }

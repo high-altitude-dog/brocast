@@ -94,24 +94,54 @@ private fun bluetoothKind(device: BluetoothDevice?): OutputKind {
  * The same mic session hears both legs, so its latency cancels. Each leg is timed from the output time stamp, the same one
  * playback uses, so the difference is exactly the extra lag playback would need.
  */
-class EarcupRun(private val ctx: Context, private val output: AudioOutput) : Thread("earcup") {
+class EarcupRun(private val ctx: Context, private val output: AudioOutput, val count: Int = 3) : Thread("earcup") {
     enum class Phase { SPEAKER, HEADPHONES, ANALYSING, DONE }
 
     @Volatile var phase = Phase.SPEAKER
     @Volatile var outcome: EarcupOutcome? = null
     @Volatile private var cancelled = false
     @Volatile private var recording = true
-    val startedMs = System.currentTimeMillis()
+    /** When the run in progress started. */
+    @Volatile var startedMs = System.currentTimeMillis()
+    /** Three runs back to back (hand-off 51): which one is going (0-based), and each finished run's gap in ms, null where it failed. */
+    @Volatile var runIndex = 0
+    val results = java.util.concurrent.CopyOnWriteArrayList<Double?>()
 
     fun cancel() { cancelled = true; interrupt() }
 
-    @SuppressLint("MissingPermission")     // MainActivity asks before starting this
+    /**
+     * The runs: a failed one is repeated once, and a second failure stops the test. The result is their average; its ± is half
+     * their spread, since the error shows between runs, not within one (2 Nov measurements).
+     */
     override fun run() {
+        val passes = ArrayList<EarcupOutcome.Pass>()
+        var fails = 0
+        var last: EarcupOutcome? = null
+        while (passes.size < count && !cancelled) {
+            runIndex = passes.size; phase = Phase.SPEAKER; startedMs = System.currentTimeMillis()
+            val o = once() ?: return
+            last = o
+            when (o) {
+                is EarcupOutcome.Pass -> { passes.add(o); results.add(o.laterMs) }
+                is EarcupOutcome.Fail -> { results.add(null); if (++fails >= 2) break }
+                is EarcupOutcome.Problem -> { finish(o); return }
+            }
+        }
+        if (cancelled) return
+        if (passes.isEmpty()) { finish(last ?: EarcupOutcome.Problem("No run finished.")); return }
+        val gaps = passes.map { it.laterMs }
+        val spread = gaps.max() - gaps.min()
+        val p = passes.last()
+        finish(EarcupOutcome.Pass(gaps.average(), p.speaker, p.headphones, if (passes.size > 1) spread / 2 else p.scatterMs, gaps))
+    }
+
+    @SuppressLint("MissingPermission")     // MainActivity asks before starting this
+    private fun once(): EarcupOutcome? {
         val am = ctx.getSystemService(AudioManager::class.java)
         val speaker = am.getDevices(AudioManager.GET_DEVICES_OUTPUTS).firstOrNull { it.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER }
         val mic = am.getDevices(AudioManager.GET_DEVICES_INPUTS).firstOrNull { it.type == AudioDeviceInfo.TYPE_BUILTIN_MIC }
-        if (speaker == null || mic == null || output.device == null) { finish(EarcupOutcome.Problem("This phone's speaker or mic couldn't be found.")); return }
-        val rec = try { makeRecorder(am, mic) } catch (e: Exception) { finish(EarcupOutcome.Problem("The mic couldn't start: ${e.message}")); return }
+        if (speaker == null || mic == null || output.device == null) { return EarcupOutcome.Problem("This phone's speaker or mic couldn't be found.") }
+        val rec = try { makeRecorder(am, mic) } catch (e: Exception) { return EarcupOutcome.Problem("The mic couldn't start: ${e.message}") }
         val samples = FloatArray((2 * legSeconds() + 4).toInt() * Earcup.RATE)
         var filled = 0
         val reader = Thread({
@@ -130,18 +160,19 @@ class EarcupRun(private val ctx: Context, private val output: AudioOutput) : Thr
         try {
             sleep(300)
             val first = playLeg(speaker, rec, driftSpeaker)
-            if (cancelled) return
+            if (cancelled) return null
             phase = Phase.HEADPHONES
             val second = playLeg(output.device, rec, driftHeadphones)
             recording = false
             reader.join(500)
-            if (cancelled) return
+            if (cancelled) return null
             phase = Phase.ANALYSING
             val result = if (first == null || second == null) EarcupOutcome.Problem("Android wouldn't play through both the speaker and the headphones.")
             else earcupVerdict(analyseLeg(samples, first), analyseLeg(samples, second))
             log(result)
-            finish(result)
+            return result
         } catch (_: InterruptedException) {
+            return null
         } finally {
             recording = false
             reader.join(500)
