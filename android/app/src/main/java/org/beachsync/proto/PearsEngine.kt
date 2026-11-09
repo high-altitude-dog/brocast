@@ -34,7 +34,12 @@ import kotlin.math.roundToLong
  * One live peer, from the engine's status. [path] is lan, direct, punched or relayed (null if not yet known). [country] (hand-off 38) is an
  * ISO code, `hidden` (the peer doesn't allow it) or `unknown` (relayed, or not in the table); null from an engine that doesn't say.
  */
-class MeshPeer(val key: String, val station: Boolean, val path: String?, val toYouKbps: Int, val fromYouKbps: Int, val country: String? = null, val rxBytes: Long = 0L) {
+class MeshPeer(
+    val key: String, val station: Boolean, val path: String?, val toYouKbps: Int, val fromYouKbps: Int, val country: String? = null, val rxBytes: Long = 0L,
+    // Swarm listener details (hand-off 46): their nym once its signature checks out, versions and holding from their hello, round trip, when they connected.
+    val txBytes: Long = 0L, val nym: String? = null, val verified: Boolean = false, val app: String? = null, val engineVersion: String? = null,
+    val heldPct: Int? = null, val rttMs: Int? = null, val connectedAtMs: Long? = null,
+) {
     val countryCode get() = country?.takeIf { it.length == 2 }
 }
 
@@ -64,7 +69,11 @@ class MeshView(val nym: String, val listeners: Int, val peers: List<MeshPeer>, v
             val list = sw?.optJSONArray("peers")
             val peers = (0 until (list?.length() ?: 0)).map { i ->
                 val p = list!!.getJSONObject(i)
-                MeshPeer(p.optString("key"), p.optString("role") == "station-seed", p.optString("path").ifEmpty { null }?.takeIf { it != "null" }, p.optInt("toYouKbps"), p.optInt("fromYouKbps"), p.optString("country").ifEmpty { null }, p.optLong("rxBytes"))
+                MeshPeer(p.optString("key"), p.optString("role") == "station-seed", p.optString("path").ifEmpty { null }?.takeIf { it != "null" }, p.optInt("toYouKbps"), p.optInt("fromYouKbps"), p.optString("country").ifEmpty { null }, p.optLong("rxBytes"),
+                    p.optLong("txBytes"), p.optString("nym").takeIf { !p.isNull("nym") && it.isNotEmpty() }, p.optBoolean("verified"),
+                    p.optString("app").takeIf { !p.isNull("app") && it.isNotEmpty() }, p.optString("engineVersion").takeIf { !p.isNull("engineVersion") && it.isNotEmpty() },
+                    if (p.isNull("heldPct") || !p.has("heldPct")) null else p.optInt("heldPct"), if (p.isNull("rttMs") || !p.has("rttMs")) null else p.optInt("rttMs"),
+                    if (p.isNull("connectedAt") || !p.has("connectedAt")) null else p.optLong("connectedAt"))
             }
             val today = s.optJSONObject("ledger")?.optJSONObject("today")
             return MeshView(
@@ -114,6 +123,7 @@ object PearsEngine {
         stop()
         key = k
         app = ctx.applicationContext
+        loadBlocked(ctx)
         library = lib
         lib.meshKey = k
         if (k.isEmpty()) return
@@ -144,6 +154,7 @@ object PearsEngine {
             call(CMD_START, JSONObject()
                 .put("seed", seed(ctx)).put("stationKey", key).put("profile", "balanced").put("share", sharing).put("count", counted)
                 .put("showCountry", showCountry).put("countryTable", countryTable(ctx)?.path)
+                .put("blocked", JSONArray(blocked.toList())).put("app", appVersion(ctx))
                 .put("dirs", JSONObject().put("store", store.path).put("music", lib.folder.path))) {
                 call(CMD_SUBSCRIBE, JSONObject().put("hz", 1)) {}
             }
@@ -252,6 +263,22 @@ object PearsEngine {
     }
 
     /** Show my country, now and at every start. Peers look up this phone's country only while it's on. */
+    /** Listeners this phone has blocked (hand-off 46): saved, sent to the engine, which cuts them off and refuses them. */
+    var blocked by androidx.compose.runtime.mutableStateOf<Set<String>>(emptySet())
+        private set
+
+    fun loadBlocked(ctx: Context) {
+        blocked = ctx.getSharedPreferences("mesh", Context.MODE_PRIVATE).getStringSet("blocked", emptySet())!!.toSet()
+    }
+
+    fun setBlocked(ctx: Context, keys: Set<String>) {
+        blocked = keys
+        ctx.getSharedPreferences("mesh", Context.MODE_PRIVATE).edit().putStringSet("blocked", keys).apply()
+        if (worklet != null) call(CMD_PREFS, JSONObject().put("blocked", JSONArray(keys.toList()))) {}
+    }
+
+    private fun appVersion(ctx: Context) = "Brocast " + runCatching { ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName }.getOrNull().orEmpty()
+
     fun setShowCountry(on: Boolean) {
         showCountry = on
         if (worklet != null) call(CMD_PREFS, JSONObject().put("showCountry", on)) {}

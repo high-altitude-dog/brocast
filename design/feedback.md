@@ -450,3 +450,8 @@ The user has seen h42 as built (`dd0e9d5`) on the phones and says it doesn't loo
 
 Unchanged from the user's earlier changes: no automatic switch to Flat (Flat only from its switch), no snap after pinch or turn (the user keeps the angle and zoom they chose), country flags on the card, Galileo shown as United Kingdom and Germany.
 Engineering limits stay as in "hand-off 42 as built": the orbit plane is inferred from the system's tilt and whether the satellite is heading north or south (it may flip once in the first minute), and there's no almanac, so only satellites in view can be drawn.
+
+## 8 Nov: hand-offs 45 and 46 as built
+
+- **h45:** built as designed. "Rose … ago" and "sets in …" are rough (the orbit's own motion less the Earth's turning, from the system's height and tilt), and the path is the inferred orbit plane. Whole Earth still shows only satellites in view.
+- **h46:** engine now sends each peer a hello on its own channel (`brocast/hello/1`: nym proof, app and engine versions, % of the library held, every 10 s); the nym shows only once the proof checks against their key. Round trip from the connection's UDX stream. Block cuts them off and refuses them; undo is a **Blocked listeners · Unblock all** card in Settings › Delivery (no per-listener list yet). Gaps: **Holding** is "% of the library", not time ahead; **Shared** counts since they connected, not today; list rows lead with nym, no flag column change; station sheet uses the same layout without Country/Holding/App/Block.

@@ -7,6 +7,7 @@ import c from 'compact-encoding'
 import crypto from 'hypercore-crypto'
 import b4a from 'b4a'
 import { Sketch } from './sketch.js'
+import { nymFrom, nymText } from './nym.js'
 
 /** Everything a node needs, derived from its one secret seed, so one file backs it up. */
 export function keysFromSeed (seed) {
@@ -57,6 +58,13 @@ export class Mesh {
     this.showCountry = false
     this.shows = new Map()
     this.flagChannels = new Set()
+    // Swarm listener details (hand-off 46): each side's hello (nym proof, app and engine versions, how much it holds), checked against its key,
+    // when each peer connected, and the listener's blocklist (they can't connect, and nothing is taken from them).
+    this.hello = null
+    this.peerInfo = new Map()
+    this.connectedAt = new Map()
+    this.blocked = new Set()
+    this.helloChannels = new Set()
     this.closedWire = { rx: 0, tx: 0, packetsRx: 0, packetsTx: 0, retransmits: 0 }
     this.swarm.on('connection', (conn) => this._onconnection(conn))
   }
@@ -120,6 +128,7 @@ export class Mesh {
   _onconnection (conn) {
     if (!conn.isInitiator) this._record(conn, 'server', null, null, 'open')
     if (this.allow && !this.allow(conn.remotePublicKey)) return conn.destroy()
+    if (conn.remotePublicKey && this.blocked.has(hex(conn.remotePublicKey))) return conn.destroy()
     conn.on('error', () => {})
     conn.on('close', () => add(this.closedWire, conn.rawStream))
     this.store.replicate(conn)
@@ -134,12 +143,49 @@ export class Mesh {
       fc.open()
       this.flagChannels.add(fc)
     }
+    if (k) this.connectedAt.set(k, Date.now())
+    const hc = Protomux.from(conn).createChannel({
+      protocol: 'brocast/hello/1',
+      onopen: () => { if (this.hello) hc.helloMsg.send(this.hello) },
+      onclose: () => { this.helloChannels.delete(hc); if (k) { this.peerInfo.delete(k); this.connectedAt.delete(k) } }
+    })
+    if (hc) {
+      hc.helloMsg = hc.addMessage({
+        encoding: c.json,
+        onmessage: (m) => {
+          if (!k || !m) return
+          let nym = null
+          try { const n = nymFrom(conn.remotePublicKey, m.shuffle | 0, b4a.from(String(m.proof || ''), 'hex')); nym = n ? nymText(n) : null } catch { nym = null }
+          this.peerInfo.set(k, { nym, verified: nym !== null, app: String(m.app || '').slice(0, 32), engine: String(m.engine || '').slice(0, 32), heldPct: Number.isFinite(m.heldPct) ? Math.max(0, Math.min(100, m.heldPct)) : null })
+        }
+      })
+      hc.open()
+      this.helloChannels.add(hc)
+    }
     if (!this.relaySketch) return
     const ch = Protomux.from(conn).createChannel({ protocol: 'brocast/sketch/1', onclose: () => this.channels.delete(ch) })
     if (!ch) return
     ch.sketchMsg = ch.addMessage({ encoding: c.raw, onmessage: (b) => this.sketch.merge(b) })
     ch.open()
     this.channels.add(ch)
+  }
+
+  /** This node's hello: { shuffle, proof (hex), app, engine, heldPct }. Sent to every peer now and to each new one. */
+  setHello (hello) {
+    this.hello = hello
+    for (const ch of this.helloChannels) ch.helloMsg.send(hello)
+  }
+
+  /** The listener's blocklist (hex keys): blocked peers are cut off now and refused from then on. */
+  setBlocked (keys) {
+    this.blocked = new Set(keys)
+    for (const conn of this.swarm.connections) if (this.blocked.has(hex(conn.remotePublicKey))) conn.destroy()
+  }
+
+  /** Round trip to a peer in ms, from its UDX stream, or null. */
+  rttMs (key) {
+    for (const conn of this.swarm.connections) if (hex(conn.remotePublicKey) === key) return conn.rawStream?.rtt ?? null
+    return null
   }
 
   /** Changes this node's Show-my-country flag and tells every peer at once. */

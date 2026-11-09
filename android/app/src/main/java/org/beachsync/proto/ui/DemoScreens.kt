@@ -10,6 +10,8 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -115,7 +117,7 @@ private fun loudness(i: Int): Float {
 private val CLOCK_FMT: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm:ss").withZone(ZoneOffset.UTC)
 
 /** One listener on Swarm: [path] is lan, direct, punched or relayed (null while it's still being worked out). */
-private class SwarmPeer(val key: String, val path: String?, val toYouKbps: Int, val fromYouKbps: Int, val country: String? = null) {
+private class SwarmPeer(val key: String, val path: String?, val toYouKbps: Int, val fromYouKbps: Int, val country: String? = null, val full: org.beachsync.proto.MeshPeer? = null) {
     val relayed get() = path == "relayed"
     val lan get() = path == "lan"
 }
@@ -139,7 +141,7 @@ fun SwarmScreen(back: () -> Unit) {
     val moments = live?.moments
     val receiveOnly = live != null && !live.sharing
     // Same-Wi-Fi listeners first, so they sit nearest you.
-    val peers = (live?.listenerPeers?.map { SwarmPeer(it.key.take(8), it.path, it.toYouKbps, if (receiveOnly) 0 else it.fromYouKbps, it.country) }
+    val peers = (live?.listenerPeers?.map { SwarmPeer(it.key.take(8), it.path, it.toYouKbps, if (receiveOnly) 0 else it.fromYouKbps, it.country, it) }
         ?: DemoMesh.peers.map { SwarmPeer(it.key, if (it.relayed) "relayed" else "direct", it.toYouKbps, it.fromYouKbps) }).sortedByDescending { it.lan }
     val stationOffline = moments?.stationOfflineSinceMs
     val stationCount = live?.stations?.size?.let { if (it == 0 && stationOffline != null) 1 else it } ?: DemoMesh.STATIONS
@@ -152,6 +154,11 @@ fun SwarmScreen(back: () -> Unit) {
     val fromYou = peers.sumOf { it.fromYouKbps }
     val lonely = live != null && peers.isEmpty() && live.stations.isEmpty() && stationOffline == null   // nothing connected yet
     var capSheet by remember { mutableStateOf(false) }
+    // Listener details (hand-off 46): the open peer, and the last we saw of each one, so the sheet can say when someone left.
+    var openKey by remember { mutableStateOf<String?>(null) }
+    val lastSeen = remember { HashMap<String, Pair<org.beachsync.proto.MeshPeer, Long>>() }
+    live?.peers?.forEach { lastSeen[it.key] = it to System.currentTimeMillis() }
+    val nodeHits = remember { ArrayList<Pair<String, Offset>>() }
     Box(Modifier.fillMaxSize()) {
     Column(
         Modifier.fillMaxSize().background(Ink.bg).safeDrawingPadding().verticalScroll(rememberScrollState())
@@ -169,8 +176,14 @@ fun SwarmScreen(back: () -> Unit) {
             else -> "● SHARING" to Ink.accent
         }
         BasicText(chip, style = Tokens.Text.bodyStrong.style(chipColor))
-        Canvas(Modifier.fillMaxWidth().height(if (sparse) 250.dp else 330.dp).semantics { contentDescription = "The swarm: you in the centre, $connected listeners round you and $stationCount station servers above." + (if (stationOffline != null) " The station is offline." else "") + if (live == null) " Demo data." else "" }) {
+        Canvas(Modifier.fillMaxWidth().height(if (sparse) 250.dp else 330.dp).pointerInput(live != null) {
+            if (live != null) detectTapGestures { tap ->
+                val hit = nodeHits.minByOrNull { (it.second - tap).getDistance() }
+                if (hit != null && (hit.second - tap).getDistance() <= 22.dp.toPx()) openKey = hit.first
+            }
+        }.semantics { contentDescription = "The swarm: you in the centre, $connected listeners round you and $stationCount station servers above." + (if (stationOffline != null) " The station is offline." else "") + if (live == null) " Demo data." else "" }) {
             val me = Offset(size.width / 2f, (if (sparse) 170 else 190).dp.toPx())
+            nodeHits.clear()
             val rx = size.width * (if (sparse) 0.30f else 0.40f); val ry = (if (sparse) 60 else 100).dp.toPx()
             val node = (if (sparse) 13 else 9).dp.toPx()
             fun lane(from: Offset, to: Offset, perp: Float, active: Boolean, relayed: Boolean, filled: Boolean, k: Int, startGap: Float = 24.dp.toPx()) {
@@ -206,6 +219,7 @@ fun SwarmScreen(back: () -> Unit) {
                     continue
                 }
                 lane(s, me, 0f, st == null || st.toYouKbps > 0, st?.path == "relayed", true, i, sq / 2 + 4.dp.toPx())
+                st?.let { nodeHits.add(it.key to s); if (it.key == openKey) drawCircle(Ink.text, sq * 0.9f, s, style = Stroke(2.dp.toPx())) }
                 drawRect(Ink.text, Offset(s.x - sq / 2, s.y - sq / 2), Size(sq, sq))
                 label("STATION", s.x, s.y - sq / 2 - 5.dp.toPx(), 9f, Ink.textSecondary)
             }
@@ -224,6 +238,7 @@ fun SwarmScreen(back: () -> Unit) {
                 drawCircle(if (p.lan) Ink.accent else Ink.textSecondary, node, pos, style = Stroke(1.5.dp.toPx()))
                 if (p.lan) wifiMark(pos, node * 0.55f)
                 label(p.key.take(4), pos.x, pos.y + node + 13.dp.toPx(), 9f, Ink.textSecondary)
+                p.full?.let { f -> nodeHits.add(f.key to pos); if (f.key == openKey) { drawCircle(Ink.text, node + 6.dp.toPx(), pos, style = Stroke(2.dp.toPx())); drawCircle(Ink.text.copy(alpha = 0.3f), node + 11.dp.toPx(), pos, style = Stroke(1.dp.toPx())) } }
                 if (p.lan) label("same Wi-Fi", pos.x, pos.y - node - 6.dp.toPx(), 9f, Ink.accent)   // above the peer, clear of your halo
             }
             drawCircle(Ink.accent.copy(alpha = 0.18f), (if (sparse) 30 else 24).dp.toPx(), me)
@@ -296,10 +311,11 @@ fun SwarmScreen(back: () -> Unit) {
         if (peers.isNotEmpty()) Card {
             BasicText(if (sparse) "LISTENERS" else "BUSIEST LISTENERS", style = Tokens.Text.cardLabel.style())
             for (p in peers.sortedByDescending { it.toYouKbps + it.fromYouKbps }.take(4)) {
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.fillMaxWidth().clickable(enabled = p.full != null, role = Role.Button) { openKey = p.full?.key }.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    p.full?.let { NymAvatar(it.nym, 32.dp); Spacer(Modifier.width(10.dp)) }
                     Column(Modifier.weight(1f)) {
-                        BasicText(p.key, style = Tokens.Text.valueSmall.style())
-                        BasicText(pathWords(p.path), style = Tokens.Text.small.style(if (p.lan) Ink.accent else Ink.textSecondary))
+                        BasicText(p.full?.nym?.let { nymCase(it) } ?: p.key, style = if (p.full?.nym != null) Tokens.Text.bodyStrong.style() else Tokens.Text.valueSmall.style(), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        BasicText((if (p.full?.nym != null) "${p.key.take(4)} · " else "") + pathWords(p.path), style = Tokens.Text.small.style(if (p.lan) Ink.accent else Ink.textSecondary))
                     }
                     if (live != null) CountryCell(p.country, Modifier.width(76.dp))
                     BasicText(if (live != null) "↓${kBs(p.toYouKbps)}  ↑${if (receiveOnly) "—" else kBs(p.fromYouKbps)}" else "↓${p.toYouKbps}  ↑${p.fromYouKbps} kb/s", style = Tokens.Text.small.style(Ink.textSecondary))
@@ -309,6 +325,104 @@ fun SwarmScreen(back: () -> Unit) {
         BasicText("Listeners are found by key, from anywhere, never by location, and can see your network address.", style = Tokens.Text.small.style(Ink.textSecondary))
     }
     if (capSheet) MobileCapSheet { capSheet = false }
+    openKey?.let { k ->
+        val ctx = androidx.compose.ui.platform.LocalContext.current
+        lastSeen[k]?.let { (peer, seenAt) ->
+            val here = live?.peers?.any { it.key == k } == true
+            PeerSheet(peer, if (here) null else seenAt, receiveOnly, { openKey = null }) {
+                org.beachsync.proto.PearsEngine.setBlocked(ctx, org.beachsync.proto.PearsEngine.blocked + k); openKey = null
+            }
+        } ?: run { openKey = null }
+    }
+    }
+}
+
+/** "GREY RASPBERRY LAPWING" as "Grey Raspberry Lapwing". */
+internal fun nymCase(nym: String) = nym.lowercase().split(' ').joinToString(" ") { w -> w.replaceFirstChar { it.uppercase() } }
+
+/** A round avatar in the nym's colour word, with the animal's initial; grey with "?" when there's no nym. */
+@Composable
+internal fun NymAvatar(nym: String?, size: androidx.compose.ui.unit.Dp) {
+    val words = nym?.lowercase()?.split(' ').orEmpty()
+    val named = mapOf("red" to 0xFFE5534B, "coral" to 0xFFFF7F66, "orange" to 0xFFF0883E, "amber" to 0xFFE3B341, "gold" to 0xFFD4A72C, "yellow" to 0xFFE3D341,
+        "lime" to 0xFFB5E853, "green" to 0xFF57AB5A, "teal" to 0xFF39C5BB, "cyan" to 0xFF56D4DD, "blue" to 0xFF539BF5, "navy" to 0xFF3C5A99,
+        "indigo" to 0xFF6E7BF2, "violet" to 0xFF9A6EF5, "purple" to 0xFFB083F0, "pink" to 0xFFF778BA, "rose" to 0xFFF47067, "grey" to 0xFF8B949E,
+        "silver" to 0xFFB1BAC4, "white" to 0xFFE6EDF3, "black" to 0xFF545D68, "brown" to 0xFFA0785A)
+    val colour = words.firstOrNull()?.let { w -> named[w]?.let { Color(it) } ?: Color.hsv((w.hashCode() and 0x7fffffff) % 360f, 0.55f, 0.9f) } ?: Ink.muted
+    Box(Modifier.size(size).background(colour, androidx.compose.foundation.shape.CircleShape), contentAlignment = Alignment.Center) {
+        BasicText(words.lastOrNull()?.firstOrNull()?.uppercase() ?: "?", style = Tokens.Text.bodyStrong.style(Color(0xFF101418)).copy(fontSize = (size.value * 0.42f).sp))
+    }
+}
+
+/**
+ * Swarm · listener details (hand-off 46): a bottom sheet for one peer, live each second. [leftAtMs] is set once they've gone. Station nodes get the
+ * station form (no nym, country or Block). The internet address is never shown.
+ */
+@Composable
+private fun PeerSheet(p: org.beachsync.proto.MeshPeer, leftAtMs: Long?, receiveOnly: Boolean, close: () -> Unit, block: () -> Unit) {
+    val gone = leftAtMs != null
+    val dim = if (gone) Ink.textSecondary else Ink.text
+    Sheet(close) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (p.station) Box(Modifier.size(52.dp).background(Ink.text, RoundedCornerShape(10.dp))) else NymAvatar(if (gone) null else p.nym, 52.dp)
+            Spacer(Modifier.width(14.dp))
+            Column(Modifier.weight(1f)) {
+                BasicText(if (p.station) "Station" else p.nym?.let { nymCase(it) } ?: "key ${p.key.take(4)}·${p.key.substring(4, 8)}…", style = Tokens.Text.screenTitle.style(dim).copy(fontSize = 19.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    when {
+                        p.station -> BasicText("✓ station key", style = Tokens.Text.small.style(Ink.accent))
+                        p.nym != null && p.verified -> BasicText("✓ verified", style = Tokens.Text.small.style(Ink.accent))
+                        p.app == null -> BasicText("checking name…", style = Tokens.Text.small.style(Ink.textSecondary))
+                        else -> BasicText("no name · older app", style = Tokens.Text.small.style(Ink.textSecondary))
+                    }
+                    if (p.nym != null || p.station) BasicText("key ${p.key.take(4)}·${p.key.substring(4, 8)}…", style = Tokens.Text.small.style(Ink.textSecondary).copy(fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace))
+                }
+            }
+            BasicText("×", Modifier.clickable(onClick = close).padding(10.dp), Tokens.Text.bodyStrong.style().copy(fontSize = 20.sp))
+        }
+        if (gone) BasicText("Left ${(System.currentTimeMillis() - leftAtMs!!) / 1000} s ago", style = Tokens.Text.small.style(Ink.textSecondary))
+        Row(Modifier.fillMaxWidth().height(88.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            StatTile("TO YOU", if (gone) "—" else "${(p.toYouKbps + 4) / 8}", "kB/s now", Modifier.weight(1f))
+            StatTile("FROM YOU", if (gone || receiveOnly || p.station || p.fromYouKbps == 0) "—" else "${(p.fromYouKbps + 4) / 8}", "kB/s now", Modifier.weight(1f))
+            StatTile("ROUND TRIP", if (gone) "—" else p.rttMs?.toString() ?: "—", "ms", Modifier.weight(1f))
+        }
+        if (!p.station) PeerRow("COUNTRY") {
+            when {
+                p.country == "hidden" -> { BasicText("Not shown", style = Tokens.Text.body.style()); BasicText("They keep Show my country off.", style = Tokens.Text.small.style(Ink.textSecondary)) }
+                p.countryCode == null -> { BasicText("Unknown", style = Tokens.Text.body.style()); BasicText(if (p.path == "relayed") "Relayed: the address is the relay's, so it's never guessed." else "Not in the country table.", style = Tokens.Text.small.style(Ink.textSecondary)) }
+                else -> {
+                    BasicText("${org.beachsync.proto.flagOf(p.countryCode!!)}  ${java.util.Locale("", p.countryCode!!).getDisplayCountry(java.util.Locale.UK)}", style = Tokens.Text.body.style())
+                    BasicText(if (p.path == "lan") "Same Wi-Fi as you, so your country." else "From their internet address, looked up on this phone. They allow it.", style = Tokens.Text.small.style(Ink.textSecondary))
+                }
+            }
+        }
+        PeerRow("CONNECTION") {
+            BasicText(when (p.path) { "lan" -> "Same Wi-Fi"; "punched" -> "Hole-punched"; "relayed" -> "Relayed"; "direct" -> "Direct"; else -> "Connecting" }, style = Tokens.Text.body.style())
+            val since = p.connectedAtMs?.let { at -> SINCE_CLOCK.format(Instant.ofEpochMilli(at).atZone(java.time.ZoneId.systemDefault())) + " (${(System.currentTimeMillis() - at) / 60_000} min)" }
+            BasicText(listOfNotNull(when (p.path) { "lan" -> "Over your own network"; "relayed" -> "Through a relay; the relay sees only scrambled blocks"; "punched" -> "Straight between you, through both routers"; else -> "Straight between your phones" }, since?.let { "since $it" }).joinToString(" · "), style = Tokens.Text.small.style(Ink.textSecondary))
+        }
+        PeerRow("SHARED") {
+            BasicText("${p.rxBytes / 1_000_000} MB to you · ${p.txBytes / 1_000_000} from you", style = Tokens.Text.valueSmall.style())
+            BasicText("Since you connected.", style = Tokens.Text.small.style(Ink.textSecondary))
+        }
+        if (!p.station) PeerRow("HOLDING") {
+            BasicText(p.heldPct?.let { "$it% of the library" } ?: "—", style = Tokens.Text.body.style())
+            BasicText(if (p.heldPct != null) "What they can pass on, from their last hello." else "Not said yet.", style = Tokens.Text.small.style(Ink.textSecondary))
+        }
+        if (!p.station) PeerRow("APP") { BasicText(listOfNotNull(p.app, p.engineVersion?.let { "engine $it" }).joinToString(" · ").ifEmpty { "—" }, style = Tokens.Text.body.style()) }
+        Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            BasicText(if (p.station) "The station's internet address is never shown." else "Their internet address is never shown. Only the country, and only if they allow it.", Modifier.weight(1f), Tokens.Text.small.style(Ink.textSecondary))
+            if (!p.station) BasicText("Block", Modifier.padding(start = 12.dp).border(1.dp, Ink.danger, RoundedCornerShape(24.dp)).clickable(role = Role.Button, onClick = block).padding(horizontal = 20.dp, vertical = 12.dp), Tokens.Text.bodyStrong.style(Ink.danger))
+        }
+        if (!p.station) BasicText("Blocked: they can't connect to you and you take nothing from them. You still hear the station. Undo in Settings. No report is sent.", style = Tokens.Text.small.style(Ink.textSecondary))
+    }
+}
+
+@Composable
+private fun PeerRow(label: String, body: @Composable () -> Unit) {
+    Row(Modifier.fillMaxWidth().padding(top = 10.dp)) {
+        BasicText(label, Modifier.width(110.dp).padding(top = 2.dp), Tokens.Text.cardLabel.style())
+        Column(Modifier.weight(1f)) { body() }
     }
 }
 

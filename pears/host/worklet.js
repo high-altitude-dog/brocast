@@ -62,6 +62,7 @@ rpc = new RPC(Bare.IPC, async (req) => {
     case CMD.prefs: // settings that change live, without a restart
       if (!run) refuse('NOT_STARTED', 'start first')
       if ('showCountry' in body) run.mesh.setShowCountry(body.showCountry)
+      if (Array.isArray(body.blocked)) run.mesh.setBlocked(body.blocked.map(String))
       return reply({})
     case CMD.stop:
       if (run) await run.stop()
@@ -83,7 +84,7 @@ function oneSecond (buf, k) {
 }
 
 class Run {
-  constructor ({ seed, stationKey, dirs, profile: prof = 'balanced', lan = true, relayThrough, share = true, count = true, showCountry = false, countryTable = null }) {
+  constructor ({ seed, stationKey, dirs, profile: prof = 'balanced', lan = true, relayThrough, share = true, count = true, showCountry = false, countryTable = null, blocked = [], app = '' }) {
     this.p = profile(prof)
     // share: false is receive-only (mobile data without the listener's opt-in): never announced, and each block is cleared once it's in the built
     // file, so there's nothing to upload (step 0's copy and clear: 0 bytes up).
@@ -100,6 +101,11 @@ class Run {
     this.nym = nymText(nymFrom(pk, 0, nymProof(this.mesh.keyPair.secretKey, 0)))
     if (count) this.mesh.sketch.add(pk, 0)
     this.mesh.setShowCountry(showCountry)
+    this.mesh.setBlocked(blocked)
+    // The hello (hand-off 46): this phone's nym proof, app and engine versions, and how much of the library it holds, refreshed every 10 s.
+    this.helloBase = { shuffle: 0, proof: hex(nymProof(this.mesh.keyPair.secretKey, 0)), app: String(app).slice(0, 32), engine: String(ENGINE.version) }
+    this.mesh.setHello({ ...this.helloBase, heldPct: null })
+    this.helloTimer = setInterval(() => this.mesh.setHello({ ...this.helloBase, heldPct: this.total ? Math.floor((100 * this.held.size) / this.total) : (this.phase === 'all sets held' ? 100 : null) }), 10000)
     try { this.countries = countryTable ? Countries.load(countryTable) : null } catch (e) { this.countries = null; emit(EV.warning, { code: 'COUNTRIES', text: String(e) }) }
     this.gossip = setInterval(() => this.mesh.gossip(), 2000)
     this.rate = { at: now(), byPeer: new Map() } // last snapshot's totals, for kb/s
@@ -224,6 +230,13 @@ class Run {
 
   sendStatus () { emit(EV.status, this.snapshot()) }
 
+  /** Swarm listener details (hand-off 46): their checked nym, versions and holding from their hello, round trip, and when they connected. */
+  details (k) {
+    const i = this.mesh.peerInfo.get(k)
+    const rtt = this.mesh.rttMs(k)
+    return { nym: i?.nym ?? null, verified: i?.verified ?? false, app: i?.app ?? null, engineVersion: i?.engine ?? null, heldPct: i?.heldPct ?? null, rttMs: Number.isFinite(rtt) ? Math.round(rtt) : null, connectedAt: this.mesh.connectedAt.get(k) ?? null }
+  }
+
   /** A subset of the status snapshot of docs/engine-api.md §6. */
   snapshot () {
     const wire = this.mesh.wire()
@@ -246,11 +259,12 @@ class Run {
       const was = this.rate.byPeer.get(k) || p
       return {
         key: k, role: p.station ? 'station-seed' : 'listener', path: paths.get(k.slice(0, 8)) ?? null, country: country(k, paths.get(k.slice(0, 8))), rxBytes: p.rx, txBytes: p.tx,
-        toYouKbps: Math.round(((p.rx - was.rx) * 8) / 1000 / dt), fromYouKbps: Math.round(((p.tx - was.tx) * 8) / 1000 / dt)
+        toYouKbps: Math.round(((p.rx - was.rx) * 8) / 1000 / dt), fromYouKbps: Math.round(((p.tx - was.tx) * 8) / 1000 / dt),
+        ...this.details(k)
       }
     })
     // Connected peers that haven't sent or asked for a block yet still count, with no traffic.
-    for (const k of live) if (!this.byPeer.has(k)) peers.push({ key: k, role: this.seeds?.has(k) ? 'station-seed' : 'listener', path: paths.get(k.slice(0, 8)) ?? null, country: country(k, paths.get(k.slice(0, 8))), rxBytes: 0, txBytes: 0, toYouKbps: 0, fromYouKbps: 0 })
+    for (const k of live) if (!this.byPeer.has(k)) peers.push({ key: k, role: this.seeds?.has(k) ? 'station-seed' : 'listener', path: paths.get(k.slice(0, 8)) ?? null, country: country(k, paths.get(k.slice(0, 8))), rxBytes: 0, txBytes: 0, toYouKbps: 0, fromYouKbps: 0, ...this.details(k) })
     this.rate = { at: t, byPeer: new Map([...this.byPeer].map(([k, p]) => [k, { rx: p.rx, tx: p.tx }])) }
     return {
       at: { uptimeSec: Math.round(now() / 1000) },
@@ -282,6 +296,7 @@ class Run {
     clearInterval(this.pump)
     clearInterval(this.statusTimer)
     clearInterval(this.gossip)
+    clearInterval(this.helloTimer)
     for (const s of this.sets) { while (s.builder.busy) await new Promise((resolve) => setTimeout(resolve, 20)) }
     await Promise.race([this.mesh.close(), new Promise((resolve) => setTimeout(resolve, 1500))]) // the API's 2 s limit
   }

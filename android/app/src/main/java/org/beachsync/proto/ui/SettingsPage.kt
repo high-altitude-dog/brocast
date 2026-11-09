@@ -98,6 +98,18 @@ fun SettingsPage(state: BenchState, actions: BenchActions, back: () -> Unit, ope
             }
         }
         BasicText("DELIVERY", Modifier.padding(top = 6.dp), Tokens.Text.cardLabel.style())
+        // Swarm › Block (hand-off 46): the one place to undo it.
+        val blocked = org.beachsync.proto.PearsEngine.blocked
+        if (blocked.isNotEmpty()) Card {
+            val ctx = androidx.compose.ui.platform.LocalContext.current
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    BasicText("Blocked listeners", style = Tokens.Text.bodyStrong.style())
+                    BasicText("${blocked.size} blocked · they can't connect to you", style = Tokens.Text.small.style(Ink.textSecondary))
+                }
+                BasicText("Unblock all", Modifier.clickable(role = Role.Button) { org.beachsync.proto.PearsEngine.setBlocked(ctx, emptySet()) }.padding(10.dp), Tokens.Text.body.style(Ink.accent))
+            }
+        }
         Card {
             BasicText("DEMO: nothing here reaches a mesh yet", style = Tokens.Text.cardLabel.style(Ink.warn))
             SwitchRow("Share with other listeners", "On Wi-Fi as your profile allows · never on mobile data unless you choose", DemoSharing.shareOn) { DemoSharing.shareOn = it }
