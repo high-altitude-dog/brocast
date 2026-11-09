@@ -17,6 +17,8 @@ import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -103,15 +105,18 @@ fun SettingsPage(state: BenchState, actions: BenchActions, back: () -> Unit, ope
         }
         BasicText("DELIVERY", Modifier.padding(top = 6.dp), Tokens.Text.cardLabel.style())
         // Swarm › Block (hand-off 46): the one place to undo it.
+        // Once shown, the card stays while this page is open, so unblocking never shifts the page under the finger (a second tap opened Your identity).
         val blocked = org.beachsync.proto.PearsEngine.blocked
-        if (blocked.isNotEmpty()) Card {
+        var undo by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<Set<String>>(emptySet()) }
+        if (blocked.isNotEmpty() || undo.isNotEmpty()) Card {
             val ctx = androidx.compose.ui.platform.LocalContext.current
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.heightIn(min = Tokens.Space.touchTarget.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     BasicText("Blocked listeners", style = Tokens.Text.bodyStrong.style())
-                    BasicText("${blocked.size} blocked · they can't connect to you", style = Tokens.Text.small.style(Ink.textSecondary))
+                    BasicText(if (blocked.isNotEmpty()) "${blocked.size} blocked · they can't connect to you" else "${undo.size} unblocked · they can connect again", style = Tokens.Text.small.style(Ink.textSecondary))
                 }
-                BasicText("Unblock all", Modifier.clickable(role = Role.Button) { org.beachsync.proto.PearsEngine.setBlocked(ctx, emptySet()) }.padding(10.dp), Tokens.Text.body.style(Ink.accent))
+                if (blocked.isNotEmpty()) BasicText("Unblock all", Modifier.clickable(role = Role.Button) { undo = blocked; org.beachsync.proto.PearsEngine.setBlocked(ctx, emptySet()) }.padding(10.dp), Tokens.Text.body.style(Ink.accent))
+                else BasicText("Undo", Modifier.clickable(role = Role.Button) { org.beachsync.proto.PearsEngine.setBlocked(ctx, undo); undo = emptySet() }.padding(10.dp), Tokens.Text.body.style(Ink.accent))
             }
         }
         Card {
