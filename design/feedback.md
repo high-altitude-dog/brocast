@@ -473,3 +473,11 @@ Engineering limits stay as in "hand-off 42 as built": the orbit plane is inferre
 - Upload page: Station colour card (21 swatches) + dialog (Now / At the next set, Tell listeners, before/after pills; no full Now playing mock), COLOUR column with popover; colours go into the draft and out on Publish. The page's own accent follows the station colour.
 - Beat counter: BAR and BPM moved to a line above, cells full width and 44 dp (missed from h43 first time).
 - News: BBC and NPR are built in, station's choice pre-selects and is marked; newest pubDate wins; Latest line shows bulletin time and when found.
+
+## 9 Nov: beats per bar other than 4 (user)
+
+User: "Do we need to change the design to allow more beats in a bar? … the user should probably always have an option to switch to 4-beats-per-bar."
+- The beat analysis assumes 4/4, which fits nearly all house, techno and trance. Sets can still hold a 3/4 or 6/8 track, or an odd bar at a mix (a 2-beat bar, a "beat-4 blip" before a drop).
+- Please design: the beat counter with 3 to 7 cells (beat 1's cell wider, as now); how a bar of another length shows when it happens once (an odd bar at a mix); and a Settings › Screen option to always count in 4 ("Always count in 4", on or off; default to be decided).
+- Engineering: the analysis would report beats per bar per stretch of music. Not built yet; it waits on this design.
+- Blocked listeners (built 9 Nov): after Unblock all, the card stays with "N unblocked · they can connect again" and Undo, so the page doesn't shift under the finger (a second tap had opened Your identity). Design may want to match.

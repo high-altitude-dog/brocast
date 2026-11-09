@@ -1,4 +1,4 @@
-# UI spec (hand-off 50)
+# UI spec (hand-off 53)
 
 Field names come from Claude Code's "Fields that exist today" table in `feedback.md`, as of 1 Nov 2026. If one has been renamed since, use the new name.
 
@@ -853,6 +853,80 @@ User, 8 Nov: on first opening of Satellites, or the 3rd opening without using ge
 | Reduce motion | Still card over the dimmed box: two finger marks, `Pinch to zoom · slide two fingers to tilt`, Got it. Same when-rules. |
 | Screen readers | No animation; the box label gains `Pinch with two fingers to zoom, slide two fingers up or down to tilt, or use the zoom buttons.` once, on opening 1. |
 
+## Earcup test · three runs and codecs
+
+| Test and result | States |
+|---|---|
+| ![](screens/earcup-runs.png) | ![](screens/earcup-runs-states.png) |
+
+From Claude Code's 2 Nov measurements: the codec changes the result by up to ~130 ms on one headset, and the spread only shows **between** runs.
+
+| Part | Rule |
+|---|---|
+| Runs | The test runs **three times** back to back (~50 s): `Run 1 ✓ 93 ms later`, `Run 2 ● listening · 14 of 20 clicks`, `Run 3 ○ next`. A failed run (too quiet / noisy) is repeated once; two fails stop the test. `Quick test: one run (Unsteady at best)` link. |
+| Result | Average of the runs, in words (`94 ms later`); confidence from the **spread** (max − min): Good ≤ 10 ms, Unsteady 10–30 ms or a single run, Try again > 30 ms. ± = half the spread. Dot strip: the three runs numbered, the band they span, `runs agree within 3.3 ms`, the average marked. |
+| Codec | `[Headset name] · Bluetooth · AAC` chip on the test, result and Calibration header. Saved row reads `Saved for AAC`. Note: `Saved for AAC only…` |
+| Saved per codec | On Calibration, under Sources: one row per codec (`AAC 114 ms ±1.7 IN USE`, `LDAC 18 ms late ±7.0 3 Nov`, `SBC — not tested`). The row matching the codec in use is used. |
+| Codec changed | Sheet `Your headphones switched to LDAC`: with a saved LDAC value → **Use the LDAC value** / Test again (+ `Not now keeps the AAC value; sync may be off by about 110 ms`). With none → **Test now · about 50 s** / Not now, and `▲ MAY BE OFF` on the HEADPHONES tile until tested. |
+| Reconnect note | Longer: each connection agrees a codec and buffer, each with its own delay; LDAC adaptive and SBC can drift; matters when sync sounds off, after a codec change or a new phone; Brocast keeps a value per codec and asks. |
+| Later | Codec chip, per-codec rows and the codec-changed sheets wait until an ordinary app is confirmed able to read the codec. Until then: three runs, one saved value, the longer note. |
+
+## Swarm · busy (8+ listeners)
+
+![](screens/swarm-busy.png)
+
+| Part | Rule |
+|---|---|
+| Up to 7 | All drawn, as now. |
+| 8 or more | The 6 busiest (to-you + from-you, smoothed 10 s) plus one dashed **+N** node with their total rate. Same-Wi-Fi listeners always drawn; an open listener sheet keeps its node. |
+| Lines | Width and brightness follow rate; moving blocks only on the 3 busiest links. |
+| +N | Tap scrolls to the list. Count changes without animation. |
+| Swaps | Into the 6 only after 10 s busier; 400 ms cross-fade. |
+
+## Buffer axis (9 Nov)
+
+Labels only where there's room: `−5 s`, `+5 s`, `+10 s`, `1 m`, `1 h`, `24 h`; `10 m` keeps its tick without a label; `6 h` only when it's 40 px clear of `24 h`; no label within 24 px of the frontier line. The `FRONTIER +6 h 12 m` label sits on a dark backing so lines don't cross it. Canvas edits kept: Reduced steps at 10 Hz; Minimal shows no panel, the AHEAD tile only.
+
+## Silent reactions
+
+![](screens/reactions.png)
+
+User, 9 Nov (mesh ideas). Six emoji, no text, nothing to moderate.
+
+| Part | Rule |
+|---|---|
+| Tray | On Now playing under the mesh card: `REACT` and the top counts for the last minute (`🔥 1.4 k · 🙌 610 · last min`); six 48 px buttons (fire, hands up, love, wow, party, wave) with small counts. Rounded above 100. |
+| Sending | Tap: ringed, the rest dim for 3 s (one every 3 s per phone); a soft tick on the next beat confirms. |
+| Landing | Each reaction lands on the next beat 1 at the ear for everyone. On Swarm a ring and a small emoji float up from the sender's node (~1 s). |
+| Travel | Small signed message (key, emoji, bar) on its own mesh channel, passed on at most 3 hops; phones sum per minute; no list of who sent what. Senders faster than 1 / 3 s ignored for a minute; Blocked listeners dropped. |
+| Settings › Listening | Show reactions (on), Send reactions (on; off hides the tray). |
+| Levels | No flashing / Reduce motion: counts only, nothing floats. Minimal: hidden. |
+
+## Pass it on
+
+![](screens/pass-it-on.png)
+
+| Part | Rule |
+|---|---|
+| Giver | Kept › a set › Pass it on, or Now playing › ⋯ › Pass this set on: set header, a QR code (`brocast://pass/<station key>/<set>?via=<your key>`), `Let them scan this with Brocast`, `SIGNED BY BEACH SYNC RADIO`. |
+| Receiver | Brocast › Add › Scan: shows the set and who it's from (`SIGNED`) before anything downloads. Camera app opens Brocast. |
+| Moving | Both phones: `Sending to Teal Plum Ibis` / `Getting it from Amber Fig Heron`, %, path (`Same Wi-Fi · straight between you`), rate, time left. |
+| Done | `KEPT` · `Plays offline, in sync with the station when it's on air.` Every block checked against the station signature; withdrawn sets leave Kept too. |
+| Can't connect | `CAN'T REACH THEIR PHONE`: join the same Wi-Fi or a hotspot; resumes where it stopped. |
+| Rules | Only signed station sets held in full (and stations, via the existing Share a station). Same Wi-Fi/hotspot first, else internet (hole-punched); not on mobile data unless both allow it. Nearby holders also serve. |
+
+## You kept people listening
+
+![](screens/kept-people.png)
+
+| Part | Rule |
+|---|---|
+| Swarm | Top of stats: `You kept 3 people listening for 2 h 10 m today` (big), explanation, this week's bars (today highlighted). |
+| Mesh card | Third line `Helped 3 listeners · 2 h 10 m today` (replaces Passed on; bytes move to Swarm tiles). Not "Kept", which is the library. |
+| Note | Optional, once a day after the first hour passed on, only while open: `You kept 3 people listening today`. Settings › Delivery › Thank-you notes. |
+| Small numbers | 1 → `person`; minutes under an hour; none yet → a sentence, no zero; receive-only → hidden. |
+| Counting | Listening time = audio bytes passed on and played ÷ bitrate, per listener. People = distinct keys with ≥ 60 s from you today. On this phone only, never named or sent. Needs the daily ledger (until then "since 09:14"). |
+
 ## New running order on the phone
 
 ![](screens/order-change.png)
@@ -946,7 +1020,7 @@ A repeated event within 10 s gets a count (`×3`) instead of new rows. The Copy 
 
 ![](screens/time-signals-sources.png)
 
-The user's request (5 Nov): tapping a node in SOURCES shows what it is. Each node, its line and its label make one 44 px target. The tapped node gets a white ring and a sheet rises: the name and its state (`in charge`, `standing by`, `in use`, `discarded`), a plain definition, then live details. Tap another node to switch; swipe down or × to close. The SOURCES caption reads `Node size = accuracy. Tap a node to see what it is.`
+The user's request (5 Nov): tapping a node in SOURCES shows what it is. Each node, its line and its label make one 44 px target. The tapped node gets a white ring and a sheet rises: the name and its state (`in charge`, `standing by`, `in use`, `discarded`), a plain definition, then live details. Tap another node to switch; swipe down or × to close. **Superseded in hand-off 52:** SOURCES is now a picture (below); the taps work the same on the satellites, the mast and the hourglass. Caption: `Tap the satellites, the mast or the hourglass to see what each is. Sunrise and sunset for where you are, worked out on this phone.`
 
 | Node | Definition | Details |
 |---|---|---|
@@ -954,6 +1028,25 @@ The user's request (5 Nov): tapping a node in SOURCES shows what it is. Each nod
 | GPS | Time from navigation satellites via this phone's GPS chip; the best a phone can get | Satellites used of seen, Gold or Silver, last fix, error; link to Satellites |
 | Hold | This phone's own clock carrying on from the last satellite fix; takes over when GPS drops, error grows with time and temperature | Error now, growth rate, last fix, when internet time would take over; link to Satellites |
 | Internet time server (NTP) | A time server over the internet; S1 is one step from an atomic clock; NPL is the UK's National Physical Laboratory | Server, stratum, reference, round trip, difference from GPS, error, in use or discarded |
+
+
+### Sources as a picture (hand-off 52)
+
+| Main | States |
+|---|---|
+| ![](screens/time-signals.png) | ![](screens/time-signals-scene.png) |
+
+User, 9 Nov: the node diagram looked like a mesh with 4 nodes. Replace with a more accurate pictogram: a vastly exaggerated radio tower (Alexandra Palace style) for NTP, plus sunrise and sunset for the user's location.
+
+| Part | Rule |
+|---|---|
+| Scene | 350 × 236, rounded. Sky gradient (day / night with stars and moon). Ground with a slight curve. **Sun** on a dotted arc from the sunrise end (left) to the sunset end (right), placed by the time of day (updates once a minute). Under the ground line: `↑ 06:59 SUNRISE` left, `↓ 16:56 SUNSET` right, warm yellow `#FFD27A`. |
+| GPS | Four small satellites top left; lines to the phone. In charge: accent, solid, glow; otherwise grey, dashed. Label `GPS ±400 µs`. Tap opens Satellites. |
+| NTP | **A tall lattice mast on a brick tower with arched windows** (Alexandra Palace-like), far too tall on purpose, aerials and three wave arcs on top. In charge: accent, waves glow, solid line; otherwise grey, dashed. Label `NTP ±5.5 ms` (best server). Tap scrolls to NTP servers. |
+| Phone | FLOWTIME phone standing on the ground, centre, with a soft accent halo. **Hourglass** beside it = the phone's own clock (holdover), accent while holding. Label `HOLD ±600 µs`. Tap opens the holdover explanation. |
+| Accuracy | Now in the labels, not in node size. |
+| Sunrise / sunset | From this phone's position and date, on the phone (position never leaves it). Use satellites off: last known position, else the time zone's main city, with `approx.` Midnight sun / polar night: `Sun up all day` / `Sun doesn't rise today`. |
+| Clock face | When internet time is in charge, the Now playing clock-face aerial becomes a mini mast (same symbol). |
 
 ## Calibration
 
