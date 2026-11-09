@@ -34,7 +34,8 @@ import kotlin.math.sin
  */
 object News {
     enum class Phase { IDLE, GETTING, PLAYING, ENDING }
-    enum class Source { STATION, NPR, OWN }
+    /** AUTO follows the station's choice; the others are the listener's own pick (hand-off 50). */
+    enum class Source { AUTO, BBC, NPR, OWN }
 
     const val NPR_URL = "https://feeds.npr.org/500005/podcast.xml"
     val DOWN_S = floatArrayOf(0.5f, 1.5f, 3f)
@@ -47,7 +48,7 @@ object News {
 
     // The listener's settings, kept on the phone.
     @Volatile var on = true
-    @Volatile var source = Source.STATION
+    @Volatile var source = Source.AUTO
     @Volatile var ownUrl = ""
     @Volatile var underPct = 25
     @Volatile var fadeDown = 1
@@ -78,7 +79,8 @@ object News {
         app = ctx.applicationContext
         val p = ctx.getSharedPreferences("news", Context.MODE_PRIVATE)
         on = p.getBoolean("on", true)
-        source = Source.entries.getOrElse(p.getInt("source", 0)) { Source.STATION }
+        source = p.getString("src", null)?.let { n -> Source.entries.firstOrNull { it.name == n } }
+            ?: when (p.getInt("source", 0)) { 1 -> Source.NPR; 2 -> Source.OWN; else -> Source.AUTO }   // saved before hand-off 50
         ownUrl = p.getString("ownUrl", "") ?: ""
         underPct = p.getInt("underPct", 25); fadeDown = p.getInt("fadeDown", 1); fadeUp = p.getInt("fadeUp", 1)
         prefetch = p.getBoolean("prefetch", true)
@@ -88,16 +90,29 @@ object News {
 
     fun save(ctx: Context) {
         ctx.getSharedPreferences("news", Context.MODE_PRIVATE).edit()
-            .putBoolean("on", on).putInt("source", source.ordinal).putString("ownUrl", ownUrl)
+            .putBoolean("on", on).putString("src", source.name).putString("ownUrl", ownUrl)
             .putInt("underPct", underPct).putInt("fadeDown", fadeDown).putInt("fadeUp", fadeUp).putBoolean("prefetch", prefetch).apply()
     }
 
     /** The feed this phone would use: name and URL, or null (station chose None, or no feed set up). */
-    fun feed(lib: LibraryStore?): Pair<String, String>? = when (source) {
+    fun feed(lib: LibraryStore?): Pair<String, String>? = when (picked(lib)) {
+        Source.BBC -> BuildConfig.NEWS_BBC_URL.takeIf { it.isNotEmpty() }?.let { "BBC World Service" to it }
         Source.NPR -> "NPR News Now" to NPR_URL
         Source.OWN -> ownUrl.trim().takeIf { it.startsWith("http") }?.let { "Your feed" to it }
-        Source.STATION -> stationNews(lib).takeIf { it.choice != "none" && it.url.isNotEmpty() }?.let { it.name to it.url }
+        else -> null
     }
+
+    /** The station's choice as a source: BBC, NPR, or AUTO when it chose None. */
+    fun stationSource(lib: LibraryStore?): Source = when (stationNews(lib).choice) { "npr" -> Source.NPR; "none" -> Source.AUTO; else -> Source.BBC }
+
+    /** The option in use: the listener's pick, else the station's (AUTO when the station chose None). */
+    fun picked(lib: LibraryStore?): Source = if (source == Source.AUTO) stationSource(lib) else source
+
+    // "Latest: 10:00 bulletin" under the options (hand-off 50).
+    @Volatile var latestFeed = ""
+    @Volatile var latestPublishedMs = 0L
+    @Volatile var latestFoundMs = 0L
+    @Volatile var latestReady = false
 
     /** The station's choice, or until it sends one, the station default: BBC World Service (hand-off 49). */
     fun stationNews(lib: LibraryStore?): StationNews =
@@ -151,7 +166,7 @@ object News {
             val item = newest(feedUrl) ?: throw java.io.IOException("no bulletin in the feed")
             if (item.second > 0 && System.currentTimeMillis() - item.second > TOO_OLD_MS) throw java.io.IOException("newest is too old")
             publishedMs = item.second
-            fetch(ctx, item.first) { my == gen }
+            fetch(ctx, item.first) { my == gen }?.also { noteLatest(sourceName, item.second) }
         } catch (e: Exception) {
             Log.w(TAG, "fetch: $e")
             if (my == gen) fail("News isn't answering right now")
@@ -168,7 +183,7 @@ object News {
         val enhancer = try { matchLoudness(ctx, player, file) } catch (e: Exception) { Log.w(TAG, "loudness: $e"); null }
         durationMs = if (limitMs > 0) minOf(limitMs, player.duration) else player.duration
         phase = Phase.PLAYING
-        val low = underPct / 100f
+        var low = underPct / 100f
         val withMusic = MainActivity.session != null
         if (withMusic) ramp(1f, low, DOWN_S[fadeDown], down = true)
         var done = false
@@ -178,6 +193,7 @@ object News {
             positionMs = try { player.currentPosition } catch (_: Exception) { break }
             if (limitMs > 0 && positionMs >= limitMs) break
             if (withMusic && MainActivity.session == null) break   // the music was stopped under the news
+            if (withMusic && underPct / 100f != low) { low = underPct / 100f; MainActivity.session?.setGain(low) }   // the slider moved: follow it now
             SystemClock.sleep(100)
         }
         try { player.stop() } catch (_: Exception) { }
@@ -189,6 +205,10 @@ object News {
         }
         MainActivity.session?.setGain(1f)
         if (my == gen) phase = Phase.IDLE
+    }
+
+    private fun noteLatest(feed: String, published: Long) {
+        latestFeed = feed; latestPublishedMs = published; latestFoundMs = System.currentTimeMillis(); latestReady = true
     }
 
     private val musicDb = java.util.concurrent.ConcurrentHashMap<String, Double>()
@@ -330,6 +350,7 @@ object News {
             var audio: String? = null
             var date = 0L
             var tag = ""
+            var best: Pair<String, Long>? = null   // the newest pubDate wins, not just the first listed
             while (p.next() != XmlPullParser.END_DOCUMENT) {
                 when (p.eventType) {
                     XmlPullParser.START_TAG -> {
@@ -338,10 +359,16 @@ object News {
                         if (inItem && tag == "enclosure" && audio == null) audio = p.getAttributeValue(null, "url")
                     }
                     XmlPullParser.TEXT -> if (inItem && tag == "pubDate" && date == 0L) date = parseDate(p.text.trim())
-                    XmlPullParser.END_TAG -> { if (p.name == "item" && inItem) return audio?.let { it to date }; tag = "" }
+                    XmlPullParser.END_TAG -> {
+                        if (p.name == "item" && inItem) {
+                            if (audio != null && (best == null || date > best.second)) best = audio to date
+                            inItem = false; audio = null; date = 0L
+                        }
+                        tag = ""
+                    }
                 }
             }
-            return null
+            return best
         } finally { c.disconnect() }
     }
 
@@ -383,7 +410,7 @@ object News {
             val ctx = app
             if (ctx != null && on && prefetch && phase == Phase.IDLE && MainActivity.session != null && unmetered(ctx)) {
                 try {
-                    feed(LibraryStore.get(ctx))?.let { f -> newest(f.second)?.let { item -> fetch(ctx, item.first) { phase == Phase.IDLE }?.let { b -> newsDb.getOrPut(b.name) { bulletinDb(b) }; currentMusicDb(ctx) } } }   // measured ahead, so a press starts at once
+                    feed(LibraryStore.get(ctx))?.let { f -> newest(f.second)?.let { item -> fetch(ctx, item.first) { phase == Phase.IDLE }?.let { b -> noteLatest(f.first, item.second); newsDb.getOrPut(b.name) { bulletinDb(b) }; currentMusicDb(ctx) } } }   // measured ahead, so a press starts at once
                 } catch (e: Exception) { Log.w(TAG, "prefetch: $e") }
                 if (phase == Phase.IDLE) { gotBytes = 0; totalBytes = -1 }
             }

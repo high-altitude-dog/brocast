@@ -464,3 +464,12 @@ Engineering limits stay as in "hand-off 42 as built": the orbit plane is inferre
 - Own feed: a plain text field under the option (no validation beyond starting with http).
 - A station that hasn't sent a news choice yet reads "Station's choice · This station hasn't chosen yet"; one with BBC chosen but no feed URL on the server reads "Not set up on the station yet". Design needed?
 - Upload page: the NEWS BULLETIN card sits under Artists, as the Station colour card (h43) isn't built on the upload page yet.
+
+## 9 Nov: hand-offs 43 (station colour), 50 (colour per set, news sources) as built
+
+- Phones: the accent is one runtime token; every tint already derived from it, so nothing was hard-coded. Station colour fades over 2 s from its time; a set's own colour fades in from its first downbeat at the ear (the set's start until its beat grid exists). Checked on the Pixel: Lime → Violet.
+- Change toast at the top of Now playing: built, not yet seen on a phone.
+- Not built: Stations list colour bars (no Stations screen yet), Coming up / Kept set-colour dots, lock-screen/notification accents (no media notification yet), Minimal level rule, station name header line (h50).
+- Upload page: Station colour card (21 swatches) + dialog (Now / At the next set, Tell listeners, before/after pills; no full Now playing mock), COLOUR column with popover; colours go into the draft and out on Publish. The page's own accent follows the station colour.
+- Beat counter: BAR and BPM moved to a line above, cells full width and 44 dp (missed from h43 first time).
+- News: BBC and NPR are built in, station's choice pre-selects and is marked; newest pubDate wins; Latest line shows bulletin time and when found.

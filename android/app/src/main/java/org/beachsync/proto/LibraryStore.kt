@@ -29,6 +29,8 @@ class LibraryStore private constructor(ctx: Context) : Thread("library") {
     @Volatile var dMs = 60000L
     /** The station's news bulletin (hand-off 49) from its announcement: null when it hasn't said, name "None" when it chose none. */
     @Volatile var news: StationNews? = null
+    /** The station colour (hand-off 43) from its announcement, or null for Lime. */
+    @Volatile var colour: StationColourSpec? = null
     @Volatile var url = ""
     @Volatile var status = "Library not downloaded yet"
     @Volatile var haveSets = 0
@@ -115,9 +117,10 @@ class LibraryStore private constructor(ctx: Context) : Thread("library") {
             val items = ed.getJSONArray("items")
             Edition(ed.getLong("start_ns"), (0 until items.length()).map { i ->
                 val it = items.getJSONObject(i)
-                LibraryItem(it.getString("id"), it.optString("title"), it.optString("artist"), it.getLong("seconds"), it.getLong("bytes"), it.getString("sha256"))
+                LibraryItem(it.getString("id"), it.optString("title"), it.optString("artist"), it.getLong("seconds"), it.getLong("bytes"), it.getString("sha256"), it.optString("color"))
             }, ed.optInt("n"), ed.optString("message"), ed.optLong("published_ns"), ed.optLong("from_s"))
         }
+        colour = j.optJSONObject("color")?.let { StationColourSpec(it.optString("hex"), it.optString("prev"), it.optLong("at_ns"), it.optBoolean("tell")) }
         news = j.optJSONObject("news")?.let { StationNews(it.optString("choice"), it.optString("name"), it.optString("url")) }
         calledOff = j.optJSONArray("called_off")?.let { c -> (0 until c.length()).map { c.getJSONObject(it).optLong("start_ns") }.toSet() }.orEmpty()
         artists = j.optJSONObject("artists")?.let { a -> a.keys().asSequence().associateWith { k -> a.getJSONObject(k).let { it.optString("name") to it.optLong("v") } } }.orEmpty()
@@ -318,3 +321,6 @@ class LocalSupply(private val store: LibraryStore) : BlockSupply {
 
 /** A station's news choice: "bbc", "npr" or "none", its name, and the feed URL ('' if the station has none set up). */
 data class StationNews(val choice: String, val name: String, val url: String)
+
+/** The station colour: hex from the 21, the one before, and the flowtime at the ear when it takes over (hand-off 43). */
+data class StationColourSpec(val hex: String, val prev: String, val atNs: Long, val tell: Boolean)

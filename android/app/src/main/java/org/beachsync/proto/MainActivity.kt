@@ -144,6 +144,7 @@ class MainActivity : ComponentActivity(), BenchActions {
             var from by remember { mutableStateOf(home) }   // where the event log and nudge screens go back to
             var logLane by remember { mutableStateOf<Lane?>(null) }
             var artistFrom by remember { mutableStateOf(home) }
+            org.beachsync.proto.ui.StationColour.Driver(state.library)
             var artistItem by remember { mutableStateOf<String?>(null) }
             var cardSetup by remember { mutableStateOf<org.beachsync.proto.ui.TestCardSetup?>(null) }
             BackHandler(page != home) {

@@ -43,7 +43,8 @@ object Ink {
     val textSecondary = Color(Tokens.Colors.textSecondary)
     val muted = Color(Tokens.Colors.muted)
     val faint = Color(Tokens.Colors.faint)
-    val accent = Color(Tokens.Colors.accent)
+    /** The station colour (hand-off 43): one runtime token, Lime until a station says otherwise. Every tint derives from it. */
+    val accent: Color get() = StationColour.accent
     val onAccent = Color(Tokens.Colors.onAccent)
     val warn = Color(Tokens.Colors.warn)
     val danger = Color(Tokens.Colors.danger)

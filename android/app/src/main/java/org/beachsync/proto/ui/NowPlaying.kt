@@ -166,6 +166,17 @@ fun NowPlaying(state: BenchState, actions: BenchActions, openLog: () -> Unit, op
     ChannelOverlays(chUi, state, actions)
     OrderNews.toast?.let { Toast(it.first, null, {}, Modifier.align(Alignment.BottomCenter)) }
     NewsToast()
+    StationColour.toast?.let { (text, _) ->
+        // Station colour change (hand-off 43): at the top, a dot in the new colour.
+        Row(Modifier.align(Alignment.TopCenter).fillMaxWidth().safeDrawingPadding().padding(16.dp).background(Ink.surface, androidx.compose.foundation.shape.RoundedCornerShape(14.dp)).border(1.dp, Ink.accent, androidx.compose.foundation.shape.RoundedCornerShape(14.dp)).padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(12.dp).background(Ink.accent, androidx.compose.foundation.shape.CircleShape))
+            Spacer(Modifier.width(10.dp))
+            Column {
+                BasicText(text, style = Tokens.Text.bodyStrong.style())
+                BasicText("Set by the station · fades in over 2 s", style = Tokens.Text.small.style(Ink.textSecondary))
+            }
+        }
+    }
     // Asked once, as first listen folds away (hand-off 38).
     if (state.countryOffer && org.beachsync.proto.PearsEngine.view?.moments?.firstMusicDone == true) CountryAskSheet(actions::answerCountry)
     }

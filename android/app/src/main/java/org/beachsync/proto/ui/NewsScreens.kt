@@ -45,8 +45,7 @@ private val newsInk get() = Lane.NET.color()
 /** Settings › Listening row: `On · BBC World Service · music to 25%`. */
 internal fun newsSummary(lib: LibraryStore?): String {
     if (!News.on) return "Off · the button stops the music"
-    val st = News.stationNews(lib)
-    if (News.source == News.Source.STATION && st?.choice == "none") return "This station has no news · pick one below"
+    if (News.picked(lib) == News.Source.AUTO) return "This station has no news · pick one below"
     val name = News.feed(lib)?.first ?: "No feed yet"
     return "On · $name · music to ${News.underPct}%"
 }
@@ -147,16 +146,19 @@ fun NewsSettingsScreen(lib: LibraryStore?, back: () -> Unit) {
             SwitchRow("News on the headphone button", "On: play/pause gets the news. Off: the button stops the music, as before.", News.on) { News.on = it; save() }
             BasicText("News from", Modifier.padding(top = 6.dp), Tokens.Text.bodyStrong.style())
             Column(Modifier.selectableGroup(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                val st = News.stationNews(lib)
-                val stationLine = when {
-                    st.choice == "none" -> "Station’s choice · none" to "This station has no news · pick one below"
-                    st.url.isEmpty() -> "Station’s choice · ${st.name}" to "Not set up on the station yet"
-                    else -> "Station’s choice · ${st.name}" to "Set by the station · hourly, about 5 min"
+                // BBC and NPR are built in; the station's choice only pre-selects one (hand-off 50).
+                val station = News.stationSource(lib)
+                val picked = News.picked(lib)
+                if (station == News.Source.AUTO) BasicText("This station has no news · pick one below", style = Tokens.Text.small.style(Ink.textSecondary))
+                val mark = { s: News.Source -> if (s == station) " · the station’s choice" else "" }
+                SourceOption("BBC World Service", "Hourly, about 5 min${mark(News.Source.BBC)}", picked == News.Source.BBC, cyan) { News.source = News.Source.BBC; save() }
+                SourceOption("NPR News Now", "Hourly, about 5 min · public feed${mark(News.Source.NPR)}", picked == News.Source.NPR, cyan) { News.source = News.Source.NPR; save() }
+                SourceOption("Your own feed", "Any podcast RSS address", picked == News.Source.OWN, cyan) { News.source = News.Source.OWN; save() }
+                if (News.latestPublishedMs > 0 && News.latestFeed == News.feed(lib)?.first) {
+                    val hm = { ms: Long -> SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(ms)) }
+                    BasicText("Latest: ${hm(News.latestPublishedMs)} bulletin · found at ${hm(News.latestFoundMs)}${if (News.latestReady) " · ready on this phone" else ""}", style = Tokens.Text.small.style(Ink.textSecondary))
                 }
-                SourceOption(stationLine.first, stationLine.second, News.source == News.Source.STATION, cyan) { News.source = News.Source.STATION; save() }
-                SourceOption("NPR News Now", "Hourly, about 5 min · public feed", News.source == News.Source.NPR, cyan) { News.source = News.Source.NPR; save() }
-                SourceOption("Your own feed", "Any podcast RSS address", News.source == News.Source.OWN, cyan) { News.source = News.Source.OWN; save() }
-                if (News.source == News.Source.OWN) {
+                if (picked == News.Source.OWN) {
                     var text by remember { mutableStateOf(News.ownUrl) }
                     BasicTextField(text, { text = it; News.ownUrl = it.trim(); save() },
                         Modifier.fillMaxWidth().border(1.dp, Ink.grid, RoundedCornerShape(10.dp)).padding(12.dp),

@@ -8,7 +8,7 @@ import java.io.RandomAccessFile
  * The beta's library: every set plays in turn on a shared timeline, so any phone holding the files can work out what's due
  * from flowtime alone. Plain Kotlin, tested in simtest/. Audio stays silent where a file hasn't arrived, rather than out of sync.
  */
-class LibraryItem(val id: String, val title: String, val artist: String, val seconds: Long, val bytes: Long, val sha256: String)
+class LibraryItem(val id: String, val title: String, val artist: String, val seconds: Long, val bytes: Long, val sha256: String, val color: String = "")
 
 /**
  * One running order from [startNs] on. [number], [message] and [publishedNs] (hand-off 41) come from the upload page: the edition's number,

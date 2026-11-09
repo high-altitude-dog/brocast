@@ -49,6 +49,10 @@ LIBRARY_D_MS = 60000
 # Station news bulletin (hand-off 49). The BBC feed URL carries a key, so it comes from station.json in the data
 # folder ("news_urls": {"bbc": "..."}) or BROCAST_NEWS_BBC_URL, never from this public file.
 NEWS_CHOICES = {"bbc": "BBC World Service", "npr": "NPR News Now", "none": "None"}
+# Station colour (hand-offs 43 and 50): the 21 accents, Lime by default. Anything else reads as Lime on the phones.
+PALETTE = {"Lime": "#C8FF4D", "Chartreuse": "#DEFF5C", "Lemon": "#F4F56A", "Pistachio": "#B8F2A0", "Spring": "#7DFF7A", "Mint": "#6BFFB8", "Seafoam": "#5CF2D0",
+           "Ice": "#A6E4FF", "Sky": "#7CC8FF", "Bluebell": "#86A8FF", "Hyacinth": "#A2A6FF", "Lavender": "#BCA8FF", "Purple": "#A98BFF", "Violet": "#C483FF",
+           "Orchid": "#DE8CFF", "Lilac": "#E6B3FF", "Magenta": "#FF7AE0", "Pink": "#FF8FC8", "Bubblegum": "#FFB0D9", "Blush": "#FFC4CF", "Iris": "#9E95FF"}
 NEWS_PUBLIC_URLS = {"npr": "https://feeds.npr.org/500005/podcast.xml"}
 LIBRARY_NOTICE_S = 600     # how far ahead a new running order takes effect at the earliest, so every phone can fetch it
 MESSAGE_MAX = 140
@@ -67,6 +71,16 @@ def edition_at(eds: list[dict], t: int) -> dict | None:
     """The newest edition already started at t, or the earliest if none has (as LibraryPlan.kt's editionAt)."""
     started = [e for e in eds if e["start_ns"] <= t]
     return max(started, key=lambda e: e["start_ns"]) if started else min(eds, key=lambda e: e["start_ns"], default=None)
+
+
+def parse_colors(q: dict) -> dict:
+    """`id:HEX,id:HEX` from the page: per-set colours."""
+    out = {}
+    for pair in (q.get("colors") or [""])[0].split(","):
+        k, _, v = pair.partition(":")
+        if ID.match(k) and ("#" + v.lstrip("#").upper()) in PALETTE.values():
+            out[k] = "#" + v.lstrip("#").upper()
+    return out
 
 
 def item_at(e: dict, t: int) -> tuple[int, int] | None:
@@ -455,6 +469,26 @@ class Library:
         url = (st.get("news_urls") or {}).get(choice) or (os.environ.get("BROCAST_NEWS_BBC_URL", "") if choice == "bbc" else NEWS_PUBLIC_URLS.get(choice, ""))
         return {"choice": choice, "name": NEWS_CHOICES[choice], "url": url}
 
+    def colour(self) -> dict:
+        """The station colour as phones get it: hex, the one before, and when it took or takes over at the ear."""
+        st = self.station()
+        hexv = st.get("color") if st.get("color") in PALETTE.values() else PALETTE["Lime"]
+        prev = st.get("color_prev") if st.get("color_prev") in PALETTE.values() else hexv
+        return {"hex": hexv, "prev": prev, "at_ns": int(st.get("color_at_ns") or 0), "tell": bool(st.get("color_tell"))}
+
+    def set_colour(self, hexv: str, when: str, tell: bool):
+        if hexv not in PALETTE.values():
+            raise ValueError("pick one of the 21 colours")
+        with self.lock:
+            st = self.station()
+            eds = self.read_library()["editions"]
+            heard = time.time_ns()
+            if when == "next" and eds:
+                heard = next_boundary(eds, self.timeline_now() + SEC) + LIBRARY_D_MS * 1_000_000
+            st.update(color_prev=self.colour()["hex"], color=hexv, color_at_ns=heard, color_tell=tell)
+            self.write_json(os.path.join(self.directory, "station.json"), st)
+        self.publish_library()
+
     def set_news(self, choice: str):
         if choice not in NEWS_CHOICES:
             raise ValueError("no such news choice")
@@ -468,7 +502,7 @@ class Library:
         """Writes library.json. Artists ride beside the editions, so a new photo or a confirmed match never moves the shared timeline."""
         artists = {a["id"]: {"name": a["name"], "v": a["v"]} for a in self.artists() if a.get("v")}
         set_artists = {m["id"]: m["artist_ids"] for m in self.sets() if m["status"] == "ready" and m.get("artist_ids") and m.get("artist_sure")}
-        new = {"version": 1, "D_ms": LIBRARY_D_MS, "editions": editions, "called_off": called_off[-8:], "artists": artists, "set_artists": set_artists, "news": self.news()}
+        new = {"version": 1, "D_ms": LIBRARY_D_MS, "editions": editions, "called_off": called_off[-8:], "artists": artists, "set_artists": set_artists, "news": self.news(), "color": self.colour()}
         path = os.path.join(self.directory, "library.json")
         try:
             with open(path) as f:
@@ -501,6 +535,15 @@ class Library:
         locked = bool(queued) and queued["start_ns"] - self.timeline_now() < LIBRARY_NOTICE_S * SEC
         return {"live": live, "queued": queued, "locked": locked}
 
+    def draft_colors(self) -> dict | None:
+        """Per-set colours in the draft (hand-off 50), or None to keep what's published."""
+        try:
+            with open(os.path.join(self.directory, "draft.json")) as f:
+                c = json.load(f).get("colors")
+                return {k: v for k, v in c.items() if v in PALETTE.values()} if isinstance(c, dict) else None
+        except (OSError, ValueError):
+            return None
+
     def draft(self) -> list[str] | None:
         try:
             with open(os.path.join(self.directory, "draft.json")) as f:
@@ -508,15 +551,17 @@ class Library:
         except (OSError, ValueError, KeyError):
             return None
 
-    def save_draft(self, order: list[str] | None):
+    def save_draft(self, order: list[str] | None, colors: dict | None = None):
         path = os.path.join(self.directory, "draft.json")
+        if colors is None and order is not None:
+            colors = self.draft_colors()
         if order is None:
             try:
                 os.remove(path)
             except OSError:
                 pass
         else:
-            self.write_json(path, {"order": order})
+            self.write_json(path, {"order": order, **({"colors": colors} if colors is not None else {})})
 
     def current_order(self) -> list[str]:
         r = self.running()
@@ -554,8 +599,9 @@ class Library:
         k = item_at(before, start - SEC) if before else None
         return {"start_ns": start, "ending": before["items"][k[0]]["title"] if k else None, "earliest_ns": earliest}
 
-    def publish(self, order: list[str], when: str, at_heard_ns: int | None, message: str) -> dict:
+    def publish(self, order: list[str], when: str, at_heard_ns: int | None, message: str, colors: dict | None = None) -> dict:
         ready = self.ready_items()
+        colors = {k: v for k, v in (colors or {}).items() if v in PALETTE.values()}
         if not order or any(i not in ready for i in order) or len(set(order)) != len(order):
             raise ValueError("the order must list each ready set once")
         if len(message) > MESSAGE_MAX:
@@ -582,7 +628,7 @@ class Library:
             k = item_at(before, start - SEC) if before else None
             was = before["items"][k[0]]["id"] if k else None
             nxt = (order.index(was) + 1) % len(order) if was in order else 0
-            items = [ready[i] for i in order]
+            items = [{**ready[i], **({"color": colors[i]} if i in colors else {})} for i in order]
             from_s = sum(i["seconds"] for i in items[:nxt])
             live = edition_at(base, self.timeline_now())
             keep = [e for e in base if live is None or e["start_ns"] >= live["start_ns"]]
@@ -688,6 +734,10 @@ dialog::backdrop { background: rgba(0, 0, 0, .7); } .cols { display: grid; grid-
 .cols li b { font-family: var(--mono); color: var(--muted); font-weight: 400; margin-right: 12px; font-size: 13px; }
 .opt { border: 1px solid var(--grid); border-radius: 12px; padding: 12px 14px; display: flex; gap: 12px; align-items: flex-start; margin-top: 8px; cursor: pointer; }
 .opt.on { border-color: var(--accent); } .opt input { accent-color: var(--accent); margin-top: 4px; }
+.swatches { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; margin: 12px 0; } .sw { aspect-ratio: 1; border-radius: 50%; border: 0; padding: 0; min-height: 0; cursor: pointer; display: flex; align-items: center; justify-content: center; color: #0A0C0F; font-weight: 700; }
+.sw.cur { box-shadow: 0 0 0 3px var(--bg, #0A0C0F), 0 0 0 5px #fff; } .cdot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; } .cring { display: inline-block; width: 8px; height: 8px; border-radius: 50%; border: 2px solid var(--accent); margin-right: 6px; vertical-align: -1px; }
+.colpop { position: absolute; z-index: 20; background: #15191E; border: 1px solid var(--grid); border-radius: 12px; padding: 14px; width: 300px; } .colpop .swatches { margin: 10px 0 6px; } .colcell { cursor: pointer; white-space: nowrap; }
+.preview { display: flex; gap: 14px; margin: 12px 0; } .preview div { flex: 1; border: 1px solid var(--grid); border-radius: 12px; padding: 12px; } .preview .pill { border-radius: 99px; padding: 8px 12px; color: #0A0C0F; font-weight: 600; margin-top: 8px; text-align: center; }
 .opt.news.on { border-color: var(--news); } .opt.news input { accent-color: var(--news); } .faint { color: var(--faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 300px; }
 .artist { display: flex; gap: 12px; align-items: flex-start; border: 1px solid var(--border); border-radius: 12px; padding: 12px; margin: 8px 0; }
 .photo { position: relative; display: inline-block; cursor: crosshair; } .photo img { max-width: 200px; display: block; border-radius: 8px; }
@@ -700,6 +750,7 @@ dialog::backdrop { background: rgba(0, 0, 0, .7); } .cols { display: grid; grid-
   <a id="nav-upload">Upload<span id="nav-upload-sub"></span></a>
   <a id="nav-artists">Artists<span id="nav-artists-sub"></span></a>
   <a id="nav-disk">Disk<span id="nav-disk-sub"></span></a>
+  <a id="nav-colour">Colour<span id="nav-colour-sub"></span></a>
   <a id="nav-news">News<span id="nav-news-sub"></span></a>
   <div class="foot">Reached through the SSH tunnel only. No login: anyone with the tunnel is the operator.</div>
 </nav>
@@ -707,7 +758,7 @@ dialog::backdrop { background: rgba(0, 0, 0, .7); } .cols { display: grid; grid-
   <section id="view-order">
     <div class="head"><h1>Running order</h1><span class="muted" id="live"></span></div>
     <div id="bars"></div>
-    <table><thead><tr><th></th><th class="label">#</th><th></th><th class="label">Set</th><th class="label">Artist</th><th class="label">Length</th><th class="label">Plays (<span id="tz"></span>)</th><th class="label">Status</th><th></th></tr></thead>
+    <table><thead><tr><th></th><th class="label">#</th><th></th><th class="label">Set</th><th class="label">Artist</th><th class="label">Length</th><th class="label">Plays (<span id="tz"></span>)</th><th class="label">Colour</th><th class="label">Status</th><th></th></tr></thead>
       <tbody id="rows"></tbody></table>
     <p class="muted small">Drag a row by its handle, or use ⋯ › Move up / Move down / Move to… Times are for the next loop after publishing. The set on air can't be moved until it ends.</p>
     <div id="out"></div>
@@ -754,6 +805,11 @@ dialog::backdrop { background: rgba(0, 0, 0, .7); } .cols { display: grid; grid-
     <div class="faces" id="faces"></div>
     <div id="confirms"></div>
   </div>
+  <div class="card" id="colour-card">
+    <div class="row"><span class="label">Station colour</span><span class="small" id="colour-now"></span></div>
+    <div class="swatches" id="swatches"></div>
+    <p class="muted small">Like the lights on silent-disco headphones: every listener’s phone takes this colour, so a crowd can see who’s on this station. Pick one to preview it before it goes out.</p>
+  </div>
   <div class="card" id="news-card">
     <div class="row"><span class="label">News bulletin</span><span class="small" style="color: var(--news)" id="news-now"></span></div>
     <div id="news-opts"></div>
@@ -761,6 +817,7 @@ dialog::backdrop { background: rgba(0, 0, 0, .7); } .cols { display: grid; grid-
   </div>
 </aside>
 <dialog id="pub"></dialog>
+<dialog id="colour-dlg"></dialog>
 <script>
 const $ = id => document.getElementById(id);
 const headers = {"X-Brocast": "1"};
@@ -788,10 +845,15 @@ function movedIds(base, now) {
   return new Set(now.filter(x => !keep.has(x)));
 }
 const byId = () => Object.fromEntries(d.sets.map(s => [s.id, s]));
+let colors = {};
+const baseColors = () => Object.fromEntries(((d.queued || d.live) ? (d.queued || d.live).items : []).filter(i => i.color).map(i => [i.id, i.color]));
+const sameColors = (a, b) => JSON.stringify(Object.entries(a).sort()) === JSON.stringify(Object.entries(b).sort());
+const colourName = hex => Object.keys(d.palette).find(k => d.palette[k] === hex) || "Lime";
 const baseOrder = () => ((d.queued || d.live) ? (d.queued || d.live).items.map(i => i.id) : []);
 const secondsOf = id => { const s = byId()[id]; return s ? Math.ceil(s.frames / 48000) : 0; };
 function onAirId() { if (!d.live) return null; const p = playing(d.live, d.now_ns - d.D_ms * 1e6); return p ? {id: d.live.items[p.k].id, off: p.off} : null; }
-async function saveDraft(o) { order = o; render(); await fetch("/api/draft?order=" + o.join(","), {method: "POST", headers}); }
+const colorParam = c => Object.entries(c).map(([k, v]) => k + ":" + v.slice(1)).join(",");
+async function saveDraft(o) { order = o; render(); await fetch("/api/draft?order=" + o.join(",") + "&colors=" + colorParam(colors), {method: "POST", headers}); }
 function move(id, to) {
   const o = order.filter(x => x !== id); o.splice(Math.max(0, Math.min(to, o.length)), 0, id);
   const air = onAirId(); if (air && order.indexOf(air.id) !== o.indexOf(air.id)) { alert("The set on air can't move until it ends."); return; }
@@ -822,7 +884,8 @@ function thumb(s) {
 }
 function render() {
   const sets = byId(), base = baseOrder(), moved = movedIds(base, order), air = onAirId();
-  const isDraft = d.draft && JSON.stringify(d.draft) !== JSON.stringify(base);
+  const colorsChanged = !sameColors(colors, baseColors());
+  const isDraft = (d.draft && JSON.stringify(d.draft) !== JSON.stringify(base)) || colorsChanged;
   // Bars: queued or locked, then the draft.
   const bars = $("bars"); bars.replaceChildren();
   if (d.queued) {
@@ -843,6 +906,7 @@ function render() {
     const words = [];
     for (const id of order) if (moved.has(id)) words.push((sets[id] ? sets[id].title : "?") + (base.includes(id) ? (order.indexOf(id) < base.indexOf(id) ? " moved up" : " moved down") : " added"));
     for (const id of base) if (!order.includes(id)) words.push((sets[id] ? sets[id].title : "?") + " taken out");
+    const bc = baseColors(); for (const id of order) if ((colors[id] || "") !== (bc[id] || "")) words.push((sets[id] ? sets[id].title : "?") + ": " + (colors[id] ? colourName(colors[id]) : "station colour"));
     b.append(el("span", (words.join(", ") || "Order changed") + ". Nothing changes for listeners until you publish.", "text"));
     const x = el("button", "Discard"); x.onclick = () => act("/api/draft", "DELETE");
     const p = el("button", "Publish order…", "primary"); p.onclick = openPublish;
@@ -870,7 +934,10 @@ function render() {
     const st = air && k < airAt ? el("td", "played", "st-played") : fixed ? el("td", "● on air", "st-air") : el("td", "ready", "muted");
     const dots = el("button", "⋯", "dots"); dots.onclick = e => { e.stopPropagation(); openMenu(dots, id, true); };
     const md = el("td"); md.append(dots);
-    tr.append(h, el("td", String(k + 1), "mono muted"), th, t, el("td", s.artist || "—"), el("td", hms(s.seconds), "mono"), el("td", hm(t0) + "–" + hm(t1), "mono"), st, md);
+    const cc = el("td", null, "colcell"); const own = colors[id];
+    const mark = el("span", null, own ? "cdot" : "cring"); if (own) mark.style.background = own;
+    cc.append(mark, document.createTextNode(own ? colourName(own) : "Station")); cc.onclick = e => { e.stopPropagation(); setColourPop(cc, id, k); };
+    tr.append(h, el("td", String(k + 1), "mono muted"), th, t, el("td", s.artist || "—"), el("td", hms(s.seconds), "mono"), el("td", hm(t0) + "–" + hm(t1), "mono"), cc, st, md);
     rows.append(tr);
   });
   const out = $("out"); out.replaceChildren();
@@ -917,7 +984,7 @@ function openPublish() {
   const btns = el("div"); btns.style.cssText = "display:flex;justify-content:flex-end;gap:10px;margin-top:16px";
   const cancel = el("button", "Cancel"); cancel.onclick = () => dlg.close();
   go.onclick = async () => {
-    const q = new URLSearchParams({order: order.join(","), when, message: msg.value}); if (when === "time") q.set("at", String(setTime()));
+    const q = new URLSearchParams({order: order.join(","), when, message: msg.value, colors: colorParam(colors)}); if (when === "time") q.set("at", String(setTime()));
     go.disabled = true; const ok = await act("/api/publish?" + q, "POST"); go.disabled = false; if (ok) dlg.close();
   };
   btns.append(cancel, go); dlg.append(btns); update(); dlg.showModal();
@@ -1016,7 +1083,50 @@ $("aform").onsubmit = e => {
 function setView(v) { view = v; $("view-order").hidden = v !== "order"; $("view-artists").hidden = v !== "artists";
   $("nav-order").className = v === "order" ? "on" : ""; $("nav-artists").className = v === "artists" ? "on" : ""; }
 $("nav-order").onclick = () => setView("order"); $("nav-artists").onclick = () => setView("artists"); $("open-artists").onclick = () => setView("artists");
-$("nav-upload").onclick = () => $("upload-card").scrollIntoView({behavior: "smooth"}); $("nav-disk").onclick = () => $("disk-card").scrollIntoView({behavior: "smooth"}); $("nav-news").onclick = () => $("news-card").scrollIntoView({behavior: "smooth"});
+$("nav-upload").onclick = () => $("upload-card").scrollIntoView({behavior: "smooth"}); $("nav-disk").onclick = () => $("disk-card").scrollIntoView({behavior: "smooth"}); $("nav-colour").onclick = () => $("colour-card").scrollIntoView({behavior: "smooth"}); $("nav-news").onclick = () => $("news-card").scrollIntoView({behavior: "smooth"});
+// Station colour (hand-off 43) and colour per set (hand-off 50).
+function swatchGrid(current, pick) {
+  const g = el("div", null, "swatches");
+  for (const [name, hex] of Object.entries(d.palette)) { const b = el("button", hex === current ? "✓" : "", "sw" + (hex === current ? " cur" : "")); b.style.background = hex; b.title = name; b.onclick = e => { e.stopPropagation(); pick(hex); }; g.append(b); }
+  return g;
+}
+function showColour() {
+  const c = d.colour, name = colourName(c.hex);
+  document.documentElement.style.setProperty("--accent", c.hex);
+  $("nav-colour-sub").replaceChildren(Object.assign(el("span", null, "cdot"), {style: "background:" + c.hex}), document.createTextNode(name));
+  $("colour-now").replaceChildren(Object.assign(el("span", null, "cdot"), {style: "background:" + c.hex}), document.createTextNode(name + (c.hex === d.palette.Lime ? " · default" : "") + (c.at_ns > d.now_ns ? " · from " + hm(c.at_ns) : "")));
+  $("swatches").replaceWith(Object.assign(swatchGrid(c.hex, hex => { if (hex !== c.hex) openColour(hex); }), {id: "swatches"}));
+}
+function openColour(hex) {
+  const dlg = $("colour-dlg"), name = colourName(hex), cur = d.colour.hex;
+  dlg.replaceChildren(el("h2", "Change the station colour to " + name + "?"));
+  const pv = el("div", null, "preview");
+  for (const [label, h] of [["Now · " + colourName(cur), cur], ["New · " + name, hex]]) { const b = el("div"); b.append(el("div", label, "label")); const pill = el("div", "● IN SYNC ±3.0 ms", "pill"); pill.style.background = h; b.append(pill); pv.append(b); }
+  dlg.append(pv, el("div", "When", "label"));
+  const mk = (title, sub, on) => { const o = el("label", null, "opt" + (on ? " on" : "")); const r = el("input"); r.type = "radio"; r.name = "cwhen"; r.checked = on; const t = el("div"); t.append(el("div", title), el("div", sub, "muted small")); o.append(r, t); return [o, r]; };
+  const [o1, r1] = mk("Now", "Fades over 2 s on every phone; phones that are offline get it when they reconnect.", true);
+  const [o2, r2] = mk("At the next set", "Changes on the next set boundary. Sets with their own colour (Colour column in the running order) keep it.", false);
+  r1.onchange = r2.onchange = () => { o1.className = "opt" + (r1.checked ? " on" : ""); o2.className = "opt" + (r2.checked ? " on" : ""); };
+  const tell = el("label", null, "opt on"); const tc = el("input"); tc.type = "checkbox"; tc.checked = true; const tt = el("div"); tt.append(el("div", "Tell listeners"), el("div", "“Beach Sync Radio is " + name + " now” for 4 s", "muted small")); tell.append(tc, tt);
+  dlg.append(o1, o2, tell, el("p", "Contrast with the dark button text: at least 7 : 1, like all 21 colours.", "muted small"));
+  const btns = el("div"); btns.style.cssText = "display:flex;justify-content:flex-end;gap:10px;margin-top:16px";
+  const cancel = el("button", "Cancel"); cancel.onclick = () => dlg.close();
+  const go = el("button", "Change to " + name, "primary"); go.style.background = hex; go.style.borderColor = hex;
+  go.onclick = async () => { go.disabled = true; const ok = await act("/api/colour?" + new URLSearchParams({hex: hex.slice(1), when: r2.checked ? "next" : "now", tell: tc.checked ? "1" : "0"}), "POST"); go.disabled = false; if (ok) dlg.close(); };
+  btns.append(cancel, go); dlg.append(btns); dlg.showModal();
+}
+function setColourPop(cell, id, k) {
+  closeMenu(); const sets = byId(), title = sets[id] ? sets[id].title : "?";
+  menu = el("div", null, "colpop"); const r = cell.getBoundingClientRect(); menu.style.left = (r.left + scrollX) + "px"; menu.style.top = (r.bottom + scrollY + 4) + "px";
+  menu.onclick = e => e.stopPropagation();
+  menu.append(el("div", "Colour for " + title, "label"));
+  const station = el("label", null, "opt" + (colors[id] ? "" : " on")); const sr = el("input"); sr.type = "radio"; sr.checked = !colors[id];
+  station.append(sr, el("div", "Use the station colour (" + colourName(d.colour.hex) + ")")); sr.onchange = () => { delete colors[id]; closeMenu(); saveDraft(order); };
+  menu.append(station, swatchGrid(colors[id], hex => { colors[id] = hex; closeMenu(); saveDraft(order); }));
+  const prev = order[(k + order.length - 1) % order.length], pc = colors[prev] || d.colour.hex, nc = colors[id] || d.colour.hex;
+  const line = el("div", null, "muted small"); line.append(document.createTextNode((sets[prev] ? sets[prev].title : "") + " "), Object.assign(el("span", null, "cdot"), {style: "background:" + pc}), document.createTextNode("→ "), Object.assign(el("span", null, "cdot"), {style: "background:" + nc}), document.createTextNode("every phone changes on beat 1 of the first bar"));
+  menu.append(line); document.body.append(menu);
+}
 // Station news bulletin (hand-off 49): BBC World Service (default), NPR News Now or None.
 const NEWS = [["bbc", "BBC World Service", "Hourly · about 5 min · default"], ["npr", "NPR News Now", "Hourly · about 5 min"], ["none", "None", "No news on the headphone button for this station"]];
 function showNews() {
@@ -1042,7 +1152,8 @@ async function refresh(force) {
   const unsure = d.sets.filter(s => s.status === "ready" && !s.artist_sure && s.title !== "Test reel").length;
   $("nav-artists-sub").textContent = (d.artists || []).length + (unsure ? " · " + unsure + " to confirm" : "");
   $("nav-disk-sub").textContent = gb(d.free) + " free";
-  render(); jobs(); diskBar(); showArtists(); showNews();
+  colors = d.draft_colors || baseColors();
+  render(); jobs(); diskBar(); showArtists(); showNews(); showColour();
 }
 refresh(true); setInterval(refresh, 2000);
 </script></body></html>
@@ -1087,7 +1198,7 @@ def make_handler(lib: Library):
                 self.reply(sets=lib.sets(), on_air=lib.on_air(), free=lib.free(), used=lib.used(), max=lib.max, reserve=lib.reserve, artists=lib.artists(),
                            live=r["live"], queued=r["queued"], locked=r["locked"], draft=lib.draft(), plan=lib.plan(),
                            D_ms=LIBRARY_D_MS, notice_s=LIBRARY_NOTICE_S, now_ns=time.time_ns(), message_max=MESSAGE_MAX,
-                           news={**(n := lib.news()), "url": n["url"].split("?")[0]})   # the key never reaches the page
+                           news={**(n := lib.news()), "url": n["url"].split("?")[0]}, colour=lib.colour(), palette=PALETTE, draft_colors=lib.draft_colors())   # the key never reaches the page
             elif m := re.fullmatch(r"/api/artists/([0-9a-f]{32})/(photo|1x1|9x16|16x9)\.jpg", path):
                 try:
                     with open(lib.artist_path(m.group(1), m.group(2) + ".jpg"), "rb") as f:
@@ -1165,13 +1276,16 @@ def make_handler(lib: Library):
                     return self.reply()
                 if url.path == "/api/draft":   # the page's working order, kept on the server so it survives a reload
                     ids = [i for i in (q.get("order") or [""])[0].split(",") if ID.match(i)]
-                    lib.save_draft(ids)
+                    lib.save_draft(ids, parse_colors(q) if "colors" in q else None)
                     return self.reply()
                 if url.path == "/api/publish":
                     at = field("at")
                     msg = (q.get("message") or [""])[0][:MESSAGE_MAX + 1]
-                    e = lib.publish([i for i in (q.get("order") or [""])[0].split(",") if ID.match(i)], field("when"), int(at) if at.isdigit() else None, msg)
+                    e = lib.publish([i for i in (q.get("order") or [""])[0].split(",") if ID.match(i)], field("when"), int(at) if at.isdigit() else None, msg, parse_colors(q))
                     return self.reply(n=e["n"], start_ns=e["start_ns"])
+                if url.path == "/api/colour":
+                    lib.set_colour("#" + field("hex").lstrip("#").upper(), field("when"), field("tell") == "1")
+                    return self.reply()
                 if url.path == "/api/news":
                     lib.set_news(field("choice"))
                     return self.reply()

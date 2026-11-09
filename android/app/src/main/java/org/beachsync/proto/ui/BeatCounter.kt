@@ -59,27 +59,29 @@ fun BeatCounter(state: BenchState, open: () -> Unit) {
     val flash = ScreenPrefs.flashBar && p != null && p.beatInBar == 0 && p.sinceBeatSamples < 0.12 * 48000   // a setting, off by default (hand-offs 27, 29)
     val shape = RoundedCornerShape(Tokens.Radius.card.dp)
     val working = SetBeatAnalyser.current()?.working?.takeIf { it.first == item.title }?.second ?: 0
-    Row(
-        Modifier.fillMaxWidth().height(56.dp).background(Ink.surface, shape)
+    // Full width (hand-off 43): BAR and BPM on a line above, the four cells across the whole card.
+    Column(
+        Modifier.fillMaxWidth().background(Ink.surface, shape)
             .border(if (flash || p?.realigned == true) 2.dp else Tokens.Stroke.card.dp, if (flash || p?.realigned == true) Ink.accent else Ink.border, shape)
-            .clickable(role = Role.Button, onClick = open).padding(horizontal = 14.dp)
+            .clickable(role = Role.Button, onClick = open).padding(horizontal = 14.dp, vertical = 12.dp)
             .semantics { contentDescription = if (p != null) "Bar ${p.bar + 1}, beat ${p.beatInBar + 1}, $bpm beats per minute. Opens Buffer." else if (grid == null) "Working out the beats, $working percent" else "No steady beat" },
-        verticalAlignment = Alignment.CenterVertically,
+        verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Column(Modifier.width(64.dp)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             // For two bars after the bar start moved (a DJ mixed the next record in off the bar), the label says so, in accent.
-            BasicText(if (grid == null) "BEATS" else if (p?.realigned == true) "BAR ↻" else "BAR", style = Tokens.Text.cardLabel.style(if (p?.realigned == true) Ink.accent else Ink.textSecondary).copy(fontSize = 10.sp))
-            BasicText(if (grid == null) "$working%" else p?.let { "${it.bar + 1}" } ?: "—", style = Tokens.Text.value.style().copy(fontSize = 18.sp))
-        }
-        Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-            for (i in 0..3) BeatCell(i, p, Modifier.weight(if (i == 0) 1.35f else 1f))
-        }
-        Column(Modifier.width(74.dp), horizontalAlignment = Alignment.End) {
-            if (p == null) BasicText(if (grid == null) "working\nthem out" else "no steady\nbeat", style = Tokens.Text.small.style(Ink.textSecondary).copy(textAlign = TextAlign.End, fontSize = 11.sp))
+            BasicText(if (grid == null) "BEATS" else if (p?.realigned == true) "BAR ↻" else "BAR", style = Tokens.Text.cardLabel.style(if (p?.realigned == true) Ink.accent else Ink.textSecondary).copy(fontSize = 9.5.sp))
+            Spacer(Modifier.width(8.dp))
+            BasicText(if (grid == null) "$working%" else p?.let { "${it.bar + 1}" } ?: "—", style = Tokens.Text.value.style().copy(fontSize = 14.sp))
+            Spacer(Modifier.weight(1f))
+            if (p == null) BasicText(if (grid == null) "working them out" else "no steady beat", style = Tokens.Text.small.style(Ink.textSecondary).copy(fontSize = 11.sp))
             else {
-                BasicText("BPM", style = Tokens.Text.cardLabel.style().copy(fontSize = 10.sp))
-                BasicText("$bpm", style = Tokens.Text.value.style(if (p.bar == seen.accentBar) Ink.accent else Ink.text).copy(fontSize = 18.sp))
+                BasicText("BPM", style = Tokens.Text.cardLabel.style().copy(fontSize = 9.5.sp))
+                Spacer(Modifier.width(8.dp))
+                BasicText("$bpm", style = Tokens.Text.value.style(if (p.bar == seen.accentBar) Ink.accent else Ink.text).copy(fontSize = 14.sp))
             }
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+            for (i in 0..3) BeatCell(i, p, Modifier.weight(if (i == 0) 1.35f else 1f))
         }
     }
 }
@@ -90,7 +92,7 @@ private fun BeatCell(i: Int, p: org.beachsync.proto.SetBeats.Pos?, modifier: Mod
     val played = p != null && i < p.beatInBar
     val r = 7.dp
     Box(
-        modifier.height(34.dp).drawBehind {
+        modifier.height(44.dp).drawBehind {
             val cr = CornerRadius(r.toPx())
             when {
                 p == null -> drawRoundRect(Ink.faint, cornerRadius = cr, style = Stroke(1.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 3.dp.toPx()))))
