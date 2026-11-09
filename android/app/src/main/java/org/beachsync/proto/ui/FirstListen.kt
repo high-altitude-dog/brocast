@@ -207,7 +207,9 @@ fun MeshCard(v: MeshView, openSwarm: () -> Unit) {
             }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                for ((label, value) in listOf("Connected" to connected, "In" to inLine, "Passed on" to passed)) Row {
+                // Hand-off 53: Helped replaces Passed on once someone has had a minute from you today (bytes move to Swarm's tiles).
+                val helped = helpedLine(androidx.compose.ui.platform.LocalContext.current, v)
+                for ((label, value) in listOf("Connected" to connected, "In" to inLine, if (helped != null) "Helped" to helped else "Passed on" to passed)) Row {
                     BasicText(label, Modifier.width(76.dp), Tokens.Text.small.style(Ink.textSecondary))
                     BasicText(value, style = Tokens.Text.small.style())
                 }

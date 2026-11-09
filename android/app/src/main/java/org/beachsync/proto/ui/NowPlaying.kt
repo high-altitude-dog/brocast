@@ -153,6 +153,7 @@ fun NowPlaying(state: BenchState, actions: BenchActions, openLog: () -> Unit, op
         SyncCard(s, boot, lagUncNs, out.kind.label.lowercase(), out.external, openSignals)
         NudgeRow(state, openNudge, SECOND_MS)
         mesh?.let { MeshCard(it, openSwarm) }
+        mesh?.let { ReactionTray(it, state.library) }
         Row(Modifier.fillMaxWidth().height(IntrinsicTile), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             val gpsNow = s?.gps ?: state.idleGps
             val gold = when (gpsNow?.gold) { true -> "Gold · "; false -> "Silver · "; null -> "" }
@@ -166,6 +167,7 @@ fun NowPlaying(state: BenchState, actions: BenchActions, openLog: () -> Unit, op
     ChannelOverlays(chUi, state, actions)
     OrderNews.toast?.let { Toast(it.first, null, {}, Modifier.align(Alignment.BottomCenter)) }
     NewsToast()
+    ThankYouNote()
     StationColour.toast?.let { (text, _) ->
         // Station colour change (hand-off 43): at the top, a dot in the new colour.
         Row(Modifier.align(Alignment.TopCenter).fillMaxWidth().safeDrawingPadding().padding(16.dp).background(Ink.surface, androidx.compose.foundation.shape.RoundedCornerShape(14.dp)).border(1.dp, Ink.accent, androidx.compose.foundation.shape.RoundedCornerShape(14.dp)).padding(14.dp), verticalAlignment = Alignment.CenterVertically) {

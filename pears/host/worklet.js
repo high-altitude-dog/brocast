@@ -16,7 +16,7 @@ import { hedge } from '../engine/hedge.js'
 import { nymFrom, nymProof, nymText } from '../engine/nym.js'
 import { PACKETS } from '../engine/blocks.js'
 
-const CMD = { hello: 1, start: 2, subscribe: 3, status: 4, stop: 5, block: 6, prefs: 7 }
+const CMD = { hello: 1, start: 2, subscribe: 3, status: 4, stop: 5, block: 6, prefs: 7, react: 8 }
 const EV = { status: 100, built: 102, warning: 103, fatal: 104, catalog: 105 }
 
 const t0 = Date.now()
@@ -64,6 +64,9 @@ rpc = new RPC(Bare.IPC, async (req) => {
       if ('showCountry' in body) run.mesh.setShowCountry(body.showCountry)
       if (Array.isArray(body.blocked)) run.mesh.setBlocked(body.blocked.map(String))
       return reply({})
+    case CMD.react: // a silent reaction from this listener (hand-off 53)
+      if (!run) refuse('NOT_STARTED', 'start first')
+      return reply({ sent: run.mesh.react(body.e | 0) })
     case CMD.stop:
       if (run) await run.stop()
       reply({})
@@ -102,6 +105,9 @@ class Run {
     if (count) this.mesh.sketch.add(pk, 0)
     this.mesh.setShowCountry(showCountry)
     this.mesh.setBlocked(blocked)
+    // Silent reactions (hand-off 53): the last minute's, summed per emoji; the newest few with their sender's short key, for Swarm's pulses.
+    this.reactions = []
+    this.mesh.onreaction = (k, e, mine) => { this.reactions.push({ k: k.slice(0, 8), e, at: Date.now(), mine }); if (this.reactions.length > 5000) this.reactions.splice(0, 1000) }
     // The hello (hand-off 46): this phone's nym proof, app and engine versions, and how much of the library it holds, refreshed every 10 s.
     this.helloBase = { shuffle: 0, proof: hex(nymProof(this.mesh.keyPair.secretKey, 0)), app: String(app).slice(0, 32), engine: String(ENGINE.version) }
     this.mesh.setHello({ ...this.helloBase, heldPct: null })
@@ -237,6 +243,15 @@ class Run {
     return { nym: i?.nym ?? null, verified: i?.verified ?? false, app: i?.app ?? null, engineVersion: i?.engine ?? null, heldPct: i?.heldPct ?? null, rttMs: Number.isFinite(rtt) ? Math.round(rtt) : null, connectedAt: this.mesh.connectedAt.get(k) ?? null }
   }
 
+  /** The last minute's reactions per emoji, and the last 5 s individually (short key, emoji, how long ago in ms). */
+  reactionSummary () {
+    const t = Date.now()
+    this.reactions = this.reactions.filter((r) => t - r.at < 60000)
+    const counts = [0, 0, 0, 0, 0, 0]
+    for (const r of this.reactions) counts[r.e]++
+    return { counts, recent: this.reactions.filter((r) => t - r.at < 5000).map((r) => ({ k: r.k, e: r.e, ago: t - r.at, mine: r.mine })) }
+  }
+
   /** A subset of the status snapshot of docs/engine-api.md §6. */
   snapshot () {
     const wire = this.mesh.wire()
@@ -271,6 +286,7 @@ class Run {
       engine: { version: ENGINE.version, api: 1, wire: ENGINE.wire, storage: ENGINE.storage },
       me: { publicKey: hex(this.mesh.keyPair.publicKey), nym: this.nym, showCountry: this.mesh.showCountry },
       countries: this.countries ? { source: 'DB-IP ' + this.countries.source } : null,
+      reactions: this.reactionSummary(),
       listeners: { estimate: this.mesh.sketch.estimate() },
       phase: this.phase,
       sharing: this.share,

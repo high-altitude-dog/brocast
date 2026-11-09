@@ -34,6 +34,9 @@ import kotlin.math.roundToLong
  * One live peer, from the engine's status. [path] is lan, direct, punched or relayed (null if not yet known). [country] (hand-off 38) is an
  * ISO code, `hidden` (the peer doesn't allow it) or `unknown` (relayed, or not in the table); null from an engine that doesn't say.
  */
+/** One reaction as the engine saw it: the sender's short key, the emoji (0–5), how long ago in ms, and whether it was this phone's. */
+class Reaction(val key8: String, val emoji: Int, val agoMs: Long, val mine: Boolean)
+
 class MeshPeer(
     val key: String, val station: Boolean, val path: String?, val toYouKbps: Int, val fromYouKbps: Int, val country: String? = null, val rxBytes: Long = 0L,
     // Swarm listener details (hand-off 46): their nym once its signature checks out, versions and holding from their hello, round trip, when they connected.
@@ -57,7 +60,9 @@ class MeshMoments(
 }
 
 /** What the screens show of the mesh, parsed once per status (once a second). Null while the engine isn't running. */
-class MeshView(val nym: String, val listeners: Int, val peers: List<MeshPeer>, val foundNotConnected: Int, val upBytes: Long, val downBytes: Long, val sharing: Boolean, val counted: Boolean = true, val moments: MeshMoments? = null, val countrySource: String? = null) {
+class MeshView(val nym: String, val listeners: Int, val peers: List<MeshPeer>, val foundNotConnected: Int, val upBytes: Long, val downBytes: Long, val sharing: Boolean, val counted: Boolean = true, val moments: MeshMoments? = null, val countrySource: String? = null,
+    /** Silent reactions (hand-off 53): the last minute's count per emoji, and the last 5 s one by one. */
+    val reactCounts: IntArray = IntArray(6), val reactRecent: List<Reaction> = emptyList()) {
     val stations get() = peers.filter { it.station }
     val listenerPeers get() = peers.filter { !it.station }
     /** Other listeners: the estimate counts this phone too unless it's switched out of the count. */
@@ -80,6 +85,8 @@ class MeshView(val nym: String, val listeners: Int, val peers: List<MeshPeer>, v
                 s.optJSONObject("me")?.optString("nym").orEmpty(), s.optJSONObject("listeners")?.optInt("estimate") ?: 0, peers,
                 sw?.optInt("foundNotConnected") ?: 0, today?.optLong("upBytes") ?: 0L, today?.optLong("downBytes") ?: 0L, sharing, counted, moments,
                 s.optJSONObject("countries")?.optString("source")?.ifEmpty { null },
+                s.optJSONObject("reactions")?.optJSONArray("counts")?.let { a -> IntArray(6) { a.optInt(it) } } ?: IntArray(6),
+                s.optJSONObject("reactions")?.optJSONArray("recent")?.let { a -> (0 until a.length()).map { i -> a.getJSONObject(i).let { r -> Reaction(r.optString("k"), r.optInt("e"), r.optLong("ago"), r.optBoolean("mine")) } } }.orEmpty(),
             )
         }
     }
@@ -183,7 +190,7 @@ object PearsEngine {
     private fun onEvent(ev: Int, body: ByteArray) {
         val text = String(body)
         when (ev) {
-            EV_STATUS -> JSONObject(text).let { s -> status = s; view = MeshView.of(s, sharing, counted, moments(s)); library?.meshProgress(s) }
+            EV_STATUS -> JSONObject(text).let { s -> status = s; view = MeshView.of(s, sharing, counted, moments(s)); library?.meshProgress(s); app?.let { a -> view?.let { v -> KeptLedger.update(a, v, library) } } }
             EV_CATALOG -> JSONObject(text).optJSONObject("library")?.let { library?.fromMesh(it.toString()) }
             EV_BUILT -> library?.meshBuilt()
             EV_WARNING -> Log.w("BeachSync", "Mesh: $text")
@@ -279,6 +286,11 @@ object PearsEngine {
 
     private fun appVersion(ctx: Context) = "Brocast " + runCatching { ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName }.getOrNull().orEmpty()
 
+    /** Sends a silent reaction (0–5) over the mesh. The engine refuses one sooner than 3 s after the last. */
+    fun react(emoji: Int) {
+        if (worklet != null) call(CMD_REACT, JSONObject().put("e", emoji)) {}
+    }
+
     fun setShowCountry(on: Boolean) {
         showCountry = on
         if (worklet != null) call(CMD_PREFS, JSONObject().put("showCountry", on)) {}
@@ -334,6 +346,7 @@ object PearsEngine {
     private const val CMD_STOP = 5
     private const val CMD_BLOCK = 6
     private const val CMD_PREFS = 7
+    private const val CMD_REACT = 8
     private const val EV_STATUS = 100
     private const val EV_BUILT = 102
     private const val EV_WARNING = 103

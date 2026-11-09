@@ -37,10 +37,14 @@ fun SettingsPage(state: BenchState, actions: BenchActions, back: () -> Unit, ope
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         ScreenHeader("Settings", back)
+        val ctx = androidx.compose.ui.platform.LocalContext.current
+        androidx.compose.runtime.LaunchedEffect(Unit) { ReactPrefs.load(ctx) }
         BasicText("LISTENING", Modifier.padding(top = 6.dp), Tokens.Text.cardLabel.style())
         Card {
             SatellitesRow(state.satellites, actions::setSatellites, "GPS time only · your position stays on this phone")
             SwitchRow("Be counted as a listener", "Adds you to the listener estimate · off: you still listen and share", state.counted, actions::setCounted)
+            SwitchRow("Show reactions", "Counts and floating emoji from other listeners", ReactPrefs.show) { ReactPrefs.set(ctx, show = it) }
+            SwitchRow("Send reactions", "Off hides the tray on Now playing", ReactPrefs.send) { ReactPrefs.set(ctx, send = it) }
             SwitchRow("Show my country", "Others may see it from your internet address · off by default", state.showCountry, actions::setShowCountry)
             Column(Modifier.fillMaxWidth().heightIn(min = Tokens.Space.touchTarget.dp).clickable(role = Role.Button, onClick = openNews), Arrangement.Center) {
                 BasicText("News on the headphone button", style = Tokens.Text.bodyStrong.style())
@@ -81,7 +85,6 @@ fun SettingsPage(state: BenchState, actions: BenchActions, back: () -> Unit, ope
                 SatellitesSwitch(state.localTime)
             }
         }
-        val ctx = androidx.compose.ui.platform.LocalContext.current
         androidx.compose.runtime.LaunchedEffect(Unit) { ScreenPrefs.load(ctx) }
         Card {
             Column(Modifier.fillMaxWidth().heightIn(min = Tokens.Space.touchTarget.dp).clickable(role = Role.Button, onClick = openTestCard), Arrangement.Center) {
@@ -119,6 +122,7 @@ fun SettingsPage(state: BenchState, actions: BenchActions, back: () -> Unit, ope
                 else BasicText("Undo", Modifier.clickable(role = Role.Button) { org.beachsync.proto.PearsEngine.setBlocked(ctx, undo); undo = emptySet() }.padding(10.dp), Tokens.Text.body.style(Ink.accent))
             }
         }
+        Card { SwitchRow("Thank-you notes", "Once a day, after you've kept someone listening an hour", ReactPrefs.thanks) { ReactPrefs.set(ctx, thanks = it) } }
         Card {
             BasicText("DEMO: nothing here reaches a mesh yet", style = Tokens.Text.cardLabel.style(Ink.warn))
             SwitchRow("Share with other listeners", "On Wi-Fi as your profile allows · never on mobile data unless you choose", DemoSharing.shareOn) { DemoSharing.shareOn = it }

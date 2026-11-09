@@ -66,6 +66,12 @@ export class Mesh {
     this.blocked = new Set()
     this.helloChannels = new Set()
     this.closedWire = { rx: 0, tx: 0, packetsRx: 0, packetsTx: 0, retransmits: 0 }
+    // Silent reactions (hand-off 53): six emoji, signed by the sender, passed on at most 3 hops. Each id is handled once; a sender faster than
+    // one every 3 s is ignored for a minute; blocked senders are dropped. Nothing is kept per sender beyond that rate check.
+    this.reactChannels = new Set()
+    this.reactSeen = new Map()
+    this.reactLast = new Map()
+    this.onreaction = null
     this.swarm.on('connection', (conn) => this._onconnection(conn))
   }
 
@@ -162,6 +168,12 @@ export class Mesh {
       hc.open()
       this.helloChannels.add(hc)
     }
+    const rc = Protomux.from(conn).createChannel({ protocol: 'brocast/react/1', onclose: () => this.reactChannels.delete(rc) })
+    if (rc) {
+      rc.reactMsg = rc.addMessage({ encoding: c.json, onmessage: (m) => this._reaction(m, rc) })
+      rc.open()
+      this.reactChannels.add(rc)
+    }
     if (!this.relaySketch) return
     const ch = Protomux.from(conn).createChannel({ protocol: 'brocast/sketch/1', onclose: () => this.channels.delete(ch) })
     if (!ch) return
@@ -186,6 +198,40 @@ export class Mesh {
   rttMs (key) {
     for (const conn of this.swarm.connections) if (hex(conn.remotePublicKey) === key) return conn.rawStream?.rtt ?? null
     return null
+  }
+
+  /** Sends one reaction (0–5) from this node: signed with its key, to every peer. */
+  react (e) {
+    if (!Number.isInteger(e) || e < 0 || e > 5) return false
+    const k = hex(this.keyPair.publicKey)
+    const t = Date.now()
+    const last = this.reactLast.get(k)
+    if (last && t - last.at < 3000) return false
+    this.reactLast.set(k, { at: t, muted: 0 })
+    const m = { k, e, t, h: 0, s: hex(crypto.sign(reactBody(k, e, t), this.keyPair.secretKey)) }
+    this.reactSeen.set(k + ':' + t, t)
+    if (this.onreaction) this.onreaction(k, e, true)
+    for (const ch of this.reactChannels) ch.reactMsg.send(m)
+    return true
+  }
+
+  _reaction (m, from) {
+    const t = Date.now()
+    if (!m || typeof m.k !== 'string' || !/^[0-9a-f]{64}$/.test(m.k) || !Number.isInteger(m.e) || m.e < 0 || m.e > 5) return
+    if (!Number.isFinite(m.t) || Math.abs(t - m.t) > 600000 || !Number.isInteger(m.h) || m.h < 0 || m.h > 3) return
+    const id = m.k + ':' + m.t
+    if (this.reactSeen.has(id)) return
+    if (this.reactSeen.size > 4000) for (const [x, at] of this.reactSeen) if (t - at > 120000) this.reactSeen.delete(x)
+    this.reactSeen.set(id, t)
+    if (this.blocked.has(m.k)) return
+    const last = this.reactLast.get(m.k)
+    if (last && last.muted > t) return
+    if (last && m.t - last.sent < 2800) { last.muted = t + 60000; return }
+    try { if (!crypto.verify(reactBody(m.k, m.e, m.t), b4a.from(String(m.s), 'hex'), b4a.from(m.k, 'hex'))) return } catch { return }
+    this.reactLast.set(m.k, { at: t, sent: m.t, muted: 0 })
+    if (this.reactLast.size > 4000) for (const [x, v] of this.reactLast) if (t - v.at > 120000) this.reactLast.delete(x)
+    if (this.onreaction) this.onreaction(m.k, m.e, false)
+    if (m.h < 3) for (const ch of this.reactChannels) if (ch !== from) ch.reactMsg.send({ ...m, h: m.h + 1 })
   }
 
   /** Changes this node's Show-my-country flag and tells every peer at once. */
@@ -214,3 +260,6 @@ export class Mesh {
     await this.store.close()
   }
 }
+
+/** What a reaction's signature covers: sender, emoji and time. */
+function reactBody (k, e, t) { return b4a.from('brocast/react/1:' + k + ':' + e + ':' + t) }

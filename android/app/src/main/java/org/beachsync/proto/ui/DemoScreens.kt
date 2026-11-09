@@ -180,6 +180,7 @@ fun SwarmScreen(back: () -> Unit) {
         peers.filter { it.key in shown }
     }
     val rest = peers.filter { it !in drawn }
+    val reacting = pulses(live)
     val top3 = drawn.sortedByDescending { rateOf(it.key) }.take(3).map { it.key }.toSet()
     val maxRate = drawn.maxOfOrNull { rateOf(it.key) }?.coerceAtLeast(1f) ?: 1f
     Box(Modifier.fillMaxSize()) {
@@ -266,6 +267,11 @@ fun SwarmScreen(back: () -> Unit) {
                 label(p.key.take(4), pos.x, pos.y + node + 13.dp.toPx(), 9f, Ink.textSecondary)
                 p.full?.let { f -> nodeHits.add(f.key to pos); if (f.key == openKey) { drawCircle(Ink.text, node + 6.dp.toPx(), pos, style = Stroke(2.dp.toPx())); drawCircle(Ink.text.copy(alpha = 0.3f), node + 11.dp.toPx(), pos, style = Stroke(1.dp.toPx())) } }
                 if (p.lan) label("same Wi-Fi", pos.x, pos.y - node - 6.dp.toPx(), 9f, Ink.accent)   // above the peer, clear of your halo
+                // A reaction from them (hand-off 53): a ring and a small emoji floating up for about a second.
+                reacting[p.key.take(8)]?.let { (e, t) ->
+                    drawCircle(Ink.accent.copy(alpha = 1f - t), node + (4 + 14 * t).dp.toPx(), pos, style = Stroke(1.5.dp.toPx()))
+                    label(EMOJI[e], pos.x, pos.y - node - (10 + 24 * t).dp.toPx(), 13f, Ink.text)
+                }
             }
             if (rest.isNotEmpty()) {
                 // +N: everyone not drawn, as one dashed node with their total rate.
@@ -281,6 +287,7 @@ fun SwarmScreen(back: () -> Unit) {
             drawCircle(Ink.accent, (if (sparse) 15 else 12).dp.toPx(), me)
             label("YOU", me.x, me.y + (if (sparse) 36 else 30).dp.toPx(), 9f, Ink.text)
         }
+        live?.let { KeptHeadline(it) }
         // One line in words for the sparse states and the all-relayed one (hand-offs 35 and 36).
         if (live != null) {
             val sentence = when {
