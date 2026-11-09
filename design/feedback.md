@@ -438,3 +438,15 @@ Compose Canvas with a plain perspective camera, no GL. Built: dome on the curved
 - No momentum on release; one-finger up/down drag is left to the page scroll.
 - The screen-reader list under the view isn't built; the view has the one-line summary.
 - The map waits for a position fix ("map waits for a position fix" chip); the position stays in memory only.
+
+## 8 Nov: Satellites in 3D, re-work please (user)
+
+The user has seen h42 as built (`dd0e9d5`) on the phones and says it doesn't look great yet. Please redesign:
+
+1. **The globe overflows the box.** Make the 3D box bigger (taller, and full width if that helps), so the Earth sits inside it at every zoom level.
+2. **The dome looks far smaller than the Earth,** so the satellites seem to orbit into the Earth. As built, the dome radius is 0.55 × the Earth's radius, with you on top. Please set the dome size and camera so the sky clearly sits above the Earth's surface. You choose how.
+3. **Too many lines.** Today every satellite in view gets its orbit line (user change after h42, replacing the lines from you). User idea: show one orbit at a time. Pick a satellite at random, show its orbit, switch to another every few seconds, and stop once the user taps a satellite (then show only that one's orbit). Please design the switch (fade, the label on the one shown, how long each stays) and what happens on ×.
+4. **Move "YOUR SKY" (level chip) and "dome not to scale" out of the box,** beneath it.
+
+Unchanged from the user's earlier changes: no automatic switch to Flat (Flat only from its switch), no snap after pinch or turn (the user keeps the angle and zoom they chose), country flags on the card, Galileo shown as United Kingdom and Germany.
+Engineering limits stay as in "hand-off 42 as built": the orbit plane is inferred from the system's tilt and whether the satellite is heading north or south (it may flip once in the first minute), and there's no almanac, so only satellites in view can be drawn.
