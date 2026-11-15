@@ -34,19 +34,17 @@ for d in sorted(os.listdir(root)):
         continue
     if meta.get("status") != "ready" or meta.get("title") == %r:
         continue
-    pcm = os.path.join(root, d, "audio.pcm")
-    size = os.path.getsize(pcm)
-    want = %d * 192000
-    if size < want:
+    # 10 s from the middle, decoded from the set's own Opus file (no uncompressed copy is kept, user 15 Nov).
+    seconds = meta.get("frames", 0) / 48000
+    if seconds < %d:
         continue
     names.append(meta.get("title") or d)
-    with open(pcm, "rb") as f:
-        f.seek(((size - want) // 2) // 4 * 4)
-        out.write(f.read(want))
+    out.write(subprocess.run(["ffmpeg", "-v", "error", "-ss", str((seconds - %d) / 2), "-t", str(%d), "-i", os.path.join(root, d, "set.opus"),
+                              "-f", "s16le", "-ac", "2", "-ar", "48000", "-"], check=True, capture_output=True).stdout[:%d * 192000].ljust(%d * 192000, b"\\0"))
 enc.stdin.close()
 enc.wait()
 print(json.dumps(names), file=sys.stderr)
-""" % (TITLE, SECONDS)
+""" % (TITLE, SECONDS, SECONDS, SECONDS, SECONDS, SECONDS)
 
 
 def call(admin, path, method="GET", data=None, headers=None):

@@ -69,12 +69,13 @@ private fun initials(text: String): String =
 
 /** A 52 px artist photo beside the title; with no photo yet, the artist's initials. Opens the full-screen viewer. */
 @Composable
-internal fun ArtistThumb(lib: LibraryStore?, item: LibraryItem?, open: () -> Unit) {
-    val photo = rememberPhoto(item?.let { lib?.photo(it.id) }, 200)
-    val shape = RoundedCornerShape(10.dp)
+internal fun ArtistThumb(lib: LibraryStore?, item: LibraryItem?, size: androidx.compose.ui.unit.Dp = 52.dp, open: () -> Unit) {
+    val pf = item?.let { lib?.photo(it.id) }
+    val photo = rememberPhoto(pf, 320)
+    val shape = RoundedCornerShape(if (size > 60.dp) 12.dp else 10.dp)
     val label = item?.artist?.ifEmpty { null } ?: item?.title ?: "Artist"
     Box(
-        Modifier.size(52.dp).clip(shape).background(Ink.surface, shape).border(Tokens.Stroke.card.dp, Ink.border, shape)
+        Modifier.size(size).clip(shape).background(Ink.surface, shape).border(Tokens.Stroke.card.dp, Ink.border, shape)
             .clickable(enabled = item != null, role = Role.Button, onClick = open).semantics { contentDescription = "Photo of $label. Opens full screen." },
         Alignment.Center,
     ) {
@@ -106,6 +107,10 @@ fun ArtistPhotoScreen(state: BenchState, itemId: String? = null, back: () -> Uni
         Column(Modifier.align(Alignment.BottomStart).fillMaxWidth().safeDrawingPadding().padding(20.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             if (item?.id == playing?.id) BasicText("NOW PLAYING", style = Tokens.Text.eyebrow.style(Color.White.copy(alpha = 0.7f)))
             BasicText(item?.artist?.ifEmpty { null } ?: item?.title ?: "", style = Tokens.Text.screenTitle.style(Color.White).copy(fontSize = 30.sp), maxLines = 2, overflow = TextOverflow.Ellipsis)
+            // Where the artist is from (hand-off 56): flag and country name, nothing when unknown.
+            item?.let { lib?.artistOf(it.id) }?.second?.takeIf { it.isNotEmpty() }?.let { cs ->
+                BasicText(cs.joinToString("  ") { org.beachsync.proto.flagOf(it) + " " + java.util.Locale("", it).getDisplayCountry(java.util.Locale.UK) }, style = Tokens.Text.body.style(Color.White.copy(alpha = 0.85f)))
+            }
             if (item?.artist?.isNotEmpty() == true) BasicText(item.title, style = Tokens.Text.body.style(Color.White.copy(alpha = 0.8f)), maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
     }

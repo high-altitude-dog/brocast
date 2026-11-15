@@ -100,6 +100,16 @@ class FileAudio:
         os.close(self.fd)
 
 
+class Silence:
+    """Only a length: the stream sends Opus blocks, so no audio is read here."""
+
+    def __init__(self, frames: int):
+        self.frames = frames
+
+    def read(self, frame: int, count: int) -> bytes:
+        return bytes(count * BYTES_PER_FRAME)
+
+
 class OpusBlocks:
     """A 20 ms Ogg Opus file as 1 s blocks, read from disk as needed. Only an index sits in memory.
     A block is each packet in turn as a little-endian 2-byte length and its bytes."""
@@ -238,7 +248,9 @@ class LibraryStream:
             with open(path) as f:
                 air = json.load(f)
             folder = os.path.join(self.directory, "sets", air["id"])
-            audio = FileAudio(os.path.join(folder, "audio.pcm"))
+            # The set's length from its details: the uncompressed copy is no longer kept (user, 15 Nov).
+            with open(os.path.join(folder, "meta.json")) as f:
+                audio = Silence(int(json.load(f)["frames"]))
             if audio.frames < SEG:
                 raise ValueError("too short")
             try:
@@ -267,7 +279,44 @@ class LibraryStream:
 FILE_ID = re.compile(r"^[0-9a-f]{32}$")
 
 
-def make_handler(stream):
+class BarFixes:
+    """Listeners' bar-1 corrections (user, 15 Nov), shared with every phone and kept to tune the bar finder. One file, in a small
+    writable volume: for each set, the stretches of windows a listener marked, the beat that is really bar 1 there, and the grid version
+    they were made on (phones work out the same grid from the same file). The newest correction of a stretch wins."""
+
+    MAX_SETS = 2000
+    MAX_PER_SET = 200
+
+    def __init__(self, path: str | None):
+        self.path = path
+        self.lock = threading.Lock()
+        self.data = {}
+        if path:
+            try:
+                with open(path) as f:
+                    self.data = json.load(f)
+            except (OSError, ValueError):
+                self.data = {}
+
+    def add(self, set_id: str, grid: str, start: int, end: int, shift: int):
+        with self.lock:
+            fixes = [x for x in self.data.get(set_id, []) if x["grid"] != grid or x["to"] < start or x["from"] > end]
+            fixes.append({"from": start, "to": end, "shift": shift, "grid": grid, "at": int(time.time())})
+            if set_id not in self.data and len(self.data) >= self.MAX_SETS:
+                raise ValueError("too many sets")
+            self.data[set_id] = fixes[-self.MAX_PER_SET:]
+            if self.path:
+                temp = self.path + ".tmp"
+                with open(temp, "w") as f:
+                    json.dump(self.data, f)
+                os.replace(temp, self.path)
+
+    def body(self) -> bytes:
+        with self.lock:
+            return json.dumps(self.data).encode()
+
+
+def make_handler(stream, fixes: BarFixes | None = None):
     class Handler(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
 
@@ -313,8 +362,30 @@ def make_handler(stream):
                     self.wfile.write(chunk)
                     left -= len(chunk)
 
+        def do_POST(self):
+            # A listener's bar-1 correction: /barfix?set=<id>&grid=<version>&from=<window>&to=<window>&shift=<0-3>. Nothing else is accepted.
+            from urllib.parse import parse_qs, urlparse
+            url = urlparse(self.path)
+            q = {k: v[0] for k, v in parse_qs(url.query).items()}
+            try:
+                if url.path != "/barfix" or fixes is None:
+                    raise KeyError
+                set_id, grid = q["set"], q["grid"]
+                start, end, shift = int(q["from"]), int(q["to"]), int(q["shift"])
+                if not FILE_ID.match(set_id) or not re.fullmatch(r"beats \d{1,3}", grid) or not 0 <= start <= end < 100000 or not 0 <= shift <= 3:
+                    raise ValueError
+                fixes.add(set_id, grid, start, end, shift)
+                self.send(200, b"{}", "application/json", "no-store")
+            except KeyError:
+                self.send(404, b"not found", "text/plain", "no-store")
+            except ValueError:
+                self.send(400, b"bad correction", "text/plain", "no-store")
+
         def do_GET(self):
             path = self.path.split("?")[0]
+            if path == "/barfixes.json" and fixes is not None:
+                self.send(200, fixes.body(), "application/json", "no-store")
+                return
             if path == "/manifest.json":
                 self.send(200, json.dumps(stream.manifest()).encode(), "application/json", "no-store")
                 return
@@ -378,6 +449,7 @@ def main():
     p.add_argument("--port", type=int, default=8080)
     p.add_argument("--bind", default="0.0.0.0", help="address to listen on (default all)")
     p.add_argument("--d-ms", type=int, default=60000, help="playout delay D advertised to phones (ms)")
+    p.add_argument("--fixes", help="writable file for listeners' bar-1 corrections (shared with every phone)")
     p.add_argument("--library", help="folder from the upload page: play what's on air there, or the source above when nothing is")
     a = p.parse_args()
     if a.clicks:
@@ -389,7 +461,7 @@ def main():
     stream = Stream(MemoryAudio(pcm), a.d_ms, label, opus=encode_opus(pcm))
     if a.library:
         stream = LibraryStream(a.library, a.d_ms, stream)
-    srv =ThreadingHTTPServer((a.bind, a.port), make_handler(stream))
+    srv =ThreadingHTTPServer((a.bind, a.port), make_handler(stream, BarFixes(a.fixes) if a.fixes else None))
     print(f"D = {a.d_ms} ms, serving on {a.bind}:{a.port}  (Ctrl-C to stop)")
     t = threading.Thread(target=srv.serve_forever, daemon=True)
     t.start()

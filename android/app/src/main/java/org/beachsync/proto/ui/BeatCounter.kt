@@ -9,6 +9,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
@@ -48,7 +50,35 @@ fun BeatCounter(state: BenchState, open: () -> Unit) {
     val n = Math.floorDiv(Math.floor(pos).toLong(), 48000L)
     val (item, block) = segmentAt(lib.editions, n) ?: return
     val grid = lib.beats(item.id)
-    val p = grid?.at(block * 48000.0 + (pos - n * 48000.0))
+    val sample = block * 48000.0 + (pos - n * 48000.0)
+    val p = grid?.at(sample)
+    // Mark bar 1 (user, 15 Nov): press and hold the card, then tap 8 times, once on each bar's first beat. Each tap snaps to the nearest
+    // beat; if at least 6 land on the same beat of the grid's bar, one bar apart, that beat becomes bar 1 from the last change in the music
+    // to the next. 8 taps that agree can't come from a pocket.
+    val mark = remember { object { var on by mutableStateOf(false); var taps by mutableStateOf(listOf<Triple<Int, Long, Int>>()); var lastAt = 0L; var note by mutableStateOf<Pair<String, Long>?>(null) } }
+    val nowMs = android.os.SystemClock.uptimeMillis()
+    if (mark.on && mark.taps.isNotEmpty() && nowMs - mark.lastAt > 6000) { mark.on = false; mark.taps = emptyList(); mark.note = "Marking stopped: no tap for 6 s" to nowMs }
+    fun tap() {
+        val g = lib.beats(item.id) ?: return
+        val f = Session.nowBoot().let { fit.utcAt(it) }
+        val ps = (f - m.startNs - m.dMs * 1_000_000L).toDouble() * 48000.0 / 1e9
+        val nn = Math.floorDiv(Math.floor(ps).toLong(), 48000L)
+        val (it2, bl) = segmentAt(lib.editions, nn) ?: return
+        if (it2.id != item.id) return
+        val smp = bl * 48000.0 + (ps - nn * 48000.0)
+        val raw = g.at(smp, false) ?: return
+        val up = raw.beatFrac >= 0.5
+        val beat = if (up) (raw.beatInBar + 1) % 4 else raw.beatInBar
+        val bar = raw.bar + if (up && raw.beatInBar == 3) 1 else 0
+        mark.taps = mark.taps + Triple(beat, bar, g.windowOf(smp)); mark.lastAt = android.os.SystemClock.uptimeMillis()
+        if (mark.taps.size < 8) return
+        val taps = mark.taps; mark.on = false; mark.taps = emptyList()
+        val (b, hits) = taps.groupingBy { it.first }.eachCount().maxBy { it.value }
+        val on = taps.filter { it.first == b }
+        val steady = on.zipWithNext().all { (x, y) -> y.second - x.second in 1..2 }
+        mark.note = (if (hits < 6 || !steady) "The taps didn't line up with one beat. Try again: one tap on each bar's first beat"
+        else { lib.addBarFix(item.id, taps.last().third, b); if (b == 0) "Bar 1 was already right here. Thank you" else "Bar 1 moved to what was beat ${b + 1}, until the music next changes" }) to android.os.SystemClock.uptimeMillis()
+    }
     // A new tempo shows in accent for one bar.
     val seen = remember { object { var bpm = 0; var accentBar = Long.MIN_VALUE } }
     val bpm = p?.bpm?.roundToInt() ?: 0
@@ -63,8 +93,9 @@ fun BeatCounter(state: BenchState, open: () -> Unit) {
     Column(
         Modifier.fillMaxWidth().background(Ink.surface, shape)
             .border(if (flash || p?.realigned == true) 2.dp else Tokens.Stroke.card.dp, if (flash || p?.realigned == true) Ink.accent else Ink.border, shape)
-            .clickable(role = Role.Button, onClick = open).padding(horizontal = 14.dp, vertical = 12.dp)
-            .semantics { contentDescription = if (p != null) "Bar ${p.bar + 1}, beat ${p.beatInBar + 1}, $bpm beats per minute. Opens Buffer." else if (grid == null) "Working out the beats, $working percent" else "No steady beat" },
+            .pointerInput(item.id) { detectTapGestures(onLongPress = { if (lib.beats(item.id) != null) { mark.on = true; mark.taps = emptyList(); mark.note = null } }, onTap = { if (mark.on) tap() else mark.note = "Press and hold to mark bar 1. Buffer is on the AHEAD tile" to android.os.SystemClock.uptimeMillis() }) }
+            .padding(horizontal = 14.dp, vertical = 12.dp)
+            .semantics { contentDescription = if (p != null) "Bar ${p.bar + 1}, beat ${p.beatInBar + 1}, $bpm beats per minute. Press and hold to mark bar 1." else if (grid == null) "Working out the beats, $working percent" else "No steady beat" },
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -83,6 +114,9 @@ fun BeatCounter(state: BenchState, open: () -> Unit) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
             for (i in 0..3) BeatCell(i, p, Modifier.weight(if (i == 0) 1.35f else 1f))
         }
+        if (mark.on) BasicText("Tap on every bar's first beat · ${mark.taps.size} of 8", style = Tokens.Text.small.style(Ink.accent).copy(fontSize = 12.sp))
+        else mark.note?.takeIf { nowMs - it.second < 8000 }?.let { BasicText(it.first, style = Tokens.Text.small.style(Ink.textSecondary).copy(fontSize = 12.sp)) }
+            ?: BasicText("Bar 1 wrong? Press and hold here, then tap each bar's first beat 8 times", style = Tokens.Text.small.style(Ink.muted).copy(fontSize = 11.sp))
     }
 }
 

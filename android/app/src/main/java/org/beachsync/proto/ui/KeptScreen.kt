@@ -82,8 +82,14 @@ private fun loadInfo(lib: LibraryStore, item: LibraryItem): KeptInfo {
         peak = raw.indices.maxByOrNull { raw[it] }?.let { it.toLong() * item.seconds / POINTS }
     }
     fun pct(p: Double) = good.getOrNull((p * (good.size - 1)).roundToInt())?.roundToInt()
-    return KeptInfo(energy, tempo, pct(0.1), pct(0.9), pct(0.5), peak)
+    // The bar shows the middle half of the set's tempo, at most 8 BPM either side of the main one (user, 15 Nov: a live set's long bar).
+    val main = pct(0.5)
+    val low = pct(0.25)?.let { l -> main?.let { maxOf(l, it - MAX_SPREAD) } ?: l }
+    val high = pct(0.75)?.let { h -> main?.let { minOf(h, it + MAX_SPREAD) } ?: h }
+    return KeptInfo(energy, tempo, low, high, main, peak)
 }
+
+private const val MAX_SPREAD = 8
 
 private fun clock(s: Long) = if (s >= 3600) "%d:%02d:%02d".format(s / 3600, s % 3600 / 60, s % 60) else "%d:%02d".format(s / 60, s % 60)
 private fun mb(b: Long) = if (b >= 1_000_000_000) "%.2f GB".format(b / 1e9) else "${(b / 1e6).roundToInt()} MB"

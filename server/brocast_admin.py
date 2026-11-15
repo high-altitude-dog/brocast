@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """brocast_admin: a plain page for uploading music sets to the test server.
 
-Each upload is transcoded once, whatever its format or quality, into:
+Each upload becomes:
 
-    sets/<id>/set.opus     48 kHz stereo Ogg Opus at 160 kbps, as the design specifies, ready for when phones decode it
-    sets/<id>/audio.pcm    raw 48 kHz stereo, kept on the server only: only set.opus ever leaves it
+    sets/<id>/set.opus     48 kHz stereo Ogg Opus in 20 ms packets, the file phones download and play. An upload that is
+                           already stereo Opus in 20 ms packets (YouTube's format 251) is copied as it is, with no second
+                           encode (user, 15 Nov); anything else is encoded once at 160 kbps
     sets/<id>/meta.json    title, artist, set, length and the Opus file's hash
 
 The stream server reads this folder and never writes to it. This page has no password, so it must only ever be
@@ -34,7 +35,6 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
 GB = 1024 ** 3
-PCM_BYTES_PER_SECOND = 48000 * 4
 OPUS_BYTES_PER_SECOND = 20000       # 160 kbps
 MIN_SECONDS = 1
 ID = re.compile(r"^[0-9a-f]{32}$")
@@ -108,6 +108,84 @@ def next_boundary(eds: list[dict], after: int) -> int:
     return min(b, switch) if switch is not None else b
 
 
+
+
+
+YOUTUBE_ID = re.compile(r"\s*\[[A-Za-z0-9_-]{11}\]$")
+
+
+def clean_title(text: str) -> str:
+    """A name without the trailing YouTube ID that yt-dlp adds, such as " [Zy4KtD98S2c]". Other brackets ([Live], [Remix]) stay."""
+    return YOUTUBE_ID.sub("", text.strip())
+
+def name_key(text: str) -> str:
+    """A name for matching: accents folded (ü matches u), then only letters and digits, in lower case."""
+    import unicodedata
+    plain = "".join(c for c in unicodedata.normalize("NFKD", text) if not unicodedata.combining(c))
+    return re.sub(r"[^a-z0-9]+", "", plain.lower())
+
+def is_opus(path: str) -> bool:
+    """Whether the upload's first audio stream is Opus."""
+    r = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "a:0", "-show_entries", "stream=codec_name", "-of", "csv=p=0", path],
+                       capture_output=True, text=True)
+    return r.returncode == 0 and r.stdout.strip() == "opus"
+
+
+def ogg_packets(path: str):
+    """Each packet of an Ogg file, in order (one logical stream)."""
+    with open(path, "rb") as f:
+        data = f.read()
+    at, piece = 0, bytearray()
+    while at + 27 <= len(data):
+        if data[at:at + 4] != b"OggS":
+            raise ValueError("not an Ogg file")
+        count = data[at + 26]
+        laces = data[at + 27:at + 27 + count]
+        body = at + 27 + count
+        for lace in laces:
+            piece += data[body:body + lace]
+            body += lace
+            if lace < 255:
+                yield bytes(piece)
+                piece = bytearray()
+        at = body
+
+
+OPUS_FRAME_MS = [10, 20, 40, 60] * 3 + [10, 20] * 2 + [2.5, 5, 10, 20] * 4
+
+
+def opus_fit(path: str) -> str | None:
+    """Why phones couldn't play this Opus file as it is, or None: they need stereo, the usual 312-sample start and 20 ms packets."""
+    packets = ogg_packets(path)
+    head = next(packets, b"")
+    if head[:8] != b"OpusHead":
+        return "isn't a plain Opus stream"
+    if head[9] != 2:
+        return "isn't stereo"
+    if int.from_bytes(head[10:12], "little") != OPUS_DELAY_FRAMES:
+        return "has an unusual start delay"
+    next(packets, None)   # OpusTags
+    for p in packets:
+        if not p:
+            return "has an empty packet"
+        code = p[0] & 3
+        frames = 1 if code == 0 else 2 if code in (1, 2) else (p[1] & 63 if len(p) > 1 else 0)
+        if OPUS_FRAME_MS[p[0] >> 3] * frames != 20:
+            return "has packets that aren't 20 ms"
+    return None
+
+
+def decoded_frames(path: str) -> int:
+    """How many 48 kHz stereo frames the file decodes to, counted as it decodes, with nothing written to disk."""
+    p = subprocess.Popen(["nice", "-n", "19", "ffmpeg", "-nostdin", "-v", "error", "-i", path, "-f", "s16le", "-ac", "2", "-ar", "48000", "-"],
+                         stdout=subprocess.PIPE)
+    total = 0
+    while chunk := p.stdout.read(1 << 20):
+        total += len(chunk)
+    if p.wait() != 0:
+        raise ValueError("couldn't decode the Opus file")
+    return total // 4
+
 class Library:
     def __init__(self, directory: str, reserve_gb: float, max_gb: float):
         self.directory = directory
@@ -126,6 +204,9 @@ class Library:
         for s in self.sets():
             if s["status"] in ("queued", "transcoding"):
                 self.fail(s["id"], "the server restarted during transcoding, so please upload it again")
+        for s in self.sets():   # names from before 15 Nov lose their YouTube IDs (hand-off 57)
+            if s.get("title") != clean_title(s.get("title") or "") or s.get("set") != clean_title(s.get("set") or ""):
+                self.update(s["id"], title=clean_title(s.get("title") or ""), set=clean_title(s.get("set") or ""))
         self.rematch()
         self.publish_library()   # for a library from before this list existed
         threading.Thread(target=self.worker, daemon=True).start()
@@ -172,7 +253,7 @@ class Library:
 
     def fail(self, set_id: str, why: str):
         self.update(set_id, status="failed", error=why)
-        for name in ("audio.pcm", "set.opus"):
+        for name in ("set.opus", "set.opus.tmp"):
             try:
                 os.remove(self.path(set_id, name))
             except OSError:
@@ -224,22 +305,46 @@ class Library:
     def transcode(self, set_id: str, upload: str):
         tags, seconds = probe(upload)
         if seconds is not None:
-            full = int(seconds * (PCM_BYTES_PER_SECOND + OPUS_BYTES_PER_SECOND))
+            full = int(seconds * OPUS_BYTES_PER_SECOND)
             why = self.room_for(full)
             if why:
                 raise ValueError(why)
         m = self.meta(set_id)
-        title = m["title"] or tags.get("title") or os.path.splitext(m["filename"])[0]
+        title = clean_title(m["title"] or tags.get("title") or os.path.splitext(m["filename"])[0])
         artist = m["artist"] or tags.get("artist") or ""
-        set_name = m["set"] or tags.get("album") or ""
+        set_name = clean_title(m["set"] or tags.get("album") or "")
         self.update(set_id, status="transcoding", title=title, artist=artist, set=set_name)
-        pcm, opus = self.path(set_id, "audio.pcm"), self.path(set_id, "set.opus")
-        common = ["-map", "0:a:0", "-ac", "2", "-ar", "48000"]
-        cmd = ["nice", "-n", "19", "ffmpeg", "-nostdin", "-v", "error", "-y", "-protocol_whitelist", "file,pipe",
-               "-progress", "pipe:1", "-i", upload, *common, "-f", "s16le", "-c:a", "pcm_s16le", pcm,
-               *common, "-c:a", "libopus", "-b:a", "160k", "-vbr", "on", "-frame_duration", "20",
-               "-page_duration", "1000000", "-map_metadata", "-1", "-metadata", f"title={title}",
-               "-metadata", f"artist={artist}", "-metadata", f"album={set_name}", "-f", "ogg", opus]
+        opus = self.path(set_id, "set.opus")
+        tags_out = ["-map_metadata", "-1", "-metadata", f"title={title}", "-metadata", f"artist={artist}", "-metadata", f"album={set_name}"]
+        copied = False
+        if is_opus(upload):
+            # Already Opus: copy the packets into a fresh Ogg file, then keep it only if phones can play it as it is.
+            self.ffmpeg(set_id, seconds, ["-i", upload, "-map", "0:a:0", "-c:a", "copy", "-page_duration", "1000000", *tags_out, "-f", "ogg", opus])
+            why = opus_fit(opus)
+            if why is None:
+                copied = True
+            else:
+                print(f"{set_id}: encoding again, as the Opus upload {why}", flush=True)
+        if not copied:
+            self.ffmpeg(set_id, seconds, ["-i", upload, "-map", "0:a:0", "-ac", "2", "-ar", "48000", "-c:a", "libopus", "-b:a", "160k", "-vbr", "on",
+                                          "-frame_duration", "20", "-page_duration", "1000000", *tags_out, "-f", "ogg", opus])
+        frames = decoded_frames(opus)
+        if frames < MIN_SECONDS * 48000:
+            raise ValueError("no audio found, or shorter than a second")
+        digest = hashlib.sha256()
+        with open(opus, "rb") as f:
+            while chunk := f.read(1024 * 1024):
+                digest.update(chunk)
+        self.update(set_id, status="ready", frames=frames, seconds=frames / 48000, copied=copied,
+                    opus_bytes=os.path.getsize(opus), sha256=digest.hexdigest())
+        self.rematch()   # a new set finds its artist (user, 15 Nov: a photo added just before the upload didn't attach)
+        self.publish_library()
+        if title != REEL_TITLE:
+            self.join_draft(set_id, m.get("goes", "end"))
+
+    def ffmpeg(self, set_id: str, seconds, args: list):
+        """Runs ffmpeg at low priority, reporting progress, and stops it if the shared disk runs short."""
+        cmd = ["nice", "-n", "19", "ffmpeg", "-nostdin", "-v", "error", "-y", "-protocol_whitelist", "file,pipe", "-progress", "pipe:1", *args]
         p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         for line in p.stdout:
             if line.startswith("out_time_us=") and seconds:
@@ -253,18 +358,6 @@ class Library:
         error = p.stderr.read()
         if p.wait() != 0:
             raise ValueError("ffmpeg couldn't read this file: " + error[:240])
-        frames = os.path.getsize(pcm) // 4
-        if frames < MIN_SECONDS * 48000:
-            raise ValueError("no audio found, or shorter than a second")
-        digest = hashlib.sha256()
-        with open(opus, "rb") as f:
-            while chunk := f.read(1024 * 1024):
-                digest.update(chunk)
-        self.update(set_id, status="ready", frames=frames, seconds=frames / 48000,
-                    pcm_bytes=os.path.getsize(pcm), opus_bytes=os.path.getsize(opus), sha256=digest.hexdigest())
-        self.publish_library()
-        if title != REEL_TITLE:
-            self.join_draft(set_id, m.get("goes", "end"))
 
     def ready_items(self) -> dict[str, dict]:
         """Every set phones can play, as an edition lists it."""
@@ -365,6 +458,16 @@ class Library:
         self.crop_artist(artist_id)
         self.publish_library()
 
+    def set_countries(self, artist_id: str, codes: list[str]):
+        """Where an artist is from (hand-off 56): up to two ISO 3166 alpha-2 codes, or none."""
+        codes = [c.upper() for c in codes if re.fullmatch(r"[A-Za-z]{2}", c)][:2]
+        path = self.artist_path(artist_id, "meta.json")
+        with open(path) as f:
+            m = json.load(f)
+        m["countries"] = list(dict.fromkeys(codes))
+        self.write_json(path, m)
+        self.publish_library()
+
     def update_artist(self, artist_id: str, name: str, aliases: list[str]):
         path = self.artist_path(artist_id, "meta.json")
         with open(path) as f:
@@ -384,7 +487,7 @@ class Library:
 
     def match(self, text: str) -> tuple[list[str], bool]:
         """Registry artists named in a set's artist field (or its title before " - "), and whether every match was exact."""
-        key = lambda t: re.sub(r"[^a-z0-9]+", "", t.lower())
+        key = name_key
         names = {}
         for a in self.artists():
             for n in [a["name"]] + a.get("aliases", []):
@@ -417,7 +520,7 @@ class Library:
             ids, sure = self.match(part)
             if ids:
                 return ids, sure
-        key = lambda t: re.sub(r"[^a-z0-9]+", "", t.lower())
+        key = name_key
         for a in self.artists():
             for n in [a["name"]] + a.get("aliases", []):
                 if len(key(n)) >= 4 and key(title).startswith(key(n)):
@@ -500,7 +603,10 @@ class Library:
 
     def write_library(self, editions: list[dict], called_off: list[dict]):
         """Writes library.json. Artists ride beside the editions, so a new photo or a confirmed match never moves the shared timeline."""
-        artists = {a["id"]: {"name": a["name"], "v": a["v"]} for a in self.artists() if a.get("v")}
+        for e in editions:   # names without YouTube IDs, in editions published before 15 Nov too (hand-off 57)
+            for it in e.get("items", []):
+                it["title"] = clean_title(it.get("title", ""))
+        artists = {a["id"]: {"name": a["name"], "v": a["v"], **({"countries": a["countries"]} if a.get("countries") else {})} for a in self.artists() if a.get("v")}
         set_artists = {m["id"]: m["artist_ids"] for m in self.sets() if m["status"] == "ready" and m.get("artist_ids") and m.get("artist_sure")}
         new = {"version": 1, "D_ms": LIBRARY_D_MS, "editions": editions, "called_off": called_off[-8:], "artists": artists, "set_artists": set_artists, "news": self.news(), "color": self.colour()}
         path = os.path.join(self.directory, "library.json")
@@ -1042,7 +1148,7 @@ function diskBar() {
 }
 let artistsShown = "";
 function showArtists() {
-  const artists = d.artists || [], sig = JSON.stringify(artists.map(a => [a.id, a.v, a.name, a.aliases, a.focus]));
+  const artists = d.artists || [], sig = JSON.stringify(artists.map(a => [a.id, a.v, a.name, a.aliases, a.focus, a.countries]));
   $("artist-names").replaceChildren(...artists.map(a => { const o = el("option"); o.value = a.name; return o; }));
   const faces = $("faces"); faces.replaceChildren();
   for (const a of artists.slice(0, 4)) { const i = el("img"); i.src = "/api/artists/" + a.id + "/1x1.jpg?v=" + a.v; i.alt = a.name; i.title = a.name; faces.append(i); }
@@ -1066,12 +1172,30 @@ function showArtists() {
     ph.onclick = e => { const r = img.getBoundingClientRect(); act("/api/artists/" + a.id + "/focus?x=" + ((e.clientX - r.left) / r.width).toFixed(3) + "&y=" + ((e.clientY - r.top) / r.height).toFixed(3), "POST"); };
     const info = el("div"); info.append(el("div", a.name, "set-title"));
     if (a.aliases && a.aliases.length) info.append(el("p", "Also: " + a.aliases.join("; "), "muted small"));
+    info.append(countryPicker(a, artists));
     const crops = el("div", null, "crops"); for (const c of ["1x1", "9x16", "16x9"]) { const i = el("img"); i.src = "/api/artists/" + a.id + "/" + c + ".jpg?v=" + a.v; i.alt = c; crops.append(i); } info.append(crops);
     const ren = el("button", "Rename"); ren.onclick = () => { const n = prompt("Name", a.name); if (n === null) return;
       const al = prompt("Other spellings, separated by ;", (a.aliases || []).join("; ")); act("/api/artists/" + a.id + "?" + new URLSearchParams({name: n, aliases: al || ""}), "POST"); };
     const del = el("button", "Delete"); del.onclick = () => { if (confirm("Delete " + a.name + "?")) act("/api/artists/" + a.id, "DELETE"); };
     info.append(ren, del); row.append(ph, info); box.append(row);
   }
+}
+// Country (hand-off 56): where the artist is from, up to two, searched by English name or code; "Used by your artists" first.
+const REGION = new Intl.DisplayNames(["en"], {type: "region"});
+const CODES = "AD AE AF AG AI AL AM AO AQ AR AS AT AU AW AX AZ BA BB BD BE BF BG BH BI BJ BL BM BN BO BQ BR BS BT BV BW BY BZ CA CC CD CF CG CH CI CK CL CM CN CO CR CU CV CW CX CY CZ DE DJ DK DM DO DZ EC EE EG EH ER ES ET FI FJ FK FM FO FR GA GB GD GE GF GG GH GI GL GM GN GP GQ GR GS GT GU GW GY HK HM HN HR HT HU ID IE IL IM IN IO IQ IR IS IT JE JM JO JP KE KG KH KI KM KN KP KR KW KY KZ LA LB LC LI LK LR LS LT LU LV LY MA MC MD ME MF MG MH MK ML MM MN MO MP MQ MR MS MT MU MV MW MX MY MZ NA NC NE NF NG NI NL NO NP NR NU NZ OM PA PE PF PG PH PK PL PM PN PR PS PT PW PY QA RE RO RS RU RW SA SB SC SD SE SG SH SI SJ SK SL SM SN SO SR SS ST SV SX SY SZ TC TD TF TG TH TJ TK TL TM TN TO TR TT TV TW TZ UA UG UM US UY UZ VA VC VE VG VI VN VU WF WS YE YT ZA ZM ZW".split(" ");
+const flag = c => String.fromCodePoint(...[...c.toUpperCase()].map(x => 0x1F1E6 + x.charCodeAt(0) - 65));
+function countryPicker(a, all) {
+  const box = el("div", null, "small"), cur = a.countries || [];
+  box.append(el("span", "Country: " + (cur.length ? cur.map(c => flag(c) + " " + REGION.of(c)).join(", ") : "—") + " ", "muted"));
+  const inp = el("input"); inp.placeholder = cur.length < 2 ? (cur.length ? "Add a second (optional)" : "Search country or code") : ""; inp.disabled = cur.length >= 2;
+  const listId = "cl-" + a.id; inp.setAttribute("list", listId);
+  const dl = el("datalist"); dl.id = listId;
+  const used = [...new Set(all.flatMap(x => x.countries || []))];
+  for (const c of [...used, ...CODES.filter(c => !used.includes(c))]) { const o = el("option"); o.value = REGION.of(c) + " (" + c + ")"; o.label = used.includes(c) ? "Used by your artists" : ""; dl.append(o); }
+  inp.onchange = () => { const m = inp.value.match(/\\(([A-Z]{2})\\)$/) || inp.value.trim().match(/^([A-Za-z]{2})$/) || [null, (CODES.find(c => REGION.of(c).toLowerCase() === inp.value.trim().toLowerCase()) || "")];
+    if (m[1]) act("/api/artists/" + a.id + "/countries?c=" + [...cur, m[1].toUpperCase()].join(","), "POST"); };
+  const clr = el("button", "Clear"); clr.onclick = () => act("/api/artists/" + a.id + "/countries?c=", "POST"); clr.hidden = !cur.length;
+  box.append(inp, dl, clr); return box;
 }
 $("aform").onsubmit = e => {
   e.preventDefault(); const file = $("afile").files[0]; if (!file) return;
@@ -1268,6 +1392,9 @@ def make_handler(lib: Library):
             try:
                 if a := re.fullmatch(r"/api/artists/([0-9a-f]{32})/focus", url.path):
                     lib.set_focus(a.group(1), float(field("x")), float(field("y")))
+                    return self.reply()
+                if a := re.fullmatch(r"/api/artists/([0-9a-f]{32})/countries", url.path):
+                    lib.set_countries(a.group(1), [c.strip() for c in field("c").split(",") if c.strip()])
                     return self.reply()
                 if a := re.fullmatch(r"/api/artists/([0-9a-f]{32})", url.path):
                     if not field("name"):

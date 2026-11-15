@@ -122,22 +122,39 @@ fun NowPlaying(state: BenchState, actions: BenchActions, openLog: () -> Unit, op
         val mesh = org.beachsync.proto.PearsEngine.view
         mesh?.moments?.takeIf { !it.firstMusicDone }?.let { FirstListenCard(it, openSwarm) }
         if (state.headphonesNameOffer && out.icon.bluetooth && !out.named) HeadphonesNameCard(actions::askHeadphonesName, actions::notNowHeadphonesName)
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            // The track and artist come from the library file the timeline has at the ear; the station name stands in before that.
-            ArtistThumb(lib, playing?.first, openArtist)
-            Spacer(Modifier.width(10.dp))
-            Column(Modifier.weight(1f)) {
-                ScrollingName(playing?.first?.title?.ifEmpty { null } ?: s?.stream?.manifest?.source?.ifEmpty { null } ?: "Beach Sync Radio", Tokens.Text.screenTitle.style().copy(fontSize = 20.sp))
-                if (silentS > 0) BasicText("Starts in ${silentS / 60}:${"%02d".format(silentS % 60)}", style = Tokens.Text.small.style(Ink.accent).copy(fontSize = 13.sp), maxLines = 1)
-                else playing?.first?.artist?.ifEmpty { null }?.let { BasicText(it, style = Tokens.Text.small.style(Ink.textSecondary).copy(fontSize = 13.sp), maxLines = 1, overflow = TextOverflow.Ellipsis) }
+        // The Now Playing box (hand-off 54): photo, title, artist with flag (hand-off 56) and set, the Stereo and Kept pills, and the library bar.
+        val cardShape = RoundedCornerShape(14.dp)
+        Column(Modifier.fillMaxWidth().background(Ink.surface, cardShape).border(Tokens.Stroke.card.dp, Ink.border, cardShape).padding(start = 12.dp, end = 12.dp, top = 10.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            BasicText("NOW PLAYING", style = Tokens.Text.cardLabel.style().copy(fontSize = 10.sp))
+            Row(Modifier.fillMaxWidth().height(96.dp)) {
+                // The track and artist come from the library file the timeline has at the ear; the station name stands in before that.
+                ArtistThumb(lib, playing?.first, 96.dp, openArtist)
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f).fillMaxHeight()) {
+                    ScrollingName(playing?.first?.title?.ifEmpty { null } ?: s?.stream?.manifest?.source?.ifEmpty { null } ?: "Beach Sync Radio", Tokens.Text.screenTitle.style().copy(fontSize = 20.sp))
+                    if (silentS > 0) BasicText("Starts in ${silentS / 60}:${"%02d".format(silentS % 60)}", style = Tokens.Text.small.style(Ink.accent).copy(fontSize = 13.sp), maxLines = 1)
+                    else playing?.first?.let { item ->
+                        val reg = lib.artistOf(item.id)
+                        val artist = item.artist.ifEmpty { reg?.first ?: "" }
+                        val flags = reg?.second.orEmpty().joinToString("") { org.beachsync.proto.flagOf(it) }
+                        val from = reg?.second.orEmpty().joinToString(" and ") { java.util.Locale("", it).getDisplayCountry(java.util.Locale.UK) }
+                        val line = artist
+                        if (line.isNotEmpty()) BasicText((if (flags.isNotEmpty() && artist.isNotEmpty()) "$flags " else "") + line, Modifier.semantics { contentDescription = artist + if (from.isNotEmpty()) ", from $from" else "" },
+                            style = Tokens.Text.small.style(Ink.textSecondary).copy(fontSize = 13.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                    Spacer(Modifier.weight(1f))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        ChannelChip(chUi, state.channel, actions.output().kind == org.beachsync.proto.OutputKind.HEADPHONES, compact = true)
+                        KeptBadge(openKept)
+                    }
+                }
             }
-            ChannelChip(chUi, state.channel, actions.output().kind == org.beachsync.proto.OutputKind.HEADPHONES)
-            KeptBadge(openKept)
+            ChannelHint(chUi)
+            LibraryLine(state.library)
         }
-        ChannelHint(chUi)
-        LibraryLine(state.library)
         NewsCard()
         Dial(s, s?.gps ?: state.idleGps, boot, state.localTime, lagUncNs, openSatellites)
+        ReceivingBox(state.library, openSwarm)
         BeatCounter(state, openBuffer)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Top) {
             PlayStopButton(s != null, lockedByDownload, listen)
@@ -163,6 +180,7 @@ fun NowPlaying(state: BenchState, actions: BenchActions, openLog: () -> Unit, op
             Tile("AHEAD", aheadText(lib != null && playing != null, everythingHere, ahead), if (everythingHere) "all downloaded" else "downloaded", Modifier.weight(1f).clickable(role = Role.Button, onClick = openBuffer))
         }
         Card { SatellitesRow(state.satellites, actions::setSatellites, "Position stays on this phone · off = Privacy mode") }
+        PlayNewsBox()
     }
     ChannelOverlays(chUi, state, actions)
     OrderNews.toast?.let { Toast(it.first, null, {}, Modifier.align(Alignment.BottomCenter)) }
@@ -191,17 +209,17 @@ private val IntrinsicTile = 84.dp
 private fun KeptBadge(open: () -> Unit) {
     val shape = RoundedCornerShape(Tokens.Radius.pill.dp)
     Row(
-        Modifier.height(Tokens.Space.touchTarget.dp).border(Tokens.Stroke.card.dp, Ink.border, shape).clickable(role = Role.Button, onClick = open).padding(horizontal = 14.dp)
+        Modifier.height(Tokens.Space.touchTarget.dp).clickable(role = Role.Button, onClick = open).padding(vertical = 9.dp).border(Tokens.Stroke.card.dp, Ink.border, shape).padding(horizontal = 9.dp)
             .semantics { contentDescription = "Kept. Every set stays on this phone in the beta. Opens Kept." },
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Canvas(Modifier.size(width = 10.dp, height = 14.dp)) {
+        Canvas(Modifier.size(width = 8.dp, height = 11.dp)) {
             val path = androidx.compose.ui.graphics.Path().apply {
                 moveTo(0f, 0f); lineTo(size.width, 0f); lineTo(size.width, size.height); lineTo(size.width / 2f, size.height * 0.72f); lineTo(0f, size.height); close()
             }
             drawPath(path, Ink.text)
         }
-        BasicText("Kept", style = Tokens.Text.body.style(Ink.text))
+        BasicText("KEPT", style = Tokens.Text.badge.style(Ink.text).copy(fontSize = 10.5.sp))
     }
 }
 
@@ -213,7 +231,7 @@ private fun LibraryLine(lib: org.beachsync.proto.LibraryStore?) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         BasicText("LIBRARY", style = Tokens.Text.cardLabel.style())
         Box(Modifier.weight(1f).height(3.dp).background(Ink.track, CircleShape)) {
-            if (total > 0) Box(Modifier.fillMaxWidth((have.toFloat() / total).coerceIn(0f, 1f)).fillMaxHeight().background(Ink.muted, CircleShape))
+            if (total > 0) Box(Modifier.fillMaxWidth((have.toFloat() / total).coerceIn(0f, 1f)).fillMaxHeight().background(Ink.accent, CircleShape))   // station colour (user, 15 Nov)
         }
         BasicText(
             when { total == 0 -> lib?.status ?: "Not downloaded yet"; have == total -> "$total sets · all here"; else -> "$have of $total sets" },
@@ -227,9 +245,10 @@ private fun LibraryLine(lib: org.beachsync.proto.LibraryStore?) {
 private fun PlayStopButton(playing: Boolean, disabled: Boolean, onClick: () -> Unit) {
     // While the set due now is still downloading, Play is dimmed and does nothing.
     val mod = Modifier.size(52.dp).alpha(if (disabled) 0.45f else 1f).then(if (disabled) Modifier else Modifier.clickable(role = Role.Button, onClick = onClick)).semantics { contentDescription = if (playing) "Stop" else if (disabled) "Play, not yet: the set due now is downloading" else "Play" }
-    Box(if (playing) mod.border(Tokens.Stroke.emphasis.dp, Ink.text, CircleShape) else if (disabled) mod.border(Tokens.Stroke.emphasis.dp, Ink.muted, CircleShape) else mod.background(Ink.accent, CircleShape), Alignment.Center) {
+    // Station colour (hand-off 55): Stop is a station-colour ring with a faint fill and a station-colour square.
+    Box(if (playing) mod.background(Ink.accent.copy(alpha = 0.07f), CircleShape).border(1.5.dp, Ink.accent, CircleShape) else if (disabled) mod.border(Tokens.Stroke.emphasis.dp, Ink.muted, CircleShape) else mod.background(Ink.accent, CircleShape), Alignment.Center) {
         Canvas(Modifier.size(16.dp)) {
-            if (playing) drawRoundRect(Ink.text, cornerRadius = CornerRadius(2.dp.toPx()))
+            if (playing) drawRoundRect(Ink.accent, Offset(1.dp.toPx(), 1.dp.toPx()), androidx.compose.ui.geometry.Size(14.dp.toPx(), 14.dp.toPx()), cornerRadius = CornerRadius(2.dp.toPx()))
             else drawPath(androidx.compose.ui.graphics.Path().apply { moveTo(size.width * 0.12f, 0f); lineTo(size.width, size.height / 2); lineTo(size.width * 0.12f, size.height); close() }, Ink.onAccent)
         }
     }
@@ -370,7 +389,7 @@ private fun badge(s: Session?, boot: Long, lagUncNs: Double, downloadPct: Int?):
         s.stream != null && s.stream.manifest == null -> Badge("NOT IN SYNC", "✕", Ink.danger, "", "No stream")
         !s.gps.active -> Badge("PRIVACY MODE", "⊘", Ink.textSecondary, figure, FlowTime.chosen?.name ?: "")
         FlowTime.chosen == Source.NTP -> Badge("INTERNET TIME", "▲", Ink.warn, figure, "NTP")
-        s.sourceName(boot) != "GPS" -> Badge("HOLDING", "○", if (over) Ink.warn else Ink.accent, figure, "Holdover")
+        s.sourceName(boot) != "GPS" -> Badge("HOLDING", "○", Ink.accent, figure, "Holdover")   // station colour always (user, 15 Nov)
         else -> Badge("IN SYNC", "●", if (over) Ink.warn else Ink.accent, figure, grade)
     }
 }
@@ -381,7 +400,7 @@ private fun SyncBadge(s: Session?, boot: Long, lagUncNs: Double, downloadPct: In
     val shape = RoundedCornerShape(Tokens.Radius.pill.dp)
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(
-            Modifier.fillMaxWidth().height(52.dp).background(b.tint.copy(alpha = 0.08f), shape).border(Tokens.Stroke.emphasis.dp, b.tint, shape).padding(horizontal = 16.dp),
+            Modifier.fillMaxWidth().height(52.dp).background(b.tint.copy(alpha = 0.07f), shape).border(Tokens.Stroke.emphasis.dp, b.tint, shape).padding(horizontal = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             BasicText("${b.mark} ${b.words}", style = Tokens.Text.badge.style(if (b.tint == Ink.accent) Ink.text else b.tint), maxLines = 1)

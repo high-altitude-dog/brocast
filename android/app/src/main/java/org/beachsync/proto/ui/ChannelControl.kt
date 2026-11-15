@@ -30,6 +30,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.onLongClick
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.beachsync.proto.Renderer
@@ -60,7 +61,7 @@ private fun channelName(c: Int) = when (c) { Renderer.LEFT -> "Left"; Renderer.R
 
 /** The chip right of the track title: a plain tap only hints, press and hold for 0.8 s opens the picker. */
 @Composable
-fun ChannelChip(ui: ChannelUi, channel: Int, headphones: Boolean) {
+fun ChannelChip(ui: ChannelUi, channel: Int, headphones: Boolean, compact: Boolean = false) {
     val progress = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
     val haptic = LocalHapticFeedback.current
@@ -68,7 +69,9 @@ fun ChannelChip(ui: ChannelUi, channel: Int, headphones: Boolean) {
     val col = if (stereo) Ink.text else Ink.accent
     val shape = RoundedCornerShape(Tokens.Radius.pill.dp)
     Row(
-        Modifier.padding(start = 6.dp).height(Tokens.Space.touchTarget.dp).alpha(if (headphones) 0.4f else 1f)
+        // Compact (hand-off 54): a 26 px pill inside a 44 px touch area.
+        Modifier.padding(start = if (compact) 0.dp else 6.dp).height(Tokens.Space.touchTarget.dp).alpha(if (headphones) 0.4f else 1f)
+            .then(if (compact) Modifier.padding(vertical = 9.dp) else Modifier)
             .border(Tokens.Stroke.card.dp, if (stereo) Ink.grid else Ink.accent, shape)
             .semantics {
                 contentDescription = "Channel: ${channelName(if (stereo) Renderer.BOTH else channel)}. " + if (headphones) "Headphones always play stereo." else "Press and hold to change."
@@ -92,10 +95,10 @@ fun ChannelChip(ui: ChannelUi, channel: Int, headphones: Boolean) {
                     if (up != null && short) { ui.hint = true; ui.hintKey++ }
                 }
             }
-            .padding(start = 8.dp, end = 12.dp),
+            .padding(start = if (compact) 6.dp else 8.dp, end = if (compact) 9.dp else 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Canvas(Modifier.size(26.dp)) {
+        Canvas(Modifier.size(if (compact) 20.dp else 26.dp)) {
             val c = center; val w = 1.5.dp.toPx()
             if (stereo) {
                 drawCircle(col, 6.dp.toPx(), Offset(c.x - 3.dp.toPx(), c.y), style = Stroke(w))
@@ -105,7 +108,7 @@ fun ChannelChip(ui: ChannelUi, channel: Int, headphones: Boolean) {
             if (p > 0f) drawArc(Ink.accent, -90f, 360f * p, false, Offset(c.x - 12.dp.toPx(), c.y - 12.dp.toPx()), Size(24.dp.toPx(), 24.dp.toPx()), style = Stroke(2.5.dp.toPx(), cap = StrokeCap.Round))
         }
         Spacer(Modifier.width(4.dp))
-        BasicText(when { stereo -> "STEREO"; channel == Renderer.LEFT -> "L LEFT"; else -> "R RIGHT" }, style = Tokens.Text.badge.style(col))
+        BasicText(when { stereo -> "STEREO"; channel == Renderer.LEFT -> "L LEFT"; else -> "R RIGHT" }, style = Tokens.Text.badge.style(col).let { if (compact) it.copy(fontSize = 10.5.sp) else it })
     }
 }
 

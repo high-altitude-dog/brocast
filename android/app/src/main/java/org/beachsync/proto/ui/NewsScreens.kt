@@ -17,6 +17,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -269,4 +270,65 @@ private fun FadeDiagram(pct: Int, down: Float, up: Float, ink: Color) {
             drawText("BULLETIN", (x1 + x2) / 2 - 28.dp.toPx(), (top + bottom) / 2, p)
         }
     }
+}
+
+/**
+ * Play news, at the foot of the home screen (user, 15 Nov): for headphones with no play/pause button. Each source is held for [HOLD_MS]
+ * so a pocket or a brush can't start it; a ring fills while it's held. While news is on, either button stops it the same way.
+ */
+@Composable
+internal fun PlayNewsBox() {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    rememberTick(250).value
+    val busy = News.phase != News.Phase.IDLE
+    Card {
+        BasicText("PLAY NEWS", style = Tokens.Text.cardLabel.style())
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            HoldButton(Modifier.weight(1f), { News.playFrom(ctx, News.Source.BBC) }) { BbcMark() }
+            HoldButton(Modifier.weight(1f), { News.playFrom(ctx, News.Source.NPR) }) { NprMark() }
+        }
+        // What's happening, at once: getting it (with how much has arrived), then which bulletin is on.
+        val status = when (News.phase) {
+            News.Phase.GETTING -> "Getting the latest ${News.sourceName}…" + (if (News.totalBytes > 0) " ${(100 * News.gotBytes / News.totalBytes).coerceIn(0, 100)}%" else "") + " · hold to cancel"
+            News.Phase.PLAYING, News.Phase.ENDING -> "Playing ${News.sourceName} · hold either to stop"
+            else -> "Hold for 2 seconds to play the latest bulletin"
+        }
+        BasicText(status, style = Tokens.Text.small.style(if (busy) Ink.accent else Ink.textSecondary))
+    }
+}
+
+private const val HOLD_MS = 2000L
+
+@Composable
+private fun HoldButton(modifier: Modifier, fire: () -> Unit, mark: @Composable () -> Unit) {
+    var heldFrom by remember { mutableStateOf<Long?>(null) }
+    var progress by remember { mutableFloatStateOf(0f) }
+    LaunchedEffect(heldFrom) {
+        val t0 = heldFrom ?: run { progress = 0f; return@LaunchedEffect }
+        while (true) {
+            withFrameMillis { }
+            progress = ((android.os.SystemClock.uptimeMillis() - t0) / HOLD_MS.toFloat()).coerceAtMost(1f)
+            if (progress >= 1f) { fire(); heldFrom = null; return@LaunchedEffect }
+        }
+    }
+    Box(
+        modifier.height(64.dp).background(Ink.track, RoundedCornerShape(12.dp)).border(1.dp, if (progress > 0f) Ink.accent else Ink.border, RoundedCornerShape(12.dp))
+            .pointerInput(Unit) { detectTapGestures(onPress = { heldFrom = android.os.SystemClock.uptimeMillis(); tryAwaitRelease(); heldFrom = null }) },
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(Modifier.align(Alignment.BottomStart).fillMaxWidth(progress).height(4.dp).background(Ink.accent, RoundedCornerShape(2.dp)))
+        mark()
+    }
+}
+
+/** Stand-ins in the style of the broadcasters' marks: three letter blocks each. */
+@Composable
+private fun BbcMark() = Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+    for (c in "BBC") BasicText(c.toString(), Modifier.size(26.dp).background(Color.White).wrapContentSize(Alignment.Center), Tokens.Text.bodyStrong.style(Color.Black).copy(fontSize = 18.sp))
+}
+
+@Composable
+private fun NprMark() = Row {
+    for ((c, bg) in listOf('n' to Color(0xFFD62021), 'p' to Color(0xFF000000), 'r' to Color(0xFF237BBD)))
+        BasicText(c.toString(), Modifier.size(26.dp).background(bg).border(if (bg == Color.Black) 1.dp else 0.dp, Color.White).wrapContentSize(Alignment.Center), Tokens.Text.bodyStrong.style(Color.White).copy(fontSize = 18.sp))
 }

@@ -225,7 +225,7 @@ private fun skyRatePerHour(o: org.beachsync.proto.Orbit): Double {
 private fun hm(hours: Double): String { val m = (hours * 60).roundToInt(); return if (m >= 60) "${m / 60} h ${m % 60} m" else "$m m" }
 
 @Composable
-internal fun Sky3D(sats: List<Sat>, position: Pair<Double, Double>?, picked: String?, pick: (String?) -> Unit, flat: () -> Unit) {
+internal fun Sky3D(sats: List<Sat>, position: Pair<Double, Double>?, picked: String?, pick: (String?) -> Unit, barClock: () -> Double? = { null }, flat: () -> Unit) {
     val ctx = LocalContext.current
     val measurer = rememberTextMeasurer()
     val reduceMotion = remember { runCatching { android.provider.Settings.Global.getFloat(ctx.contentResolver, android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f }.getOrDefault(false) }
@@ -292,14 +292,41 @@ internal fun Sky3D(sats: List<Sat>, position: Pair<Double, Double>?, picked: Str
         lastPicked = picked
     }
     val pool = sats.filter { it.used }.let { u -> if (u.size >= 3) u else sats }
+    // On the beat (user, 15 Nov): with a set playing, two bars after opening a path traces over exactly one bar, holds a bar (its set time showing),
+    // and on the next bar 1 a new satellite traces. Without a beat grid, the 6 s tour as before.
+    val bars = if (reduceMotion || hintAt != null || picked != null) null else barClock()
+    val barSync = remember { object { var start = Long.MIN_VALUE; var last = Long.MIN_VALUE; var cycle = Long.MIN_VALUE } }
+    var drawnNow = 1f
+    var cycleLeft = 0f
+    var waitingBars = 0
     if (reduceMotion) tour = sats.maxByOrNull { it.elevationDeg }?.label
     else if (hintAt != null) tour = null
+    else if (bars != null) {
+        val b = Math.floor(bars).toLong()
+        // First bar seen, or the bar count jumped (a new set, a seek): start two bars on, or one after a jump.
+        if (barSync.start == Long.MIN_VALUE) barSync.start = b + 2
+        else if (b < barSync.last || b > barSync.last + 4) { barSync.start = b + 1; barSync.cycle = Long.MIN_VALUE }
+        barSync.last = b
+        val k = b - barSync.start
+        val frac = (bars - b).toFloat()
+        if (k < 0) { if (lastPicked == null && barSync.cycle == Long.MIN_VALUE) tour = null; waitingBars = (-k).toInt(); drawnNow = 0f }
+        else {
+            val cycle = k / 2
+            if (cycle != barSync.cycle || pool.none { it.label == tour }) {
+                if (cycle != barSync.cycle) { prevTour = tour; tour = pool.filter { it.label != tour }.randomOrNull()?.label ?: pool.firstOrNull()?.label }
+                barSync.cycle = cycle; tourAt = now
+            }
+            drawnNow = if (k % 2 == 0L) frac else 1f
+            cycleLeft = 1f - ((k % 2) + frac) / 2f
+        }
+    }
     else if (picked == null && (tour == null || now - tourAt >= TOUR_MS || pool.none { it.label == tour })) {
         val next = pool.filter { it.label != tour }.randomOrNull() ?: pool.firstOrNull()
         prevTour = tour; tour = next?.label; tourAt = now
     }
     val shown = picked ?: tour
     val sinceSwitch = if (picked != null || reduceMotion) Long.MAX_VALUE else now - tourAt
+    if (bars == null) drawnNow = if (sinceSwitch < 400) 0f else ((sinceSwitch - 400) / 800f).coerceIn(0f, 1f)
     val used = sats.count { it.used }
     val sel = sats.firstOrNull { it.label == picked }
     val level = zoom.roundToInt().coerceIn(0, 2)
@@ -490,8 +517,8 @@ internal fun Sky3D(sats: List<Sat>, position: Pair<Double, Double>?, picked: Str
                 }
             }
             if (position != null) {
-                if (sinceSwitch < 400) prevTour?.let { drawPathOf(it, 1f - sinceSwitch / 400f, 1f) }
-                shown?.let { drawPathOf(it, 1f, if (sinceSwitch < 400) 0f else ((sinceSwitch - 400) / 800f).coerceIn(0f, 1f)) }
+                if (bars == null && sinceSwitch < 400) prevTour?.let { drawPathOf(it, 1f - sinceSwitch / 400f, 1f) }
+                shown?.let { drawPathOf(it, 1f, if (picked != null) 1f else drawnNow) }
             }
             // Satellites: on the dome at their true direction, sliding out to their true distance as you zoom.
             hits.clear()
@@ -570,11 +597,13 @@ internal fun Sky3D(sats: List<Sat>, position: Pair<Double, Double>?, picked: Str
     else if (picked == null) Row(verticalAlignment = Alignment.CenterVertically) {
         if (!reduceMotion) Canvas(Modifier.size(16.dp)) {
             drawCircle(Ink.track, size.minDimension / 2 - 1.dp.toPx(), style = Stroke(2.dp.toPx()))
-            drawArc(Ink.accent, -90f, 360f * (1f - (sinceSwitch.coerceAtMost(TOUR_MS) / TOUR_MS.toFloat())), false, style = Stroke(2.dp.toPx(), cap = StrokeCap.Round))
+            drawArc(Ink.accent, -90f, 360f * (if (bars != null) cycleLeft else 1f - (sinceSwitch.coerceAtMost(TOUR_MS) / TOUR_MS.toFloat())), false, style = Stroke(2.dp.toPx(), cap = StrokeCap.Round))
         }
         val left = ((TOUR_MS - sinceSwitch.coerceAtMost(TOUR_MS)) / 1000 + 1).coerceAtMost(6)
         BasicText(
-            if (reduceMotion) "Showing ${tour ?: "—"}, the highest · tap a satellite to show another" else "Showing ${tour ?: "—"} · next in $left s · tap a satellite to keep one",
+            if (reduceMotion) "Showing ${tour ?: "—"}, the highest · tap a satellite to show another"
+            else if (bars != null && waitingBars > 0) "First path in $waitingBars bar${if (waitingBars > 1) "s" else ""} · tap a satellite to keep one"
+            else if (bars != null) "Showing ${tour ?: "—"} · next on bar 1 · tap a satellite to keep one" else "Showing ${tour ?: "—"} · next in $left s · tap a satellite to keep one",
             Modifier.padding(start = 8.dp), Tokens.Text.small.style(Ink.textSecondary),
         )
     }

@@ -24,13 +24,33 @@ class SetBeats(val windows: List<Win?>) {
     /** Where [at] puts a file sample: tempo, beat 0 to 3 within the bar, how far through that beat, and the bar number from the set's start. */
     class Pos(val bpm: Double, val beatInBar: Int, val beatFrac: Double, val bar: Long, val sinceBeatSamples: Double, val realigned: Boolean = false)
 
-    fun at(fileSample: Double): Pos? {
+    /** A listener's correction (user, 15 Nov): from window [fromW] to [toW], bar 1 is the grid's beat [shift] (0–3). */
+    class Fix(val fromW: Int, val toW: Int, val shift: Int)
+
+    /** This phone's corrections, kept beside the set as `<id>.barfix`; set by [LibraryStore]. */
+    @Volatile var fixes: List<Fix> = emptyList()
+
+    /** Where [at] puts a file sample, with any listener's correction applied. */
+    fun at(fileSample: Double): Pos? = at(fileSample, true)
+
+    /** The window [fileSample] falls in, or -1. */
+    fun windowOf(fileSample: Double): Int = if (windows.isEmpty()) -1 else windowAt(floor(fileSample).toLong()).coerceIn(0L, windows.lastIndex.toLong()).toInt()
+
+    /** The stretch a correction at window [w] covers: since the grid's bar start last moved, until it next moves (a DJ's next record). */
+    fun segmentOf(w: Int): IntRange {
+        var a = w; while (a > 0 && windows[a]?.realigned != true && windows[a - 1] != null) a--
+        var b = w; while (b < windows.lastIndex && windows[b + 1]?.realigned != true && windows[b + 1] != null) b++
+        return a..b
+    }
+
+    fun at(fileSample: Double, fixed: Boolean): Pos? {
         if (windows.isEmpty()) return null
         val w = windowAt(floor(fileSample).toLong()).coerceIn(0L, windows.lastIndex.toLong()).toInt()
         val win = windows[w] ?: return null
         val x = (fileSample - win.downbeat) / win.period
         val k = floor(x)
-        val kl = k.toLong()
+        val shift = if (fixed) fixes.lastOrNull { w in it.fromW..it.toW }?.shift ?: 0 else 0
+        val kl = k.toLong() - shift
         // For the first two bars after the bar start moved, so the counter can show it.
         val fresh = win.realigned && fileSample - (WINDOW_S * w + 4) * RATE < 8 * win.period
         return Pos(60.0 * RATE / win.period, Math.floorMod(kl, 4L).toInt(), x - k, win.bar0 + Math.floorDiv(kl, 4L), (x - k) * win.period, fresh)
@@ -48,7 +68,7 @@ class SetBeats(val windows: List<Win?>) {
         const val RATE = 48000.0
         const val WINDOW_S = 8L
         const val LENGTH_S = 16
-        private const val HEADER = "beats 5"   // 5: features at 32 frames a second (9 Nov); 4: drops and breaks vote for bar 1 (9 Nov); 3: the bar start can move within a track (8 Nov); older files are resolved again from their raw results
+        const val HEADER = "beats 7"   // 7: a move of the bar start needs a drop to confirm it (15 Nov); 6: short breaks vote too (15 Nov); 5: features at 32 frames a second (9 Nov); 4: drops and breaks vote for bar 1 (9 Nov); 3: the bar start can move within a track (8 Nov); older files are resolved again from their raw results
         private const val REALIGN_COST = 4.5  // how much evidence a move of the bar start needs (tuned on 11 real sets, 8 Nov: no back-and-forth pairs)
         private const val FILL = 4            // a window with no beat borrows a good one up to this many windows away
         private const val SPAN = 8            // windows either side that vote on the bar start: about a minute each way
@@ -174,7 +194,8 @@ class SetBeats(val windows: List<Win?>) {
             // EDM structure (hand-off research, 9 Nov): sections change on bar 1 of a phrase, and the clearest change is the low end (kick and bass)
             // leaving for a break or coming back for the drop. Each such moment votes strongly for its own beat as bar 1.
             val structural = HashMap<Int, DoubleArray>()
-            if (frames > 0) for (ev in lowEndChanges(feat)) {
+            // A short break (a beat or two without the kick, then the drop) counts too, from a 1 s look either side (user, 15 Nov: a bar a beat out after one).
+            if (frames > 0) for (ev in lowEndChanges(feat) + lowEndChanges(feat, 1, SHORT_THRESH).filter { it.second }) {
                 if (STRUCT_MODE == 1 && !ev.second || STRUCT_MODE == 2 && ev.second || STRUCT_MODE == 0) continue
                 val sample = ev.first * RATE / BeatFeatures.PER_S + 1024
                 val w = windowAt(sample.toLong()).toInt()
@@ -184,6 +205,24 @@ class SetBeats(val windows: List<Win?>) {
             }
             // (A clap-on-2-and-4 cue was tried on 9 Nov, at 8 and 32 frames a second: it added nothing to this evidence.)
             val phaseOf = barPhases(n, track, filled.map { it != null }, change, winChange, structural)
+            // A move of the bar start stands only if a drop or break lands on bar 1 in its new place before it moves again (user, 15 Nov: the
+            // sound-change cue alone moved one set a beat early for 8 minutes). Otherwise the bar start stays where it was.
+            if (CONFIRM_MOVES) {
+                var held: Int? = null; var heldTrack = -1
+                var w = 0
+                while (w < n) {
+                    val ph = phaseOf[w]
+                    if (ph == null) { w++; continue }
+                    if (track[w] != heldTrack) { held = ph; heldTrack = track[w] }
+                    var e = w
+                    while (e < n && (phaseOf[e] == null || phaseOf[e] == ph) && track[e] == track[w]) e++
+                    if (ph != held) {
+                        val confirmed = (w until e).any { c -> structural[c]?.let { v -> v.max() > 0 && (0..3).maxBy { v[it] } == ph } == true }
+                        if (confirmed) held = ph else for (c in w until e) if (phaseOf[c] != null) phaseOf[c] = held
+                    }
+                    w = e
+                }
+            }
             val wins = arrayOfNulls<Win>(n)
             for (w in 0 until n) {
                 val g = filled[w] ?: continue
@@ -206,17 +245,19 @@ class SetBeats(val windows: List<Win?>) {
         @JvmField var STRUCT_WEIGHT = 2.0    // each change's vote, in units of one window's relative evidence
         @JvmField var STRUCT_REACH = 6       // windows either side it reaches (±48 s: across a breakdown)
         @JvmField var STRUCT_THRESH = 0.8    // how big a low-end change must be to count
+        @JvmField var CONFIRM_MOVES = true  // a move needs a drop or break to confirm it
+        @JvmField var SHORT_THRESH = 0.8     // the same, for the kick coming back after a short break
 
         /**
          * Where the low end (40–150 Hz: kick and bass) comes back after a break (true) or leaves for one (false), as feature frames: the steepest step
-         * near a point where the 4 s after differs from the 4 s before by more than [STRUCT_THRESH] of the set's usual low-end range.
+         * near a point where the [halfS] s after differs from the [halfS] s before by more than [thresh] of the set's usual low-end range.
          */
-        internal fun lowEndChanges(feat: FloatArray): List<Pair<Int, Boolean>> {
+        internal fun lowEndChanges(feat: FloatArray, halfS: Int = 4, thresh: Double = STRUCT_THRESH): List<Pair<Int, Boolean>> {
             val b = BeatFeatures.BANDS; val n = feat.size / b
             if (n < 80) return emptyList()
             val low = DoubleArray(n) { f -> (feat[f * b] + feat[f * b + 1] + feat[f * b + 2] + feat[f * b + 3]) / 4.0 }
             val sorted = low.sorted(); val span = (sorted[(n * 0.75).toInt()] - sorted[(n * 0.05).toInt()]).coerceAtLeast(1e-6)
-            val half = 4 * BeatFeatures.PER_S
+            val half = halfS * BeatFeatures.PER_S
             val out = ArrayList<Pair<Int, Boolean>>()
             var f = half
             while (f < n - half) {
@@ -224,11 +265,11 @@ class SetBeats(val windows: List<Win?>) {
                 for (k in f - half until f) before += low[k]
                 for (k in f until f + half) after += low[k]
                 val d = (after - before) / half / span
-                if (abs(d) > STRUCT_THRESH) {
+                if (abs(d) > thresh) {
                     // The change's centre is where the before/after difference peaks, not where it first crosses; then the steepest step near it.
                     fun diff(c: Int): Double { var a = 0.0; for (k in c until c + half) a += low[k] - low[k - half]; return a / half / span }
                     val c = (f until minOf(f + half, n - half)).maxBy { if (d > 0) diff(it) else -diff(it) }
-                    val r = 3 * BeatFeatures.PER_S / 8
+                    val r = minOf(3 * BeatFeatures.PER_S / 8, half / 4)
                     val best = (c - r..c + r).maxBy { k -> if (d > 0) low[k] - low[k - 1] else low[k - 1] - low[k] }
                     out.add(best to (d > 0)); f += 2 * half
                 } else f++

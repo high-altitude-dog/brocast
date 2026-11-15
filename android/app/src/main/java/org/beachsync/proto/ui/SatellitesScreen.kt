@@ -37,6 +37,7 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.beachsync.proto.FlowTime
+import org.beachsync.proto.Session
 import org.beachsync.proto.GpsFitter
 import org.beachsync.proto.fmtMillis
 import org.beachsync.proto.RangeTrack
@@ -107,7 +108,6 @@ fun SatellitesScreen(state: BenchState, actions: BenchActions, back: () -> Unit,
             val total = FlowTime.gps?.errAt(boot)?.div(1e6)?.takeIf { it.isFinite() } ?: (2 * max(stamp, max(signal, link)))
             // Under 1 ms in total: nothing is holding it back, so no row is tagged LIMIT (hand-off 13, "Very accurate").
             val accurate = !noRaw && total < 1.0
-            Verdict(largest, total, stamp, accurate)
             val sats = gps.sats
             // Each satellite's distance, once a second while this screen is open, for the rate on its card.
             remember(boot) { sats.forEach { s -> tracks.getOrPut(s.label) { RangeTrack() }.add(boot / 1e9, rangeOf(s)) } }
@@ -119,7 +119,7 @@ fun SatellitesScreen(state: BenchState, actions: BenchActions, back: () -> Unit,
             if (flat) {
                 BasicText("Show in 3D", Modifier.clickable { setFlat(false) }.padding(vertical = 6.dp), Tokens.Text.body.style(Ink.accent))
                 Sky(sats, picked, { picked = it })
-            } else Sky3D(sats, gps.position, picked, { picked = it }) { setFlat(true) }
+            } else Sky3D(sats, gps.position, picked, { picked = it }, barClock(state)) { setFlat(true) }
             BasicText("● GPS   ◆ Galileo   ▲ GLONASS   ■ BeiDou   ○ in view, not used", style = Tokens.Text.small.style(Ink.textSecondary))
             if (flat) BasicText("Tap any satellite for its details. Lines join the ones in use, like a constellation.", style = Tokens.Text.small.style(Ink.textSecondary))
             picked?.let { label -> sats.firstOrNull { it.label == label }?.let { SatCard(it, tracks[label]?.rateKmS()) { picked = null } } }
@@ -135,18 +135,9 @@ fun SatellitesScreen(state: BenchState, actions: BenchActions, back: () -> Unit,
                     )
                     BasicText("The total, about ±${fmtMillis(total)}, is a 95% range; the chip stamp's ±${fmtMillis(stamp)} is one standard deviation.", style = Tokens.Text.small.style())
                 }
-                Card {
-                    BasicText("Will more satellites help?", style = Tokens.Text.bodyStrong.style())
-                    BasicText(
-                        if (accurate) "Not needed. Timing is already under 1 ms, and nothing is holding it back." else when (largest) {
-                            Limit.SIGNAL -> "Yes. The signal is the limit, so more satellites or a clearer sky will help. Open sky is best."
-                            Limit.CHIP -> "No, not on this phone. The limit is inside the chip. With 9 satellites or 15, it stays at about ±${fmtMillis(total)}. Open sky helps only when the signal is the limit."
-                            else -> "No, not on this phone. The link between the chip and the clock is the limit, and more satellites won't change it."
-                        },
-                        style = Tokens.Text.body.style(),
-                    )
-                }
             }
+            // One box for the verdict and whether more satellites help (user, 15 Nov): below the sky, after what limits it.
+            Verdict(largest, total, stamp, accurate)
             Card {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     BasicText(if (gold == false) "Silver link" else if (gold == true) "Gold link" else "Link", Modifier.weight(1f), Tokens.Text.bodyStrong.style())
@@ -178,10 +169,10 @@ private fun Verdict(limit: Limit, total: Double, stamp: Double, accurate: Boolea
         Limit.LINK -> "Your phone links GPS time to its clock less directly: about ±${fmtMillis(total)}."
         Limit.NO_RAW -> "This phone's GPS chip doesn't share its clock."
     }
-    val reason = if (accurate) "Nothing is holding it back." else when (limit) {
-        Limit.CHIP -> "The chip says each time stamp it gives the Brocast clock may be off by up to ${fmtMillis(stamp)}. Brocast can't do better than that, however many satellites it sees."
-        Limit.SIGNAL -> "More satellites or a clearer sky will help."
-        Limit.LINK -> "More satellites won't change it."
+    val reason = if (accurate) "Nothing is holding it back, so more satellites aren't needed." else when (limit) {
+        Limit.CHIP -> "The chip says each time stamp it gives the Brocast clock may be off by up to ${fmtMillis(stamp)}. More satellites won't help on this phone: with 9 or 15 it stays at about ±${fmtMillis(total)}. Open sky helps only when the signal is the limit."
+        Limit.SIGNAL -> "More satellites or a clearer sky will help. Open sky is best."
+        Limit.LINK -> "The link between the chip and the clock is the limit, so more satellites won't change it."
         Limit.NO_RAW -> "Brocast uses internet time instead. The sky still shows, but Use satellites can't improve timing on this phone."
     }
     val edge = if (signal) Ink.accent else Ink.warn
@@ -312,7 +303,9 @@ private fun SatCard(s: Sat, rateKmS: Double?, close: () -> Unit) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             BasicText("● ", style = Tokens.Text.bodyStrong.style(if (s.used) Ink.accent else Ink.muted))
             BasicText(s.label, style = Tokens.Text.bodyStrong.style())
-            BasicText("  ${s.systemName} · ${if (s.used) "in use" else "in view, not used"}", Modifier.weight(1f), Tokens.Text.small.style(Ink.textSecondary))
+            BasicText("  ${s.systemName}", style = Tokens.Text.small.style(Ink.textSecondary))
+            fleet?.countries?.forEach { (code, _) -> BasicText(" " + org.beachsync.proto.flagOf(code), style = Tokens.Text.body.style()) }
+            BasicText(" · ${if (s.used) "in use" else "in view, not used"}", Modifier.weight(1f), Tokens.Text.small.style(Ink.textSecondary))
             BasicText("×", Modifier.clickable(onClick = close).padding(8.dp), Tokens.Text.bodyStrong.style())
         }
         // From the IGS table (hand-off 44): `GPS IIR-M · NAVSTAR 59 · launched Nov 2006`.
@@ -341,10 +334,7 @@ private fun SatCard(s: Sat, rateKmS: Double?, close: () -> Unit) {
         }
         fleet?.let { f ->
             FactRow("BUILT IN") {
-                for ((code, name) in f.countries) Row(verticalAlignment = Alignment.CenterVertically) {
-                    BasicText(org.beachsync.proto.flagOf(code), style = Tokens.Text.body.style().copy(fontSize = 20.sp))
-                    BasicText("  $name", style = Tokens.Text.body.style())
-                }
+                for ((_, name) in f.countries) BasicText(name, style = Tokens.Text.body.style())
                 BasicText(f.operator, style = Tokens.Text.small.style(Ink.textSecondary))
             }
         }
@@ -379,4 +369,18 @@ private fun FactRow(label: String, body: @Composable () -> Unit) {
         BasicText(label, Modifier.width(84.dp).padding(top = 2.dp), Tokens.Text.cardLabel.style())
         Column(Modifier.weight(1f)) { body() }
     }
+}
+
+/** The music's place in bars (bar number + how far through it), at the ear, from the playing set's beat grid; null when nothing with a grid is playing. */
+private fun barClock(state: BenchState): () -> Double? = clock@{
+    val s = state.session ?: return@clock null
+    val lib = state.library ?: return@clock null
+    if (!s.s.library) return@clock null
+    val m = s.stream?.manifest ?: return@clock null
+    val fit = FlowTime.fit() ?: return@clock null
+    val pos = (fit.utcAt(Session.nowBoot()) - m.startNs - m.dMs * 1_000_000L).toDouble() * 48000.0 / 1e9
+    val n = Math.floorDiv(Math.floor(pos).toLong(), 48000L)
+    val (item, block) = org.beachsync.proto.segmentAt(lib.editions, n) ?: return@clock null
+    val p = lib.beats(item.id)?.at(block * 48000.0 + (pos - n * 48000.0)) ?: return@clock null
+    p.bar + (p.beatInBar + p.beatFrac) / 4.0
 }

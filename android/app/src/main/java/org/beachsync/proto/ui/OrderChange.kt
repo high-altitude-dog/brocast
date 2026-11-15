@@ -148,14 +148,14 @@ internal fun changeLine(eds: List<Edition>, dMs: Long, up: Edition): ChangeLine?
 /** In the latest-event row's place: cyan, news not a warning. Whole minutes, then seconds in the last minute. Tap opens the event log. */
 @Composable
 internal fun OrderChangeCard(lib: LibraryStore, up: Edition, utcNs: Long, openLog: () -> Unit) {
-    val cyan = Lane.NET.color()
+    val cyan = Ink.accent   // the station colour (hand-off 55); cyan stays for the news bulletin
     val heard = up.startNs + lib.dMs * 1_000_000L
     val left = maxOf(0L, (heard - utcNs) / 1_000_000_000L)
     val inText = if (left < 60) "in $left s" else "in ${(left + 59) / 60} m"
     val line = changeLine(lib.editions, lib.dMs, up)
     val shape = RoundedCornerShape(Tokens.Radius.card.dp)
     Column(
-        Modifier.fillMaxWidth().border(1.dp, cyan, shape).clickable(role = Role.Button, onClick = openLog).padding(14.dp),
+        Modifier.fillMaxWidth().border(1.dp, cyan.copy(alpha = 0.5f), shape).clickable(role = Role.Button, onClick = openLog).padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Row(Modifier.fillMaxWidth()) {
@@ -166,8 +166,7 @@ internal fun OrderChangeCard(lib: LibraryStore, up: Edition, utcNs: Long, openLo
         if (line != null) BasicText(
             buildAnnotatedString {
                 append(line.lead + " ")
-                withStyle(SpanStyle(color = Ink.text)) { append(line.new) }
-                line.was?.let { append(" (was $it)") }
+                withStyle(SpanStyle(color = cyan)) { append(line.new); if (line.was != null) append(" (was ${line.was})") }
                 append(if (lib.file(line.newId).exists()) " · ready on this phone ✓" else " · downloading")
             },
             style = Tokens.Text.small.style(Ink.muted),

@@ -37,9 +37,14 @@ class LibraryStore private constructor(ctx: Context) : Thread("library") {
     @Volatile var totalSets = 0
     /** How much of the file being downloaded has arrived, 0 to 100; -1 when nothing is downloading. */
     @Volatile var partPct = -1
+    // The set arriving now, for the Receiving box (hand-off 57): its name, bytes so far and in all, and whether listeners are sending it.
+    @Volatile var partTitle = ""
+    @Volatile var partBytes = 0L
+    @Volatile var partTotal = 0L
+    @Volatile var partMesh = false
     @Volatile private var going = true
 
-    init { if (listFile.exists()) try { read(listFile.readText()); summarise(null) } catch (_: Exception) { } }   // what is already on the phone shows at once, with no network
+
 
     fun file(id: String) = File(dir, "$id.opus")
 
@@ -66,6 +71,11 @@ class LibraryStore private constructor(ctx: Context) : Thread("library") {
         val sets = status.optJSONObject("library")?.optJSONArray("sets") ?: return
         val building = (0 until sets.length()).map { sets.getJSONObject(it) }.firstOrNull { it.optString("state") == "building" }
         partPct = building?.optInt("pct", 0) ?: -1
+        if (building != null) {
+            partMesh = true
+            val item = editions.asSequence().flatMap { it.items.asSequence() }.firstOrNull { it.id == building.optString("id") }
+            partTitle = item?.title ?: building.optString("title"); partTotal = item?.bytes ?: 0L; partBytes = partTotal * partPct / 100
+        }
         if (building == null) summarise(null)
         else {
             val ed = editionAt(editions, System.currentTimeMillis() * 1_000_000L)
@@ -78,6 +88,15 @@ class LibraryStore private constructor(ctx: Context) : Thread("library") {
     /** Artists from the server's registry: name and photo version, and which artists each set is by. */
     @Volatile var artists: Map<String, Pair<String, Long>> = emptyMap()
     @Volatile var setArtists: Map<String, List<String>> = emptyMap()
+    /** Where each registry artist is from (hand-off 56): ISO codes, at most two. */
+    @Volatile var artistCountries: Map<String, List<String>> = emptyMap()
+
+    /** The set's registry artist: name and countries, or null. */
+    fun artistOf(itemId: String): Pair<String, List<String>>? = setArtists[itemId]?.firstOrNull()?.let { a -> artists[a]?.let { it.first to (artistCountries[a] ?: emptyList()) } }
+
+    // What is already on the phone shows at once, with no network. After the fields above, which would otherwise start empty again
+    // (15 Nov: the artists and photos vanished whenever the server was off).
+    init { if (listFile.exists()) try { read(listFile.readText()); summarise(null) } catch (e: Exception) { Log.w("BeachSync", "Library file: $e") } }
     private val artistDir = File(dir, "artists").apply { mkdirs() }
     private fun artistFile(aid: String, crop: String) = artists[aid]?.let { File(artistDir, "$aid-$crop-${it.second}.jpg") }
 
@@ -107,8 +126,49 @@ class LibraryStore private constructor(ctx: Context) : Thread("library") {
         if (!fresh && now - (beatLooked[id] ?: Long.MIN_VALUE / 2) < 5000) return null
         beatLooked[id] = now
         val f = beatsFile(id)
-        return if (f.exists()) SetBeats.decode(f.readText())?.also { beatCache[id] = it } else null
+        return if (f.exists()) SetBeats.decode(f.readText())?.also { it.fixes = readFixes(id); beatCache[id] = it } else null
     }
+
+    /** A listener's 8-tap bar-1 correction (user, 15 Nov), for the stretch around window [w]; [shift] 0 removes it. */
+    fun addBarFix(id: String, w: Int, shift: Int) {
+        val g = beats(id, fresh = true) ?: return
+        val seg = g.segmentOf(w)
+        val list = g.fixes.filter { it.toW < seg.first || it.fromW > seg.last } + (if (shift != 0) listOf(SetBeats.Fix(seg.first, seg.last, shift)) else emptyList())
+        g.fixes = list
+        File(dir, "$id.barfix").writeText(list.joinToString("\n") { "${it.fromW} ${it.toW} ${it.shift}" })
+        android.util.Log.i("SetBeats", "bar fix $id: windows ${seg.first}..${seg.last}, bar 1 on grid beat ${shift + 1}")
+        // Shared through the station (user, 15 Nov): every phone gets it, and it's kept to tune the bar finder.
+        if (url.isNotEmpty() && meshKey.isEmpty()) Thread({
+            try {
+                val q = "/barfix?set=$id&grid=${java.net.URLEncoder.encode(SetBeats.HEADER, "UTF-8")}&from=${seg.first}&to=${seg.last}&shift=$shift"
+                (URL(url.trimEnd('/') + q).openConnection() as HttpURLConnection).apply { requestMethod = "POST"; connectTimeout = 5000; readTimeout = 5000; doOutput = true; outputStream.close() }
+                    .let { c -> android.util.Log.i("SetBeats", "bar fix shared: HTTP ${c.responseCode}"); c.disconnect() }
+            } catch (e: Exception) { android.util.Log.w("SetBeats", "bar fix not shared: $e") }
+        }, "barfix").apply { isDaemon = true }.start()
+    }
+
+    /** Everyone's bar-1 corrections from the station, for grids of this version; they replace this phone's own for those sets. */
+    private fun refreshBarFixes() {
+        val c = open("/barfixes.json", 0L)
+        try {
+            if (c.responseCode != 200) return
+            val j = JSONObject(c.inputStream.use { it.readBytes() }.toString(Charsets.UTF_8))
+            for (id in j.keys()) {
+                val arr = j.getJSONArray(id)
+                val list = (0 until arr.length()).map { arr.getJSONObject(it) }.filter { it.optString("grid") == SetBeats.HEADER }
+                    .map { SetBeats.Fix(it.getInt("from"), it.getInt("to"), it.getInt("shift")) }
+                val text = list.joinToString("\n") { "${it.fromW} ${it.toW} ${it.shift}" }
+                val f = File(dir, "$id.barfix")
+                if ((if (f.exists()) f.readText() else "") == text) continue
+                f.writeText(text)
+                beatCache[id]?.fixes = list
+            }
+        } finally { c.disconnect() }
+    }
+
+    private fun readFixes(id: String): List<SetBeats.Fix> = try {
+        File(dir, "$id.barfix").takeIf { it.exists() }?.readLines()?.mapNotNull { l -> l.split(' ').takeIf { it.size == 3 }?.let { SetBeats.Fix(it[0].toInt(), it[1].toInt(), it[2].toInt()) } }.orEmpty()
+    } catch (_: Exception) { emptyList() }
 
     private fun read(text: String) {
         val j = JSONObject(text)
@@ -126,6 +186,7 @@ class LibraryStore private constructor(ctx: Context) : Thread("library") {
         news = j.optJSONObject("news")?.let { StationNews(it.optString("choice"), it.optString("name"), it.optString("url")) }
         calledOff = j.optJSONArray("called_off")?.let { c -> (0 until c.length()).map { c.getJSONObject(it).optLong("start_ns") }.toSet() }.orEmpty()
         artists = j.optJSONObject("artists")?.let { a -> a.keys().asSequence().associateWith { k -> a.getJSONObject(k).let { it.optString("name") to it.optLong("v") } } }.orEmpty()
+        artistCountries = j.optJSONObject("artists")?.let { a -> a.keys().asSequence().associateWith { k -> a.getJSONObject(k).optJSONArray("countries")?.let { c -> (0 until c.length()).map { c.getString(it) }.filter { it.length == 2 }.take(2) }.orEmpty() } }.orEmpty()
         setArtists = j.optJSONObject("set_artists")?.let { s -> s.keys().asSequence().associateWith { k -> s.getJSONArray(k).let { l -> (0 until l.length()).map { l.getString(it) } } } }.orEmpty()
     }
 
@@ -133,7 +194,7 @@ class LibraryStore private constructor(ctx: Context) : Thread("library") {
         Process.setThreadPriority(Process.THREAD_PRIORITY_BACKGROUND)
         while (going) {
             if (meshKey.isNotEmpty()) { try { sleep(RETRY_MS) } catch (_: InterruptedException) { }; continue }   // PearsEngine fetches instead
-            val done = try { refresh(); sync() } catch (e: Exception) { Log.w("BeachSync", "Library: $e"); summarise(e.message); false }
+            val done = try { refresh(); try { refreshBarFixes() } catch (e: Exception) { Log.w("BeachSync", "bar fixes: $e") }; sync() } catch (e: Exception) { Log.w("BeachSync", "Library: $e"); summarise(e.message); false }
             try { sleep(if (done) REFRESH_MS else RETRY_MS) } catch (_: InterruptedException) { }
         }
     }
@@ -209,6 +270,7 @@ class LibraryStore private constructor(ctx: Context) : Thread("library") {
                             last = t
                             val have = edition.items.count { file(it.id).exists() }
                             partPct = (part.length() * 100 / maxOf(1, item.bytes)).toInt().coerceAtMost(100)
+                            partTitle = item.title; partBytes = part.length(); partTotal = item.bytes; partMesh = false
                             status = "Downloading ${have + 1} of ${edition.items.size} · $partPct%"
                         }
                     }
