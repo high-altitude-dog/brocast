@@ -90,6 +90,8 @@ dependencies {
     implementation("androidx.compose.foundation:foundation")
     implementation("androidx.compose.ui:ui")
     implementation("androidx.activity:activity-compose:1.9.3")
+    // A dependency pulls in Fragment 1.0.0, which breaks registerForActivityResult; 1.8 is the current one.
+    implementation("androidx.fragment:fragment:1.8.5")
     // Pass it on (hand-off 53): drawing the QR code (ZXing, plain Java) and scanning one (Google's code scanner: no camera permission,
     // Play services fetch it on first use). Screens only.
     implementation("com.google.zxing:core:3.5.3")
