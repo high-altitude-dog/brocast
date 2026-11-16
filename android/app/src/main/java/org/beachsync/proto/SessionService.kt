@@ -140,7 +140,7 @@ class SessionService : Service() {
             Intent(this, SessionService::class.java).setAction(ACTION_STOP), PendingIntent.FLAG_IMMUTABLE)
         return Notification.Builder(this, CHANNEL)
             .setSmallIcon(android.R.drawable.ic_media_play)
-            .setContentTitle("Beach Sync test run")
+            .setContentTitle("Brocast test run")
             .setContentText("Playing. Tap to open.")
             .setContentIntent(open)
             .setOngoing(true)

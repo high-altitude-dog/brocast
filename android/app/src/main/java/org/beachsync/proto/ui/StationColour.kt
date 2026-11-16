@@ -90,7 +90,7 @@ object StationColour {
         val spec = lib?.colour
         if (spec != null && spec.tell && spec.atNs != toldAt && utc >= spec.atNs && utc - spec.atNs < 10 * 60_000_000_000L) {
             toldAt = spec.atNs
-            if (spec.prev != spec.hex) toast = "Beach Sync Radio is ${name(parse(spec.hex) ?: LIME)} now" to SystemClock.uptimeMillis()
+            if (spec.prev != spec.hex) toast = "Brocast Radio is ${name(parse(spec.hex) ?: LIME)} now" to SystemClock.uptimeMillis()
         }
         toast?.let { if (SystemClock.uptimeMillis() - it.second > 4000) toast = null }
         return c != (lib?.let { at(it, utc + 100_000_000L) } ?: LIME)   // still changing: follow it frame by frame

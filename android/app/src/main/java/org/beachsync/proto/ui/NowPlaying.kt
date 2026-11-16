@@ -131,7 +131,7 @@ fun NowPlaying(state: BenchState, actions: BenchActions, openLog: () -> Unit, op
                 ArtistThumb(lib, playing?.first, 96.dp, openArtist)
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f).fillMaxHeight()) {
-                    ScrollingName(playing?.first?.title?.ifEmpty { null } ?: s?.stream?.manifest?.source?.ifEmpty { null } ?: "Beach Sync Radio", Tokens.Text.screenTitle.style().copy(fontSize = 20.sp))
+                    ScrollingName(playing?.first?.title?.ifEmpty { null } ?: s?.stream?.manifest?.source?.ifEmpty { null } ?: "Brocast Radio", Tokens.Text.screenTitle.style().copy(fontSize = 20.sp))
                     if (silentS > 0) BasicText("Starts in ${silentS / 60}:${"%02d".format(silentS % 60)}", style = Tokens.Text.small.style(Ink.accent).copy(fontSize = 13.sp), maxLines = 1)
                     else playing?.first?.let { item ->
                         val reg = lib.artistOf(item.id)

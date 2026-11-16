@@ -350,7 +350,7 @@ object PearsEngine {
     private const val FIRST_MUSIC_BLOCKS = 5
     private const val OFFLINE_AFTER_MS = 10_000L
     /** The station's name until the directory (hand-off 33) gives each station its own. */
-    const val STATION_NAME = "Beach Sync Radio"
+    const val STATION_NAME = "Brocast Radio"
     private const val CMD_HELLO = 1
     private const val CMD_START = 2
     private const val CMD_SUBSCRIBE = 3

@@ -534,7 +534,7 @@ fun BufferScreen(state: BenchState, back: () -> Unit, openSwarm: () -> Unit) {
                 BasicText("Carries on in the background while you listen; usually 30 to 70 s on home Wi-Fi.", style = Tokens.Text.small.style(Ink.textSecondary))
             }
         }
-        BasicText(item?.title ?: "Beach Sync Radio", style = Tokens.Text.bodyStrong.style(), maxLines = 2, overflow = TextOverflow.Ellipsis)
+        BasicText(item?.title ?: "Brocast Radio", style = Tokens.Text.bodyStrong.style(), maxLines = 2, overflow = TextOverflow.Ellipsis)
         item?.artist?.ifEmpty { null }?.let { BasicText(it, style = Tokens.Text.small.style(Ink.textSecondary)) }
         BasicText(if (allHere) "● All here · nothing left to fetch" else "● Filling · $ahead ahead", style = Tokens.Text.bodyStrong.style(Ink.accent))
         DemoBanner("The timeline drawing is made up. AHEAD, FILLING and FROM STATION below are real.")

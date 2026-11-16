@@ -128,7 +128,7 @@ fun PassReceiveScreen(lib: LibraryStore?, link: PassLink, currentStation: String
     val stuck = accepted && !built && now - maxOf(lastMove, since) > 45_000
     PassPage("Pass it on", back) {
         Card {
-            SetHeader(item, item?.title ?: "A set from Beach Sync Radio")
+            SetHeader(item, item?.title ?: "A set from Brocast Radio")
             when {
                 built -> {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -136,7 +136,7 @@ fun PassReceiveScreen(lib: LibraryStore?, link: PassLink, currentStation: String
                         Spacer(Modifier.width(10.dp))
                         BasicText("Plays offline, in sync with the station when it's on air.", Modifier.weight(1f), Tokens.Text.body.style())
                     }
-                    BasicText("Checked against Beach Sync Radio's signature, block by block. If the station later withdraws the set, it goes from Kept too.", style = Tokens.Text.small.style(Ink.textSecondary))
+                    BasicText("Checked against Brocast Radio's signature, block by block. If the station later withdraws the set, it goes from Kept too.", style = Tokens.Text.small.style(Ink.textSecondary))
                 }
                 !accepted -> {
                     Row(verticalAlignment = Alignment.CenterVertically) {
