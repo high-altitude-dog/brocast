@@ -2,6 +2,14 @@
 
 Work agreed but not started. Newest first. Move an item out when it is built.
 
+## Next session (user, 15 Nov)
+
+1. **Release with the relay.** Publish a new GitHub release so phones installed from GitHub get the relay support and the engine's catalog-wait fix (commit `193df04`). The relay key stays out of the APK and the repo; give it by adb (`--es relay`) or a later in-app setting.
+2. **Offer HTTP-downloaded sets on the mesh.** A phone holding a set from the server should fetch only the station's proofs (tree and signature, not the audio), check its own file's blocks against them, and then serve them like any mesh set. Hypercore has no ready-made import, so this is an engine change plus a test. Until then a phone switching to the mesh fetches its whole library again.
+3. **Nearby phone-to-phone transport.** Hypercore replication over a direct radio link, for beaches, festivals and venue Wi-Fi that isolates clients or has no internet. Both test phones support Wi-Fi Direct and Bluetooth LE (not Wi-Fi Aware), so Nearby Connections or Wi-Fi Direct. Bridge the Android socket into the engine; test with the laptop station off and no internet.
+
+Context: on 15 Nov, on client-isolated public Wi-Fi, station → Galaxy → Motorola (station off) worked through a blind relay on the test server, byte-identical. A set took about 70 s through the relay; relayed bytes count as the server's egress, so relay tests stay at one set.
+
 ## Backlog: security and key management (user, 7 Nov: more important once there are users besides the user)
 
 - **Threat model** for the mesh: hostile peers, an inflated listener count, eclipse (a phone cut off from honest peers), and key loss or theft. Starting points: `docs/kademlia-research.md` §5, design note §12 (census).
