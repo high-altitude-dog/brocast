@@ -14,7 +14,7 @@ import { profile } from '../engine/policy.js'
 import { SetBuilder, serialOf } from '../engine/builder.js'
 import { hedge } from '../engine/hedge.js'
 import { nymFrom, nymProof, nymText } from '../engine/nym.js'
-import { PACKETS } from '../engine/blocks.js'
+import { PACKETS, blocks as fileBlocks } from '../engine/blocks.js'
 
 const CMD = { hello: 1, start: 2, subscribe: 3, status: 4, stop: 5, block: 6, prefs: 7, react: 8, want: 9 }
 const EV = { status: 100, built: 102, warning: 103, fatal: 104, catalog: 105 }
@@ -180,13 +180,40 @@ class Run {
       s.builder = new SetBuilder({ music: this.dirs.music, id: it.id, blocks: it.blocks, serial: serialOf(core.key), sha: it.blake2b })
       core.on('download', (index, bytes, from) => this.peer(from).rx += bytes)
       core.on('upload', (index, bytes, to) => this.peer(to).tx += bytes)
+      if (this.share) this.mesh.proofs.offer(core)
       this.sets.push(s)
       this.byId.set(it.id, s)
     }
+    this.importHeld()
     // Sets already on the phone (from the server, before the mesh) aren't fetched again.
     this.todo = this.sets.filter((s) => !s.builder.done)
     this.total = this.todo.reduce((a, s) => a + s.blocks, 0)
     this.phase = this.held.size < this.total ? 'fetching' : 'all sets held'
+  }
+
+  /**
+   * Sets this phone already has from the server: proofs only are fetched, its own blocks go into the core, and the set is
+   * then served like a mesh set (proofs.js). Not on receive-only, which never uploads. One set at a time, oldest first.
+   */
+  async importHeld () {
+    if (!this.share || this.importing) return
+    this.importing = true
+    try {
+      for (const s of this.sets) {
+        if (state.stopping) return
+        if (!s.builder.done || s.imported || s.core.contiguousLength >= s.blocks) { if (s.core.contiguousLength >= s.blocks) s.imported = true; continue }
+        let mine
+        try { mine = fileBlocks(this.dirs.music + '/' + s.it.id + '.opus', s.it.block_seconds ?? this.bs) } catch (e) { s.imported = 'unreadable'; continue }
+        if (mine.length !== s.blocks) { s.imported = 'length'; emit(EV.warning, { code: 'IMPORT', text: s.it.id + ': file has ' + mine.length + ' blocks, set has ' + s.blocks }); continue }
+        const t = now()
+        const r = await this.mesh.proofs.import(s.core, mine, (ch) => this.seeds?.has(ch.peer) ? 1 : 0)
+        if (r.ok) s.imported = true
+        else if (r.why === 'no peer proved it') { setTimeout(() => this.importHeld(), 30000); return } // try again when peers come
+        else { s.imported = 'mismatch'; emit(EV.warning, { code: 'IMPORT', text: s.it.id + ': ' + r.why }) }
+        emit(EV.warning, { code: 'IMPORTED', text: s.it.id + (r.ok ? ' offered on the mesh' : ' not offered') + ': ' + r.imported + '/' + s.blocks + ' blocks, ' + Math.round(r.proofBytes / 1024) + ' KB of proofs, ' + Math.round(now() - t) + ' ms' })
+        this.sendStatus()
+      }
+    } finally { this.importing = false }
   }
 
   peer (conn) {
@@ -313,7 +340,7 @@ class Run {
         edition: this.edition ?? null,
         held: this.held.size,
         total: this.total ?? null,
-        sets: this.sets.map((s) => ({ id: s.it.id, state: s.builder.done ? 'built' : 'building', pct: s.builder.done ? 100 : Math.floor((s.got / s.blocks) * 100) }))
+        sets: this.sets.map((s) => ({ id: s.it.id, state: s.builder.done ? 'built' : 'building', pct: s.builder.done ? 100 : Math.floor((s.got / s.blocks) * 100), offered: s.builder.done ? s.core.contiguousLength >= s.blocks : null }))
       },
       ledger: { today: { downBytes: wire.rx, upBytes: wire.tx } }
     }

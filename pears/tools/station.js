@@ -35,6 +35,7 @@ for (const name of fs.readdirSync(library).filter((f) => f.endsWith('.opus')).so
     const all = blocks(path.join(library, name), blockSeconds)
     for (let i = 0; i < all.length; i += 256) await core.append(all.slice(i, i + 256))
   }
+  mesh.proofs.offer(core) // phones holding the set from HTTP prove their copy against it (proofs.js)
   const all = []
   for (let i = 0; i < core.length; i++) all.push(await core.get(i))
   const b2 = blake2b(buildOgg(serialOf(core.key), all)) // the hash of the file every phone will build

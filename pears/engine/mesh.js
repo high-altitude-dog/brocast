@@ -7,6 +7,7 @@ import c from 'compact-encoding'
 import crypto from 'hypercore-crypto'
 import b4a from 'b4a'
 import { Sketch } from './sketch.js'
+import { Proofs } from './proofs.js'
 import { nymFrom, nymText } from './nym.js'
 
 /** Everything a node needs, derived from its one secret seed, so one file backs it up. */
@@ -72,6 +73,7 @@ export class Mesh {
     this.reactSeen = new Map()
     this.reactLast = new Map()
     this.onreaction = null
+    this.proofs = new Proofs() // sets that came over HTTP, proved by peers and then served (proofs.js)
     this.swarm.on('connection', (conn) => this._onconnection(conn))
   }
 
@@ -138,6 +140,7 @@ export class Mesh {
     conn.on('error', () => {})
     conn.on('close', () => add(this.closedWire, conn.rawStream))
     this.store.replicate(conn)
+    this.proofs.attach(conn)
     const k = conn.remotePublicKey ? hex(conn.remotePublicKey) : null
     const fc = Protomux.from(conn).createChannel({
       protocol: 'brocast/country/1',
