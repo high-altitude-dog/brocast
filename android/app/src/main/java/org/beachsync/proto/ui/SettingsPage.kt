@@ -28,7 +28,7 @@ import androidx.compose.ui.unit.dp
 
 /** Only the LISTENING section for now: the design's other sections have nothing behind them yet. */
 @Composable
-fun SettingsPage(state: BenchState, actions: BenchActions, back: () -> Unit, openCalibration: () -> Unit, openSatellites: () -> Unit, openSync: () -> Unit, openBeat: () -> Unit, openStereo: () -> Unit, openData: () -> Unit, openIdentity: (step: Int, role: Int) -> Unit, openKept: () -> Unit, openTestCard: () -> Unit = {}, openNews: () -> Unit = {}) {
+fun SettingsPage(state: BenchState, actions: BenchActions, back: () -> Unit, openCalibration: () -> Unit, openSatellites: () -> Unit, openSync: () -> Unit, openBeat: () -> Unit, openStereo: () -> Unit, openData: () -> Unit, openIdentity: (step: Int, role: Int) -> Unit, openKept: () -> Unit, openWhereFrom: () -> Unit, openTestCard: () -> Unit = {}, openNews: () -> Unit = {}) {
     rememberTick(SETTINGS_TICK_MS).value    // the output's name can change during a run
     val s = state.session
     Column(
@@ -112,6 +112,7 @@ fun SettingsPage(state: BenchState, actions: BenchActions, back: () -> Unit, ope
                 else BasicText("Undo", Modifier.clickable(role = Role.Button) { org.beachsync.proto.PearsEngine.setBlocked(ctx, undo); undo = emptySet() }.padding(10.dp), Tokens.Text.body.style(Ink.accent))
             }
         }
+        Card { NavRow("Where it came from", "Which listener sent each block of a set", openWhereFrom) }
         Card { SwitchRow("Thank-you notes", "Once a day, after you've kept someone listening an hour", ReactPrefs.thanks) { ReactPrefs.set(ctx, thanks = it) } }
         Card {
             BasicText("DEMO: nothing here reaches a mesh yet", style = Tokens.Text.cardLabel.style(Ink.warn))

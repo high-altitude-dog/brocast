@@ -39,6 +39,7 @@ class LibraryStore private constructor(ctx: Context) : Thread("library") {
     @Volatile var partPct = -1
     // The set arriving now, for the Receiving box (hand-off 57): its name, bytes so far and in all, and whether listeners are sending it.
     @Volatile var partTitle = ""
+    @Volatile var partId = ""
     @Volatile var partBytes = 0L
     @Volatile var partTotal = 0L
     @Volatile var partMesh = false
@@ -74,7 +75,7 @@ class LibraryStore private constructor(ctx: Context) : Thread("library") {
         if (building != null) {
             partMesh = true
             val item = editions.asSequence().flatMap { it.items.asSequence() }.firstOrNull { it.id == building.optString("id") }
-            partTitle = item?.title ?: building.optString("title"); partTotal = item?.bytes ?: 0L; partBytes = partTotal * partPct / 100
+            partId = building.optString("id"); partTitle = item?.title ?: building.optString("title"); partTotal = item?.bytes ?: 0L; partBytes = partTotal * partPct / 100
         }
         if (building == null) summarise(null)
         else {
@@ -273,7 +274,7 @@ class LibraryStore private constructor(ctx: Context) : Thread("library") {
                             last = t
                             val have = edition.items.count { file(it.id).exists() }
                             partPct = (part.length() * 100 / maxOf(1, item.bytes)).toInt().coerceAtMost(100)
-                            partTitle = item.title; partBytes = part.length(); partTotal = item.bytes; partMesh = false
+                            partId = item.id; partTitle = item.title; partBytes = part.length(); partTotal = item.bytes; partMesh = false
                             status = "Downloading ${have + 1} of ${edition.items.size} · $partPct%"
                         }
                     }

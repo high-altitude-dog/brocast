@@ -92,6 +92,10 @@ private fun runningOrder(editions: List<Edition>, dMs: Long, utcNow: Long): Orde
     return Order(earlier, if (started) next.first() else null, if (started) next.drop(1) else next, ed, nowStart + ed.totalSeconds * S)
 }
 
+/** When set [id] next starts at the ear (the one playing now counts), in UTC ns; null if it isn't in today's order. */
+internal fun nextStartNs(lib: LibraryStore, id: String, utcNow: Long): Long? =
+    runningOrder(lib.editions, lib.dMs, utcNow)?.let { o -> (listOfNotNull(o.now) + o.next).firstOrNull { it.item.id == id }?.startNs }
+
 private val HM = SimpleDateFormat("HH:mm", Locale.UK)
 private fun hm(utcNs: Long) = HM.format(Date(utcNs / 1_000_000L))
 internal fun lengthText(s: Long) = if (s >= 3600) "${s / 3600} h ${"%02d".format(s % 3600 / 60)} m" else if (s >= 60) "${s / 60} min" else "$s s"
@@ -149,7 +153,7 @@ internal fun SetListButton(lib: LibraryStore?, open: () -> Unit) {
 }
 
 @Composable
-fun SetListScreen(state: BenchState, back: () -> Unit, openKept: () -> Unit, passOn: (String) -> Unit) {
+fun SetListScreen(state: BenchState, back: () -> Unit, openKept: () -> Unit, whereFrom: (String) -> Unit, passOn: (String) -> Unit) {
     rememberTick(1000L).value
     val lib = state.library
     val utcNow = FlowTime.fit()?.utcAt(Session.nowBoot()) ?: (System.currentTimeMillis() * 1_000_000L)
@@ -237,7 +241,7 @@ fun SetListScreen(state: BenchState, back: () -> Unit, openKept: () -> Unit, pas
         }
         sheet?.let { id -> all.firstOrNull { it.id == id } }?.let { item ->
             val slot = order?.let { o -> (listOfNotNull(o.now) + o.next).firstOrNull { it.item.id == item.id } }
-            SetSheet(lib!!, item, slot?.startNs?.let(::hm), bpm[item.id], { sheet = null }, { sheet = null; openKept() }) { sheet = null; passOn(item.id) }
+            SetSheet(lib!!, item, slot?.startNs?.let(::hm), bpm[item.id], { sheet = null }, { sheet = null; openKept() }, { sheet = null; whereFrom(item.id) }) { sheet = null; passOn(item.id) }
         }
     }
 }
@@ -322,7 +326,7 @@ private fun StatusMark(status: Have, pct: Int, byTime: String?) {
 
 /** Tap a set: what it is, when it plays and whether it's here. Nothing in it jumps the radio ahead. */
 @Composable
-private fun SetSheet(lib: LibraryStore, item: LibraryItem, playsAt: String?, bpm: Int?, close: () -> Unit, openKept: () -> Unit, passOn: () -> Unit) {
+private fun SetSheet(lib: LibraryStore, item: LibraryItem, playsAt: String?, bpm: Int?, close: () -> Unit, openKept: () -> Unit, whereFrom: () -> Unit, passOn: () -> Unit) {
     Sheet(close) {
         Column(Modifier.padding(start = 20.dp, end = 20.dp, bottom = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -345,6 +349,7 @@ private fun SetSheet(lib: LibraryStore, item: LibraryItem, playsAt: String?, bpm
                 style = Tokens.Text.small.style(if (status == Have.HERE) Ink.accent else Ink.textSecondary),
             )
             NavRow("Keep", "Kept already: every set stays on this phone in the beta", openKept)
+            if (status != Have.NOT_YET) NavRow("Where it came from", "Which listener sent each block", whereFrom)
             if (status == Have.HERE) NavRow("Pass it on", "Show a code for the person next to you", passOn)
         }
     }

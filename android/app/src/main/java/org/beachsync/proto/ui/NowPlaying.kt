@@ -92,7 +92,7 @@ private fun rememberSecondTick(): State<Long> = produceState(Session.nowBoot()) 
 private fun logScale(ns: Double) = if (ns.isNaN() || ns <= 0.0) 0f else ((log10(ns) - 3.0) / 4.0).coerceIn(0.0, 1.0).toFloat()
 
 @Composable
-fun NowPlaying(state: BenchState, actions: BenchActions, openLog: () -> Unit, openNudge: () -> Unit, openBench: () -> Unit, openSettings: () -> Unit, openSignals: () -> Unit, openCalibration: () -> Unit, openSatellites: () -> Unit, openStereo: () -> Unit, openArtist: () -> Unit, openSwarm: () -> Unit, openBuffer: () -> Unit, openKept: () -> Unit = {}, openSetList: () -> Unit = {}) {
+fun NowPlaying(state: BenchState, actions: BenchActions, openLog: () -> Unit, openNudge: () -> Unit, openBench: () -> Unit, openSettings: () -> Unit, openSignals: () -> Unit, openCalibration: () -> Unit, openSatellites: () -> Unit, openStereo: () -> Unit, openArtist: () -> Unit, openSwarm: () -> Unit, openBuffer: () -> Unit, openKept: () -> Unit = {}, openWhere: (String) -> Unit = {}, openSetList: () -> Unit = {}) {
     val boot by rememberSecondTick()
     val s = state.session
     val listen = {
@@ -154,7 +154,7 @@ fun NowPlaying(state: BenchState, actions: BenchActions, openLog: () -> Unit, op
         }
         NewsCard()
         Dial(s, s?.gps ?: state.idleGps, boot, state.localTime, lagUncNs, openSatellites)
-        ReceivingBox(state.library, openSwarm)
+        ReceivingBox(state.library, openSwarm, openWhere)
         BeatCounter(state, openBuffer)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Top) {
             PlayStopButton(s != null, lockedByDownload, listen)

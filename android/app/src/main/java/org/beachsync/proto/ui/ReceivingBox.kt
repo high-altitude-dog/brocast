@@ -30,7 +30,7 @@ import java.util.Locale
  * Until the engine reports per-block sources (MeshSupply), the map fills in order and the sender is "the station" or "listeners" as a whole.
  */
 @Composable
-internal fun ReceivingBox(lib: LibraryStore?, openSwarm: () -> Unit) {
+internal fun ReceivingBox(lib: LibraryStore?, openSwarm: () -> Unit, openWhere: (String) -> Unit = {}) {
     lib ?: return
     rememberTick(250).value
     val now = android.os.SystemClock.uptimeMillis()
@@ -78,7 +78,8 @@ internal fun ReceivingBox(lib: LibraryStore?, openSwarm: () -> Unit) {
         }
         // The block map: 160 squares, 20 × 8. Arrived (station colour), just arrived (brighter, 2 s), asked for (outlined), still to come.
         val recent = hist.firstOrNull { now - it.first <= 2000 }?.second?.let { (it.toFloat() / total).coerceIn(0f, 1f) } ?: frac
-        Canvas(Modifier.fillMaxWidth().height(70.dp)) {
+        // Tap the map: Where it came from (hand-off 58); elsewhere in the box still opens Swarm.
+        Canvas(Modifier.fillMaxWidth().height(70.dp).clickable(role = Role.Button) { lib.partId.takeIf { it.isNotEmpty() }?.let(openWhere) ?: openSwarm() }) {
             val cols = 20; val rowsN = 8; val gap = 2.dp.toPx()
             val w = (size.width - gap * (cols - 1)) / cols; val h = (size.height - gap * (rowsN - 1)) / rowsN
             val have = (frac * 160).toInt(); val fresh = (recent * 160).toInt()
