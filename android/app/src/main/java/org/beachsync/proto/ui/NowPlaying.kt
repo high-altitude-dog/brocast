@@ -92,7 +92,7 @@ private fun rememberSecondTick(): State<Long> = produceState(Session.nowBoot()) 
 private fun logScale(ns: Double) = if (ns.isNaN() || ns <= 0.0) 0f else ((log10(ns) - 3.0) / 4.0).coerceIn(0.0, 1.0).toFloat()
 
 @Composable
-fun NowPlaying(state: BenchState, actions: BenchActions, openLog: () -> Unit, openNudge: () -> Unit, openBench: () -> Unit, openSettings: () -> Unit, openSignals: () -> Unit, openCalibration: () -> Unit, openSatellites: () -> Unit, openStereo: () -> Unit, openArtist: () -> Unit, openSwarm: () -> Unit, openBuffer: () -> Unit, openKept: () -> Unit = {}) {
+fun NowPlaying(state: BenchState, actions: BenchActions, openLog: () -> Unit, openNudge: () -> Unit, openBench: () -> Unit, openSettings: () -> Unit, openSignals: () -> Unit, openCalibration: () -> Unit, openSatellites: () -> Unit, openStereo: () -> Unit, openArtist: () -> Unit, openSwarm: () -> Unit, openBuffer: () -> Unit, openKept: () -> Unit = {}, openSetList: () -> Unit = {}) {
     val boot by rememberSecondTick()
     val s = state.session
     val listen = {
@@ -122,7 +122,7 @@ fun NowPlaying(state: BenchState, actions: BenchActions, openLog: () -> Unit, op
         val mesh = org.beachsync.proto.PearsEngine.view
         mesh?.moments?.takeIf { !it.firstMusicDone }?.let { FirstListenCard(it, openSwarm) }
         if (state.headphonesNameOffer && out.icon.bluetooth && !out.named) HeadphonesNameCard(actions::askHeadphonesName, actions::notNowHeadphonesName)
-        // The Now Playing box (hand-off 54): photo, title, artist with flag (hand-off 56) and set, the Stereo and Kept pills, and the library bar.
+        // The Now Playing box (hand-off 54): photo, title, artist with flag (hand-off 56) and set, the Stereo and Kept pills, and the SET LIST button.
         val cardShape = RoundedCornerShape(14.dp)
         Column(Modifier.fillMaxWidth().background(Ink.surface, cardShape).border(Tokens.Stroke.card.dp, Ink.border, cardShape).padding(start = 12.dp, end = 12.dp, top = 10.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             BasicText("NOW PLAYING", style = Tokens.Text.cardLabel.style().copy(fontSize = 10.sp))
@@ -150,7 +150,7 @@ fun NowPlaying(state: BenchState, actions: BenchActions, openLog: () -> Unit, op
                 }
             }
             ChannelHint(chUi)
-            LibraryLine(state.library)
+            SetListButton(state.library, openSetList)   // hand-off 63: replaces the Library bar
         }
         NewsCard()
         Dial(s, s?.gps ?: state.idleGps, boot, state.localTime, lagUncNs, openSatellites)
@@ -204,7 +204,7 @@ fun NowPlaying(state: BenchState, actions: BenchActions, openLog: () -> Unit, op
 
 private val IntrinsicTile = 84.dp
 
-/** In the beta everything is kept, so this shows that and can't be turned off. It deliberately has no tap action. */
+/** In the beta everything is kept, so this shows that and can't be turned off. Tapping it opens Kept (hand-off 64). */
 @Composable
 private fun KeptBadge(open: () -> Unit) {
     val shape = RoundedCornerShape(Tokens.Radius.pill.dp)
@@ -220,23 +220,6 @@ private fun KeptBadge(open: () -> Unit) {
             drawPath(path, Ink.text)
         }
         BasicText("KEPT", style = Tokens.Text.badge.style(Ink.text).copy(fontSize = 10.5.sp))
-    }
-}
-
-/** The whole library's download state: a thin bar and "38 of 52 sets", or "52 sets · all here" when it is complete. */
-@Composable
-private fun LibraryLine(lib: org.beachsync.proto.LibraryStore?) {
-    val have = lib?.haveSets ?: 0
-    val total = lib?.totalSets ?: 0
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        BasicText("LIBRARY", style = Tokens.Text.cardLabel.style())
-        Box(Modifier.weight(1f).height(3.dp).background(Ink.track, CircleShape)) {
-            if (total > 0) Box(Modifier.fillMaxWidth((have.toFloat() / total).coerceIn(0f, 1f)).fillMaxHeight().background(Ink.accent, CircleShape))   // station colour (user, 15 Nov)
-        }
-        BasicText(
-            when { total == 0 -> lib?.status ?: "Not downloaded yet"; have == total -> "$total sets · all here"; else -> "$have of $total sets" },
-            style = Tokens.Text.valueSmall.style(Ink.textSecondary), maxLines = 1,
-        )
     }
 }
 

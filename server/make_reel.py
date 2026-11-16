@@ -68,7 +68,7 @@ def main():
     for i, n in enumerate(names):
         print(f"  {i + 1}. {n}")
 
-    q = urllib.parse.urlencode({"name": "test-reel.opus", "title": TITLE, "artist": "Beach Sync", "set": "Music test"})
+    q = urllib.parse.urlencode({"name": "test-reel.opus", "title": TITLE, "artist": "Brocast", "set": "Music test"})
     set_id = call(a.admin, "/api/upload?" + q, "PUT", run.stdout)["id"]
     print("uploaded as", set_id)
 

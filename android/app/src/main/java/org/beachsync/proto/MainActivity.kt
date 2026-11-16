@@ -156,19 +156,23 @@ class MainActivity : ComponentActivity(), BenchActions {
             var artistFrom by remember { mutableStateOf(home) }
             org.beachsync.proto.ui.StationColour.Driver(state.library)
             var passGive by remember { mutableStateOf<String?>(null) }
+            var passFrom by remember { mutableStateOf(Page.KEPT) }   // Pass it on goes back to Kept or the Set list
+            var keptFrom by remember { mutableStateOf(home) }       // Kept goes back to Now playing, Settings or the Set list
+            var identityAt by remember { mutableStateOf(0 to 0) }   // Settings › You opens the identity flow at a step and role
             LaunchedEffect(incomingPass) { if (incomingPass != null) page = Page.PASS_RECEIVE }
             var artistItem by remember { mutableStateOf<String?>(null) }
             var cardSetup by remember { mutableStateOf<org.beachsync.proto.ui.TestCardSetup?>(null) }
             BackHandler(page != home) {
                 if (page == Page.EARCUP) cancelEarcup()
-                page = when (page) { Page.LOG, Page.NUDGE -> from; Page.EARCUP -> Page.CALIBRATION; Page.ADVANCED, Page.DATALOG -> Page.DATA; Page.SYNC_LINE -> Page.SYNC; Page.DATA, Page.IDENTITY, Page.CARD_SETUP, Page.NEWS -> Page.SETTINGS; Page.CARD -> Page.CARD_SETUP; Page.PASS_GIVE -> Page.KEPT; Page.ARTIST -> if (artistFrom == Page.KEPT) Page.KEPT else home; else -> home }
+                page = when (page) { Page.LOG, Page.NUDGE -> from; Page.EARCUP -> Page.CALIBRATION; Page.ADVANCED, Page.DATALOG -> Page.DATA; Page.SYNC_LINE -> Page.SYNC; Page.DATA, Page.IDENTITY, Page.CARD_SETUP, Page.NEWS -> Page.SETTINGS; Page.CARD -> Page.CARD_SETUP; Page.PASS_GIVE -> passFrom; Page.KEPT -> keptFrom; Page.ARTIST -> if (artistFrom == Page.KEPT) Page.KEPT else home; else -> home }
             }
             when (page) {
-                Page.NOW -> NowPlaying(state, this, { logLane = null; from = Page.NOW; page = Page.LOG }, { from = Page.NOW; page = Page.NUDGE }, { page = Page.BENCH }, { page = Page.SETTINGS }, { page = Page.SIGNALS }, { page = Page.CALIBRATION }, { page = Page.SATELLITES }, { page = Page.STEREO }, { page = Page.ARTIST }, { page = Page.SWARM }, { page = Page.BUFFER }) { page = Page.KEPT }
-                Page.KEPT -> KeptScreen(state, { page = home }, { id -> artistFrom = Page.KEPT; artistItem = id; page = Page.ARTIST }, { id -> passGive = id; page = Page.PASS_GIVE }) {
+                Page.NOW -> NowPlaying(state, this, { logLane = null; from = Page.NOW; page = Page.LOG }, { from = Page.NOW; page = Page.NUDGE }, { page = Page.BENCH }, { page = Page.SETTINGS }, { page = Page.SIGNALS }, { page = Page.CALIBRATION }, { page = Page.SATELLITES }, { page = Page.STEREO }, { page = Page.ARTIST }, { page = Page.SWARM }, { page = Page.BUFFER }, { keptFrom = Page.NOW; page = Page.KEPT }) { page = Page.SET_LIST }
+                Page.KEPT -> KeptScreen(state, { page = keptFrom }, { id -> artistFrom = Page.KEPT; artistItem = id; page = Page.ARTIST }, { id -> passGive = id; passFrom = Page.KEPT; page = Page.PASS_GIVE }) {
                     org.beachsync.proto.ui.scanPassCode(this) { link -> if (link != null) incomingPass = link else android.widget.Toast.makeText(this, "That isn't a Brocast code", android.widget.Toast.LENGTH_SHORT).show() }
                 }
-                Page.PASS_GIVE -> passGive?.let { org.beachsync.proto.ui.PassGiveScreen(state.library, it, state.stationKey.trim().lowercase()) { page = Page.KEPT } }
+                Page.PASS_GIVE -> passGive?.let { org.beachsync.proto.ui.PassGiveScreen(state.library, it, state.stationKey.trim().lowercase()) { page = passFrom } }
+                Page.SET_LIST -> org.beachsync.proto.ui.SetListScreen(state, { page = home }, { keptFrom = Page.SET_LIST; page = Page.KEPT }) { id -> passGive = id; passFrom = Page.SET_LIST; page = Page.PASS_GIVE }
                 Page.PASS_RECEIVE -> incomingPass?.let { link -> org.beachsync.proto.ui.PassReceiveScreen(state.library, link, state.stationKey.trim().lowercase(), { st -> state.stationKey = st; save(); applyStation() }) { incomingPass = null; page = home } }
                 Page.CALIBRATION -> CalibrationPage(state, this, { page = home }, { resetEarcup(); page = Page.EARCUP })
                 Page.EARCUP -> EarcupPage(state, this) { page = Page.CALIBRATION }
@@ -181,11 +185,11 @@ class MainActivity : ComponentActivity(), BenchActions {
                 Page.SWARM -> SwarmScreen { page = home }
                 Page.BUFFER -> BufferScreen(state, { page = home }) { page = Page.SWARM }
                 Page.SATELLITES -> SatellitesScreen(state, this, { page = home }, { page = Page.SIGNALS })
-                Page.SETTINGS -> SettingsPage(state, this, { page = home }, { page = Page.CALIBRATION }, { page = Page.SATELLITES }, { page = Page.SYNC }, { page = Page.BEAT }, { page = Page.STEREO }, { page = Page.DATA }, { page = Page.IDENTITY }, { page = Page.CARD_SETUP }) { page = Page.NEWS }
+                Page.SETTINGS -> SettingsPage(state, this, { page = home }, { page = Page.CALIBRATION }, { page = Page.SATELLITES }, { page = Page.SYNC }, { page = Page.BEAT }, { page = Page.STEREO }, { page = Page.DATA }, { step, role -> identityAt = step to role; page = Page.IDENTITY }, { keptFrom = Page.SETTINGS; page = Page.KEPT }, { page = Page.CARD_SETUP }) { page = Page.NEWS }
                 Page.CARD_SETUP -> TestCardSetupScreen(state, this, { page = Page.SETTINGS }) { cardSetup = it; page = Page.CARD }
                 Page.CARD -> cardSetup?.let { TestCardScreen(state, this, it) { page = Page.CARD_SETUP } }
                 Page.NEWS -> NewsSettingsScreen(state.library) { page = Page.SETTINGS }
-                Page.IDENTITY -> IdentityWizard(!state.satellites) { page = Page.SETTINGS }
+                Page.IDENTITY -> androidx.compose.runtime.key(identityAt) { IdentityWizard(!state.satellites, identityAt.first, identityAt.second) { page = Page.SETTINGS } }
                 Page.DATA -> DataSharingScreen({ page = Page.SETTINGS }, { page = Page.DATALOG }, { page = Page.ADVANCED })
                 Page.ADVANCED -> DataSharingAdvancedScreen { page = Page.DATA }
                 Page.DATALOG -> DataLogScreen { page = Page.DATA }
@@ -431,7 +435,7 @@ class MainActivity : ComponentActivity(), BenchActions {
         if (state.library != null) applyStation()
     }
 
-    private enum class Page { NOW, BENCH, LOG, NUDGE, SETTINGS, SIGNALS, CALIBRATION, EARCUP, SATELLITES, SYNC, SYNC_LINE, BEAT, STEREO, ARTIST, SWARM, BUFFER, DATA, ADVANCED, DATALOG, IDENTITY, KEPT, CARD_SETUP, CARD, NEWS, PASS_GIVE, PASS_RECEIVE }
+    private enum class Page { NOW, BENCH, LOG, NUDGE, SETTINGS, SIGNALS, CALIBRATION, EARCUP, SATELLITES, SYNC, SYNC_LINE, BEAT, STEREO, ARTIST, SWARM, BUFFER, DATA, ADVANCED, DATALOG, IDENTITY, KEPT, CARD_SETUP, CARD, NEWS, PASS_GIVE, PASS_RECEIVE, SET_LIST }
 
     companion object {
         /** Kept outside the activity, so a test run survives the screen being rebuilt. */

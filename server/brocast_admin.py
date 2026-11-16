@@ -792,7 +792,7 @@ def probe(path: str) -> tuple[dict, float | None]:
 
 PAGE = """<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Station · Beach Sync Radio</title>
+<title>Station · Brocast Radio</title>
 <style>
 :root { color-scheme: dark; --bg: #0A0C0F; --surface: #12161B; --border: #222932; --track: #1A1F26; --grid: #2A323C; --text: #ECEFF2;
   --text2: #C4CBD2; --muted: #8B95A1; --faint: #4A5562; --accent: #C8FF4D; --news: #56D4DD; --on-accent: #0A0C0F; --warn: #FFB547; --danger: #FF5A5A;
@@ -851,7 +851,7 @@ dialog::backdrop { background: rgba(0, 0, 0, .7); } .cols { display: grid; grid-
 @media (max-width: 1100px) { body { grid-template-columns: 1fr; } nav { flex-direction: row; flex-wrap: wrap; border-right: 0; } aside { border-left: 0; } }
 </style></head><body>
 <nav>
-  <div class="brand label">Beach Sync Radio · Station</div>
+  <div class="brand label">Brocast Radio · Station</div>
   <a id="nav-order" class="on">Running order<span id="nav-order-sub"></span></a>
   <a id="nav-upload">Upload<span id="nav-upload-sub"></span></a>
   <a id="nav-artists">Artists<span id="nav-artists-sub"></span></a>
@@ -1231,7 +1231,7 @@ function openColour(hex) {
   const [o1, r1] = mk("Now", "Fades over 2 s on every phone; phones that are offline get it when they reconnect.", true);
   const [o2, r2] = mk("At the next set", "Changes on the next set boundary. Sets with their own colour (Colour column in the running order) keep it.", false);
   r1.onchange = r2.onchange = () => { o1.className = "opt" + (r1.checked ? " on" : ""); o2.className = "opt" + (r2.checked ? " on" : ""); };
-  const tell = el("label", null, "opt on"); const tc = el("input"); tc.type = "checkbox"; tc.checked = true; const tt = el("div"); tt.append(el("div", "Tell listeners"), el("div", "“Beach Sync Radio is " + name + " now” for 4 s", "muted small")); tell.append(tc, tt);
+  const tell = el("label", null, "opt on"); const tc = el("input"); tc.type = "checkbox"; tc.checked = true; const tt = el("div"); tt.append(el("div", "Tell listeners"), el("div", "“Brocast Radio is " + name + " now” for 4 s", "muted small")); tell.append(tc, tt);
   dlg.append(o1, o2, tell, el("p", "Contrast with the dark button text: at least 7 : 1, like all 21 colours.", "muted small"));
   const btns = el("div"); btns.style.cssText = "display:flex;justify-content:flex-end;gap:10px;margin-top:16px";
   const cancel = el("button", "Cancel"); cancel.onclick = () => dlg.close();

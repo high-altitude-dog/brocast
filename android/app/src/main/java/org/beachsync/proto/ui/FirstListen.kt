@@ -64,7 +64,7 @@ fun FirstListenCard(m: MeshMoments, openSwarm: () -> Unit) {
     val lost = m.stageS[0] == null && t >= 60
     Card(Modifier.semantics { contentDescription = "Starting ${PearsEngine.STATION_NAME}: ${STAGES.getOrNull(current)?.first ?: "done"}, ${"%.1f".format(t)} s." }) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(40.dp).background(Ink.accent.copy(alpha = 0.18f), RoundedCornerShape(8.dp)), Alignment.Center) { BasicText("BS", style = Tokens.Text.bodyStrong.style(Ink.accent)) }
+            Box(Modifier.size(40.dp).background(Ink.accent.copy(alpha = 0.18f), RoundedCornerShape(8.dp)), Alignment.Center) { BasicText("BR", style = Tokens.Text.bodyStrong.style(Ink.accent)) }
             Spacer(Modifier.width(10.dp))
             BasicText(PearsEngine.STATION_NAME, Modifier.weight(1f), Tokens.Text.bodyStrong.style())
             // The ring fills over the usual 8 s.

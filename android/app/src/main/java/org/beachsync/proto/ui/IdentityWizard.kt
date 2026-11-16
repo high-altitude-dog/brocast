@@ -76,8 +76,9 @@ private val STEP_NAMES = listOf("WELCOME", "GATHER", "ADD YOURS", "MIX", "YOUR N
 private fun bytesText(b: Int) = if (b < 1000) "$b B" else "%.1f KB".format(b / 1000.0)
 
 @Composable
-fun IdentityWizard(privacy: Boolean, close: () -> Unit) {
-    var step by remember { mutableIntStateOf(0) }
+fun IdentityWizard(privacy: Boolean, startAt: Int = 0, role: Int = 0, close: () -> Unit) {
+    // Settings › You (hand-off 64) opens straight at Your name (4) or Back up (5); Back from there closes rather than stepping into the mix.
+    var step by remember { mutableIntStateOf(startAt) }
     val context = LocalContext.current
     val sensors = remember {
         val sm = context.getSystemService(SensorManager::class.java)
@@ -100,7 +101,7 @@ fun IdentityWizard(privacy: Boolean, close: () -> Unit) {
     var extras by remember { mutableStateOf(listOf<Src>()) }
     var touches by remember { mutableIntStateOf(0) }
     var nym by remember { mutableIntStateOf(0) }
-    BackHandler { if (step == 0) close() else step-- }
+    BackHandler { if (step <= startAt) close() else step-- }
     val all = MACHINE + sensors + other + extras
     when (step) {
         0 -> Welcome(all.count { it.dropped == null && it.off == null }) { step = 1 }
@@ -108,7 +109,7 @@ fun IdentityWizard(privacy: Boolean, close: () -> Unit) {
         2 -> AddYours({ touches = it }, { touches = 0; step = 3 }) { step = 3 }
         3 -> Mix(all, touches) { step = 4 }
         4 -> Nym(nym, { nym = (nym + 1) % NYMS.size }) { step = 5 }
-        else -> Backup(close)
+        else -> Backup(role, close)
     }
 }
 
@@ -424,8 +425,8 @@ private fun Nym(index: Int, shuffle: () -> Unit, next: () -> Unit) {
 // ---- 6 Back up ----
 
 @Composable
-private fun Backup(close: () -> Unit) {
-    var role by remember { mutableIntStateOf(0) }       // demo only: 0 listener, 1 seeder, 2 station publisher
+private fun Backup(startRole: Int, close: () -> Unit) {
+    var role by remember { mutableIntStateOf(startRole) }       // demo only: 0 listener, 1 seeder, 2 station publisher
     var words by remember { mutableStateOf(false) }
     var checking by remember { mutableStateOf(false) }
     var skipArmed by remember { mutableStateOf(false) }

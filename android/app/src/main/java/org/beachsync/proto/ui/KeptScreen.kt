@@ -91,6 +91,14 @@ private fun loadInfo(lib: LibraryStore, item: LibraryItem): KeptInfo {
 
 private const val MAX_SPREAD = 8
 
+/** The set's main BPM if Kept has worked it out (Set list, hand-off 63). */
+internal fun setBpm(id: String): Int? = KeptCache.map[id]?.bpmMain
+
+/** Works out a set's tempo for the cache; call off the UI thread. */
+internal fun loadSetBpm(lib: LibraryStore, item: LibraryItem) {
+    if (KeptCache.map[item.id]?.bpmMain == null) KeptCache.map[item.id] = loadInfo(lib, item)
+}
+
 private fun clock(s: Long) = if (s >= 3600) "%d:%02d:%02d".format(s / 3600, s % 3600 / 60, s % 60) else "%d:%02d".format(s / 60, s % 60)
 private fun mb(b: Long) = if (b >= 1_000_000_000) "%.2f GB".format(b / 1e9) else "${(b / 1e6).roundToInt()} MB"
 private val DAY = SimpleDateFormat("d MMM", Locale.UK)

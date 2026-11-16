@@ -34,7 +34,7 @@ object StationColour {
 
     var accent by mutableStateOf(LIME)
         private set
-    /** `Beach Sync Radio is Violet now`, shown for 4 s when the station tells listeners. */
+    /** `Brocast Radio is Violet now`, shown for 4 s when the station tells listeners. */
     var toast by mutableStateOf<Pair<String, Long>?>(null)
         private set
     private var toldAt = 0L

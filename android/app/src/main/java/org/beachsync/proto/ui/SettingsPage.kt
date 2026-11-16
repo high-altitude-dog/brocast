@@ -28,7 +28,7 @@ import androidx.compose.ui.unit.dp
 
 /** Only the LISTENING section for now: the design's other sections have nothing behind them yet. */
 @Composable
-fun SettingsPage(state: BenchState, actions: BenchActions, back: () -> Unit, openCalibration: () -> Unit, openSatellites: () -> Unit, openSync: () -> Unit, openBeat: () -> Unit, openStereo: () -> Unit, openData: () -> Unit, openIdentity: () -> Unit, openTestCard: () -> Unit = {}, openNews: () -> Unit = {}) {
+fun SettingsPage(state: BenchState, actions: BenchActions, back: () -> Unit, openCalibration: () -> Unit, openSatellites: () -> Unit, openSync: () -> Unit, openBeat: () -> Unit, openStereo: () -> Unit, openData: () -> Unit, openIdentity: (step: Int, role: Int) -> Unit, openKept: () -> Unit, openTestCard: () -> Unit = {}, openNews: () -> Unit = {}) {
     rememberTick(SETTINGS_TICK_MS).value    // the output's name can change during a run
     val s = state.session
     Column(
@@ -54,14 +54,6 @@ fun SettingsPage(state: BenchState, actions: BenchActions, back: () -> Unit, ope
                 BasicText("Satellites", style = Tokens.Text.bodyStrong.style())
                 BasicText("Your chip, your sky and what limits timing", style = Tokens.Text.small.style(Ink.textSecondary))
             }
-            Column(Modifier.fillMaxWidth().heightIn(min = Tokens.Space.touchTarget.dp).clickable(role = Role.Button, onClick = openSync), Arrangement.Center) {
-                BasicText("Sync view", style = Tokens.Text.bodyStrong.style())
-                BasicText("See whether phones agree, side by side", style = Tokens.Text.small.style(Ink.textSecondary))
-            }
-            Column(Modifier.fillMaxWidth().heightIn(min = Tokens.Space.touchTarget.dp).clickable(role = Role.Button, onClick = openBeat), Arrangement.Center) {
-                BasicText("Beat sync view", style = Tokens.Text.bodyStrong.style())
-                BasicText("The same, flashing on a snare in the music", style = Tokens.Text.small.style(Ink.textSecondary))
-            }
             Column(Modifier.fillMaxWidth().heightIn(min = Tokens.Space.touchTarget.dp).clickable(role = Role.Button, onClick = openStereo), Arrangement.Center) {
                 BasicText("Stereo pair", style = Tokens.Text.bodyStrong.style())
                 BasicText(when (state.channel) { org.beachsync.proto.Renderer.LEFT -> "This phone plays Left"; org.beachsync.proto.Renderer.RIGHT -> "This phone plays Right"; else -> "Stereo · back to Stereo each start" }.let { if (it.startsWith("This phone plays ")) it.removePrefix("This phone plays ") + " · until the app restarts" else it }, style = Tokens.Text.small.style(Ink.textSecondary))
@@ -85,13 +77,15 @@ fun SettingsPage(state: BenchState, actions: BenchActions, back: () -> Unit, ope
                 SatellitesSwitch(state.localTime)
             }
         }
-        androidx.compose.runtime.LaunchedEffect(Unit) { ScreenPrefs.load(ctx) }
+        // You (hand-off 64): identity was only reachable at first start. Each row opens the identity flow at its own step.
+        BasicText("YOU", Modifier.padding(top = 6.dp), Tokens.Text.cardLabel.style())
         Card {
-            Column(Modifier.fillMaxWidth().heightIn(min = Tokens.Space.touchTarget.dp).clickable(role = Role.Button, onClick = openTestCard), Arrangement.Center) {
-                BasicText("Camera test card", style = Tokens.Text.bodyStrong.style())
-                BasicText("Film phones side by side to time screen and sound", style = Tokens.Text.small.style(Ink.textSecondary))
-            }
+            val nym = (org.beachsync.proto.PearsEngine.view?.nym?.ifEmpty { null } ?: DemoMesh.NYM).lowercase().split(' ').joinToString(" ") { w -> w.replaceFirstChar { it.uppercase() } }
+            NavRow("Your name", "$nym · made from your key") { openIdentity(4, 0) }
+            NavRow("Back up your key", "24 words · demo, nothing is saved yet") { openIdentity(5, 0) }
+            NavRow("Brocast on a computer", "Run a seeder that keeps sets online") { openIdentity(5, 1) }
         }
+        androidx.compose.runtime.LaunchedEffect(Unit) { ScreenPrefs.load(ctx) }
         BasicText("SCREEN", Modifier.padding(top = 6.dp), Tokens.Text.cardLabel.style())
         Card {
             SwitchRow("No flashing", "Nothing on screen ever flashes, whatever else is set", ScreenPrefs.noFlashing) { ScreenPrefs.set(ctx, noFlashing = it) }
@@ -99,13 +93,9 @@ fun SettingsPage(state: BenchState, actions: BenchActions, back: () -> Unit, ope
                 SwitchRow("Flash on each new bar", if (ScreenPrefs.noFlashing) "Off while No flashing is on" else "The beat counter's border flashes on beat 1", ScreenPrefs.flashBar) { if (!ScreenPrefs.noFlashing) ScreenPrefs.set(ctx, barFlash = it) }
             }
         }
-        BasicText("IDENTITY", Modifier.padding(top = 6.dp), Tokens.Text.cardLabel.style())
-        Card {
-            Column(Modifier.fillMaxWidth().heightIn(min = Tokens.Space.touchTarget.dp).clickable(role = Role.Button, onClick = openIdentity), Arrangement.Center) {
-                BasicText("Your identity", style = Tokens.Text.bodyStrong.style())
-                BasicText("${(org.beachsync.proto.PearsEngine.view?.nym?.ifEmpty { null } ?: DemoMesh.NYM).lowercase().split(' ').joinToString(" ") { w -> w.replaceFirstChar { it.uppercase() } }} · run the first-run wizard (demo)", style = Tokens.Text.small.style(Ink.textSecondary))
-            }
-        }
+        // Archive (hand-off 64): only Open Kept for now. In the beta every set is kept, so Keep and Size limit have nothing to set, and there's no Archive screen yet.
+        BasicText("ARCHIVE", Modifier.padding(top = 6.dp), Tokens.Text.cardLabel.style())
+        Card { NavRow("Open Kept", "Every set on this phone · all kept in the beta", openKept) }
         BasicText("DELIVERY", Modifier.padding(top = 6.dp), Tokens.Text.cardLabel.style())
         // Swarm › Block (hand-off 46): the one place to undo it.
         // Once shown, the card stays while this page is open, so unblocking never shifts the page under the finger (a second tap opened Your identity).
@@ -131,7 +121,26 @@ fun SettingsPage(state: BenchState, actions: BenchActions, back: () -> Unit, ope
                 BasicText("${DemoSharing.profileLine} · shared 1.2 GB today on Wi-Fi", style = Tokens.Text.small.style(Ink.textSecondary))
             }
         }
+        // Advanced (hand-off 64): the Sync view row the spec promised, with the other sync checks beside it.
+        BasicText("ADVANCED", Modifier.padding(top = 6.dp), Tokens.Text.cardLabel.style())
+        Card {
+            NavRow("Sync view", "Check two phones side by side, by eye and ear", openSync)
+            NavRow("Beat sync view", "The same, flashing on a snare in the music", openBeat)
+            NavRow("Camera test card", "Film phones side by side to time screen and sound", openTestCard)
+        }
     }
 }
 
 private const val SETTINGS_TICK_MS = 1000L
+
+/** A 60 px row that opens another screen: title, one grey line and a chevron. */
+@Composable
+internal fun NavRow(title: String, detail: String, onClick: () -> Unit) {
+    Row(Modifier.fillMaxWidth().heightIn(min = 60.dp).clickable(role = Role.Button, onClick = onClick), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            BasicText(title, style = Tokens.Text.bodyStrong.style())
+            BasicText(detail, style = Tokens.Text.small.style(Ink.textSecondary), maxLines = 2, overflow = TextOverflow.Ellipsis)
+        }
+        BasicText("›", Modifier.padding(start = 10.dp), Tokens.Text.screenTitle.style(Ink.textSecondary))
+    }
+}

@@ -93,7 +93,7 @@ fun PassGiveScreen(lib: LibraryStore?, setId: String, stationKey: String, back: 
                 QrCode(link.uri(), Modifier.fillMaxWidth(0.7f).aspectRatio(1f).align(Alignment.CenterHorizontally))
                 BasicText("Let them scan this with Brocast", Modifier.fillMaxWidth(), Tokens.Text.bodyStrong.style().copy(textAlign = androidx.compose.ui.text.style.TextAlign.Center))
                 BasicText("Their phone fetches the set straight from yours: same Wi-Fi or hotspot, or over the internet. Nothing goes through the station.", style = Tokens.Text.small.style(Ink.textSecondary))
-                BasicText("SIGNED BY BEACH SYNC RADIO", Modifier.align(Alignment.CenterHorizontally).border(1.dp, Ink.accent, RoundedCornerShape(6.dp)).padding(horizontal = 8.dp, vertical = 3.dp), Tokens.Text.cardLabel.style(Ink.accent))
+                BasicText("SIGNED BY BROCAST RADIO", Modifier.align(Alignment.CenterHorizontally).border(1.dp, Ink.accent, RoundedCornerShape(6.dp)).padding(horizontal = 8.dp, vertical = 3.dp), Tokens.Text.cardLabel.style(Ink.accent))
             }
         }
         if (taker != null && item != null) Card {
