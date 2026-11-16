@@ -1,4 +1,4 @@
-# UI spec (hand-off 57)
+# UI spec (hand-off 63)
 
 Field names come from Claude Code's "Fields that exist today" table in `feedback.md`, as of 1 Nov 2026. If one has been renamed since, use the new name.
 
@@ -1226,12 +1226,12 @@ Boards: Now playing · receiving, Receiving · states. Screens: `home-receiving.
 
 | Part | Spec |
 |---|---|
-| Where | Now Playing, directly under the clock, above the beat strip. Only while a set is arriving (the next set, a gap being filled, a kept set). Not for sending only: that stays in the Mesh card. Tap opens Swarm. |
+| Where | Now Playing, directly under the clock, above the beat strip. Only while a set is arriving (the next set, a gap being filled, a kept set). Not for sending only: that stays in the Mesh card. Tap the block map: Where it came from (hand-off 58). Tap elsewhere: Swarm. |
 | Box | Same card as Now Playing (`#12161B`, 14 px radius) with a `color-mix(in srgb, {{accent}} 35%, transparent)` border and a faint accent glow in the top-right corner (`radial-gradient`, accent 9%). |
 | Header | Live dot (accent, soft halo) · `RECEIVING` in accent caps, under it `peer-to-peer · from 9 listeners` in grey. Right: rate `1.8 MB/s` (mono, 16 px) and a 44×18 sparkline of the last 60 s, accent line over a 14% fill. |
 | Set line | Set name 15 px bold, `next · 12:31` grey, right `404 / 640 MB` mono. Several sets queued: the soonest, with `1 of 3` beside the name. |
 | Block map | 32 × 5 squares (8 px, 2 px gap), one square per block in playing order, left to right then top to bottom. From a listener: accent 90%. From the station: grey `#8B95A1` 55%. Just arrived (last 2 s): near-white with an accent glow. On its way: dashed accent outline. Still needed: `#1A1F26`. Under it: a tick and `plays from here 12:31` at the left, `end 13:52` at the right (mono 8.5 px). If a set has more blocks than 160, each square stands for several and lights when all of them are in. |
-| Listeners | The 3 sending most: avatar (initials in their colour), flag from their address (none if unknown), nym, Wi-Fi icon if on the same Wi-Fi, a rate bar (accent gradient) and kB/s. Then `The station · 12%` with a grey bar. Rows swap only after 10 s. Tap a row: that listener's blocks stay lit and the rest dim for 3 s; a second tap opens their Swarm sheet. |
+| Listeners | The 3 sending most: avatar (initials in their source colour: blue `#3987e5`, orange `#d95926`, aqua `#199e70`, the same as Where it came from, hand-off 58), flag from their address (none if unknown), nym, Wi-Fi icon if on the same Wi-Fi, a rate bar (accent gradient) and kB/s. Then `The station · 12%` with a grey bar. Rows swap only after 10 s. Tap a row: that listener's blocks stay lit and the rest dim for 3 s; a second tap opens their Swarm sheet. |
 | Footer | `✓ 101 blocks checked` (every block is hash-checked before it counts) · right `ready in ~2 min`. One line. |
 | States | Finding listeners (station only, `looking for listeners…`); nobody near has it (grey dot, `from the station · no listeners yet`); a block fails its check (amber line: `1 block failed its check. Thrown away; fetching it from another listener.`, amber square in the map); paused on mobile data (grey `PAUSED`, map dimmed, `Change ›` to Data and sharing); ready (`READY`, `Every block checked · 87% came from 9 listeners`, folds away after 4 s). |
 | Motion | Opens by pushing the beat strip down over 250 ms; folds to nothing over 300 ms. A landing block pops 40 %→100 % in 180 ms, flashes white and settles to accent over 600 ms. On-its-way outlines breathe. Map at most 4 redraws a second; rate once a second, smoothed over 5 s. Reduced motion: no pop, flash, breathing or halo pulse. |
@@ -1240,3 +1240,88 @@ Boards: Now playing · receiving, Receiving · states. Screens: `home-receiving.
 
 ## Track and set names: no YouTube IDs (user 15 Nov)
 Names must never show a YouTube video ID. A trailing ` [xxxxxxxxxxx]` (an 11-character ID of letters, digits, `-` and `_` in square brackets, as download tools add to file names) is removed from titles when a file is uploaded or its tags are read, and from every existing entry. Only that exact pattern at the end of a name is removed; other brackets (`[Live]`, `[Remix]`) stay.
+
+## Where it came from (hand-off 58, user 15 Nov)
+Boards: Where it came from, Where it came from · views. Screens: `block-sources.png`, `block-sources-views.png`.
+
+| Part | Spec |
+|---|---|
+| Entry | Tap the block map in the Receiving box; **Where it came from** on a set in the Set list or Kept, and Settings › Where it came from (hand-off 63). Back returns to where you came from. Live while the set is still arriving. |
+| Header | `WHERE IT CAME FROM` over the set name. Line: `4,860 blocks · 640 MB · one square is one second` (while arriving: `1,900 of 4,860 blocks · still arriving`). Hero: `92%` (34 px) `from 9 listeners, peer-to-peer`, then a 10 px stacked bar of the shares (2 px gaps, 3 px radius). |
+| View switch | Segmented `Listener · Country · Route` (36 px tall). Recolours the map, bar and list. |
+| Map | One square per second of the set, 60 to a row, so one row is one minute; a time label every 10 rows (`12:41`, mono 7.5 px). Squares 4.2 px with 0.9 px gaps. Missing: `#161A20`. |
+| Colours | Max three named sources, fixed order: blue `#3987e5`, orange `#d95926`, aqua `#199e70` (validated for colour-blind separation on `#0A0C0F`). Everyone else: slate `#4A525C`. The station: grey `#8B95A1` with 45° stripes, so it reads without colour. Never the station accent (it could match a source). Listener view: top 3 listeners. Country: top 3 countries. Route: same Wi-Fi / across the internet / relayed, station striped. |
+| List = legend | Under the map, one 44 px row per colour: swatch, flag + name (or group), sub-line (route, listener count, or what it means), block count, share. `6 other listeners` opens the full list. |
+| Tap a source row | Its squares and bar segment stay lit, everything else drops to 18–25 %. Second tap: the listener's Swarm sheet. |
+| Tap a square | White outline, card under that row: swatch, flag, nym, `plays 12:58:13 · 38 ms · ✓ checked`, `Proof ›` to the Block provenance sheet. Drag to scrub; the card follows. |
+| Footer | `✓ Whoever sent it, every block was checked against the station's signature before it was kept. Tap a square for its proof.` |
+| Data | Per set, the phone keeps which source sent each block (a 1-byte index into a small source table: key, nym, country at the time, route), about 5 kB a set. Kept with the set, deleted with it, never uploaded. |
+| Words | `peer-to-peer`, `listeners`, `the station`. Never the networking library's name. |
+
+## Your own station (hand-off 59, user 15 Nov)
+Boards: Start a station, · key, · music, · running order, Publish your station, Your station · on air, Your station · states. Screens: `make-station*.png`, `my-station.png`. The example station "Pier Nine" (Orchid) is made up.
+
+| Part | Spec |
+|---|---|
+| Entry | Stations › **Start a station** (row under Add any station). With a station, it's the first row in Stations with an ON AIR dot and opens Your station. One station per phone for now. |
+| Steps | 4-step bar under Back: `1 · Name`, `2 · Key`, `3 · Music`, `4 · Order` (3 px bars, accent when done). Then Publish. Back keeps everything entered. |
+| 1 · Name | Live preview of the Stations row. Name (required), one line (≤ 60 chars), tags (≤ 3, chips), station colour (the 21 swatches, 30 px), News on the button: BBC (default), NPR, None. Note: changes go out with the next edition. |
+| 2 · Key | The key is made on the phone. Card: tile, four key words (2×2, mono, in the station colour), short key. Amber card: back up 24 words, can't skip; losing phone and words loses the station; anyone with the words can run it. `Show my 24 words`, then check words 7, 15, 22 (states board). Link: restore an existing station from its words. Same word list and checksum as the listener identity (docs/keys.md). |
+| 3 · Music | Two sources: Files (MP3, M4A, FLAC, WAV, Opus) and the share sheet (Share › Brocast). One file = one set, 10 min to 6 h. Each row: title (YouTube ID removed, with a `video ID removed` tag), artist with flag, length and size, state (encoding % with bar, ready, needs artist). New artist card: name (matches existing as you type), country (optional), photo (optional). Footer: total length, ~MB vs free space, encoding note (72 MB/hour, pauses under 20% battery or 1 GB free). Refused: too short, not audio. |
+| 4 · Order | Edition badge `DRAFT`. 24 h strip (first pass full, repeats at 40%). Rows: start time, colour bar, name, length, drag handle (lifted row: accent border + shadow). `Repeat to fill 24 hours` (on). Start time. Note: on air no sooner than 10 min after publishing plus fetch time; nothing goes out before then. |
+| Publish | **(hand-off 60)** `Ready to publish`: preview row; `Before it goes out` (copies already kept stay kept; your phone's name and address never shown; anyone with the station key can publish as the station). `List it in Stations` switch, on by default: the listing goes into the mesh directory, signed by the station key, nobody approves it. No legal checkbox (user: legal is out of scope). `Publish <name>`. Then Share: QR (`brocast://station/<key>?n=<name>`), four words, Share link / Copy; the code never contains the key. — was: `You're the publisher` with a responsibility checkbox and `Ask to be listed`. |
+| Your station | Tile, `ON AIR · YOUR STATION` dot in the station colour, edition and current set. Tiles: listening, sharing, share of blocks from you. **Who holds your sets**: per set, who has it (this phone, your computer, N listeners) as stacked dots; a set only on this phone is amber `Only on this phone` with advice. **Keep it on air**: share while charging on Wi-Fi (on), share on mobile data (off), last 24 h sent / battery. Your computer row (desktop seeder, docs/desktop-seeder.md). Links: running order, sets, name/colour/news, share, **co-hosts** (hand-off 60), back up words. |
+| Nobody holds a set | Listener sees `[STATION] · WAITING`, `[Set] should be on now`, `Nobody who has it is online. It starts the moment someone is, at the right second.` Keep waiting / Another station. |
+| Words | `your station`, `publish`, `listeners`, `peer-to-peer`. Never the networking library's name. |
+| Directory (hand-off 60) | The directory is shared over the mesh (user, 15 Nov). Any station can list itself; each listing is signed by its station key; nobody approves listings. Same-named stations show their four key words. Stations footnote: `Listed: in the mesh directory, 48 stations. Any station can list itself; the tick means the listing is signed by that station's key.` |
+| Co-hosts (hand-off 60) | User: "Users can share their private key." Your station › Co-hosts › **Add a co-host**: amber `This is the whole station` (co-host can publish, change the order, pass the key on; can't be taken back; removing means a new station). QR (key encrypted) + a 4-digit code the other phone types; works once, expires in 2 min, same room. Fallback: restore from the 24 words. Receiving phone: `Become a publisher of <name>?` with the four words to compare. List of handovers made from this phone only. |
+| Co-host safety | Publishing needs the mesh: a phone must have the latest edition before it publishes (two phones appending to the same core would fork it). If another phone published meanwhile: `Edition 3 came from another phone` — your changes are rebased as a draft on top; Discard mine / Review. Offline: Publish disabled with the reason; draft kept. Station page lists editions with "from this phone" / "from another phone with the key". |
+
+## Time signals on the beat (hand-off 61, user 15 Nov)
+Boards: Time signals (scene now live), Time signals · on the beat. Screens: `time-signals.png`, `time-signals-beat.png`. The canvas boards animate (SVG); open them to watch at 124 BPM.
+
+| Part | Spec |
+|---|---|
+| Every beat | A small pulse (near-white core `#F4FFE0`, accent halo) runs down each line of the source in charge (satellites, or the mast for internet time) and lands on the top of the phone exactly on the beat (eased in, leaves one beat earlier). The phone fills with accent at 55% and fades over the beat. The mast sends one expanding arc from its aerial (r 4→34 over a beat), accent at 90% when internet time leads, grey at 35% otherwise. |
+| Beat 1 of each bar | An ellipse ring spreads from the phone across the ground (rx 12→150, ry 4→26, fades by 60% of the bar) and the phone's glow brightens to 35%. |
+| Beat dots | The phone's single dot becomes four (1.3 px, 4 px apart), the current beat lit, like the beat counter. Label beside the phone: `BAR 212` / `124 BPM`. |
+| Timing | Phase comes from flowtime and the set's beat grid (the same numbers as the BAR / BPM counter), not an animation timer. A beat-counter correction applies from the next bar. |
+| No beat | Music stopped or not in sync: still picture, as before. Talk or no beat grid: one pulse a second, no ring, dots grey, label `NO BEAT · 1 s ticks`. Bars of 3–7 beats: dots follow the bar length. |
+| Reduced motion | No travelling pulses, waves or rings; beat dots still step and the phone brightens slightly on beat 1. |
+| Unchanged | The sun moves once a minute; accuracy stays in the labels. Caption: `Signals land on the beat: the clock that keeps everyone in time also keeps the bars. Tap the satellites, the mast or the hourglass to see what each is.` |
+
+## Find a station (hand-off 62, user via Claude Code 15 Nov)
+Boards: Find a station, Find a station · scan, Find a station · states; Now Playing (Main) header changed. Screens: `find-station*.png`, `now-playing.png`. Supersedes the Stations list (Stations board) as the way in; Station page and the switching/trust states stay.
+
+| Part | Spec |
+|---|---|
+| Home header | Two rows. Row 1: **Settings** (top left), Time signals, Headphone lag, Archive (44 px squares), spacer, **Find** (top right). Row 2: nym caps, station name 17 px bold with a › (opens the station page), `≈ 1.2 M listening` (opens Swarm). Header grows 52 px. |
+| Find button | 44 px tall: radar icon (two rings, a dot) + `Find`, 1.5 px station-colour border, 8% station-colour fill. Opens Find a station. |
+| First start | Button filled in the station colour, dark icon and text; two rings pulse out from it every 1.6 s (0.8 s apart, scale to 1.45×1.9, fade); radar wedge sweeps in the icon. Tip below, white: `New: find more stations, or scan one from a friend's phone`. Stops for good on the first tap or the first time Find is opened. Reduced motion: filled + tip, no rings or sweep. |
+| Screen | Back `Find a station`; tabs `On the mesh` / `Scan a code`. Radar card: 84 px radar (sweep turns every 3 s; each found station is a dot in its colour that brightens as the sweep passes), `23 stations on the mesh`, `Still looking · new ones appear as they're found`. Search, tag chips. Sections: NOW (current, accent border), FOLLOWING, ON THE MESH · N (most listened first; rows have **Listen**). Footnote: every listing is signed by its station's key; anyone can list; same names show four key words. |
+| Scan a code | Camera at once (permission first time). Corner brackets in station colour, a scan line sweeping up and down. On a station code: frame snaps to the code, short buzz, sheet with tile, name (+ tick if listed), line, four key words in the station's colour, on now, a note (listed: words match its page; unlisted: compare the four words), **Follow** / **Listen now**. A set code: `That's a code for one set (…), not a station.` + `Open it in Pass it on`. |
+| States | Searching (2 dots, `Looking on the mesh…`, skeleton rows; followed stations show at once). Nothing found (`No stations found yet`; can take a minute on a new network; suggest scanning). Offline (followed stations still show; scanning works on the same Wi-Fi or hotspot). Search no match: Clear search / Scan a code. |
+| After picking | Switching card as before (current keeps playing until 5 s of the new station are ready, then cuts over on the next second, in sync). The app's colour fades to the new station's over 400 ms; toast `Now on <station> · in sync` with Undo for 6 s. |
+| Words | `On the mesh`, `station code`, `listeners`. Never the networking library's name. |
+
+## Set list (hand-off 63, user 15 Nov)
+Boards: Set list, Set list · states; Now Playing (Main) updated. Screens: `set-list.png`, `set-list-states.png`, `now-playing.png`.
+
+| Part | Spec |
+|---|---|
+| Button | Replaces the `LIBRARY` bar at the foot of the Now playing box: a 44 px button (`#161B21`, 1 px `#2A323C`, radius 10): list icon + `SET LIST` (12 px, bold, 0.12em), 3 px bar in the station colour (sets on this phone / all sets), `38 of 52`, chevron. Pressed `#1E242C`. Label: "Set list: 38 of 52 sets on this phone. Open the set list". Box grows 32 px. |
+| Screen | Back `Now playing`; `SET LIST` over the station name; summary `38 of 52 sets on this phone · 3.9 GB`, bar in the station colour, one line on fetching. Tabs `Running order` / `All 52 sets`. |
+| Running order | `Earlier today · N played since 09:00` (dashed, expands). NOW row (station-colour border and 7% tint, `NOW · ENDS 18:46`), then UP NEXT. Each row: start time (mono), 4 px set-colour bar, 44 px photo, set name, flag + artist, length · BPM, status: on this phone (station-colour check), arriving (ring filling with %), not yet (dashed ring, `by 23:44`). Footer: edition, loop length, when it starts again. Opens scrolled to Now. |
+| All sets | A–Z, filters All / On this phone / Not yet. Sets not in today's order say so. |
+| A set (tap) | Sheet: photo, name, flag + artist, plays at · length · BPM · tracks, on-phone line; actions Tracks, Keep, Pass it on, Where it came from. Nothing jumps the radio ahead. |
+| Live | Arriving rings fill; when the order moves on, Now slides down a row (300 ms); a new edition updates in place. |
+| Older boards | Now playing states still shows the old `LIBRARY · GB` row; Set list replaces it. |
+
+## Receiving and Where it came from in Settings (hand-off 63, user 15 Nov)
+Boards: Settings, Receiving (from Settings), Where it came from · pick a set. Screens: `settings.png`, `receiving-screen.png`, `where-from-pick.png`.
+
+| Part | Spec |
+|---|---|
+| Settings rows | In DELIVERY, under Share with other listeners: **Receiving** (`● Meadow Hours arriving · 64% · 1.8 MB/s`, or `Nothing arriving`) and **Where it came from** (`Which listener sent each block of a set`). 60 px rows with ›. |
+| Receiving screen | Back `Settings`; `PEER-TO-PEER` / `Receiving` + one line. The Receiving box (same as on Now playing, hand-off 57). QUEUED (next sets, `waiting`). ARRIVED RECENTLY: rows with photo, name, flag + artist, `arrived 17:02 · 9 listeners`, a mini block-map preview (10×4) and `91% listeners`; tap → Where it came from. Idle: `Nothing arriving right now` + when the next set is fetched. |
+| Pick a set | Back `Settings`; `Where it came from` + one line; search; ARRIVING (live set, `64% here · still arriving` in station colour), ON THIS PHONE · NEWEST FIRST; same row style; tap → Where it came from for that set. |

@@ -489,3 +489,32 @@ User: "Do we need to change the design to allow more beats in a bar? … the use
 - h53 reactions: tray under the mesh card, counts per minute, one per 3 s, others' land on the next beat 1 (from the set's beat grid), Swarm ring + emoji, two settings. No soft tick sound on send (visual "Sent" line instead). Reduced/Minimal levels don't exist yet.
 - h53 kept people: daily ledger on the phone (bytes passed on ÷ the library's bitrate; a person = 60 s+), Swarm headline + week bars, `Helped` replaces Passed on once someone counts, once-a-day note, Settings › Delivery › Thank-you notes. "Played" isn't known, so passed-on bytes stand in.
 - h53 pass it on: Kept › a set › Pass it on (no Now playing ⋯ menu yet); code = brocast://pass/<station>/<set>?via=<key>; camera app opens Brocast; Kept › Scan uses Google's code scanner (Play services). Receiver: what/who/SIGNED, Get it / Cancel, progress, KEPT, can't reach (after 45 s with no progress). Not tried yet as a real transfer: both phones already hold every set.
+
+## 15 Nov: build and publish your own station from the app (user) — design brief
+
+User: "add a feature that allows a user to build and publish their own station using the app." Design first, please; nothing is built.
+
+What the design needs to cover (suggested, not decided):
+- **Create**: name, station colour, news choice, cover/artist photos; the station's identity is a key pair made on the phone (backup words, as for the listener identity: 24 words + checksum, docs/keys.md).
+- **Add music**: sets from the phone (files, or other apps' share sheet); artist names and countries; YouTube-ID stripping and artist matching as on the upload page.
+- **Running order and editions**: the upload page's draft → publish flow, on a phone; new orders go on air at least 10 minutes later plus D.
+- **Publish and share**: the station key as a QR/link (like Pass it on), and how listeners find it.
+- **Staying on air**: who seeds when the creator's phone is off (their own phone, listeners, an optional laptop/desktop seeder, docs/desktop-seeder.md); battery and data costs on the creator's phone; what listeners see when nobody holds a set.
+
+Facts that shape it:
+- A station is a signed catalog plus one Hypercore per set; only the holder of the station key can add sets or publish an edition. Listeners verify every block.
+- The phone would encode uploads to 48 kHz stereo Opus, 20 ms packets (YouTube format 251 can be kept as-is), about 72 MB per hour of music.
+- Today a station runs only on the laptop (pears/tools/station.js) or the GCP test server; the phone engine only listens and re-shares.
+- Phones can't yet offer sets they got over plain HTTP on the mesh (needs proof import, on the work queue).
+- Legal/rights: a public station plays other people's music; the design should say who is responsible and what the app shows.
+
+Open questions for the user are welcome in the brief back.
+
+## 15 Nov: Find a station (user)
+
+A new screen, opened from a new button at the **top right of the home screen**; the Settings button moves to the **top left**.
+
+1. **Stations on the mesh:** lists stations announced to the Pears mesh (a station directory; engine side not built yet), so the listener can pick one.
+2. **Scan a station:** scan a station QR code shown by another phone (the same idea as Pass it on's code, but for a whole station).
+- On the **first app start**, the new button is animated to encourage a tap; it stops once tapped.
+- Please design the button, its first-start animation, the screen (list, empty and searching states, scan) and what happens after a station is picked.

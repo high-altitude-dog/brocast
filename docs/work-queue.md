@@ -11,6 +11,19 @@ Work agreed but not started. Newest first. Move an item out when it is built.
 
 Context: on 15 Nov, on client-isolated public Wi-Fi, station → Galaxy → Motorola (station off) worked through a blind relay on the test server, byte-identical. A set took about 70 s through the relay; relayed bytes count as the server's egress, so relay tests stay at one set.
 
+## Claude Desktop hand-offs, in build order (user, 15 Nov: "do them in whichever order you prefer")
+
+1. **h61 Time signals on the beat.** Phase from flowtime and the beat grid; screen only, smallest. First.
+2. **h58 Where it came from.** Engine: per-set source log (source table + one byte per verified block, kept with the set, never uploaded); then the screen, Receiving box colours, entries from Receiving/Library/Kept. Also gives the Receiving box real senders.
+3. **Find a station** (brief 15 Nov in design/feedback.md; Desktop designing). Engine: the mesh station directory (signed listings on a topic, h60 item 2) and a station QR. New top-right home button, Settings to top left, first-start animation.
+4. **h59 + h60 Your own station.** Largest: station key pair and catalog writer on the phone, on-phone Opus encode, holder counts, edition rules, co-host key handover (encrypted QR, 4-digit code) and fork safety. Needs 3's directory first.
+
+## Mesh findings from the 15 Nov phone test
+
+- **Phones don't announce** on the catalog topic under the balanced profile, so two phones that only look can't find each other once the station is gone (a laptop listener had to announce). Decide who announces (e.g. every sharing phone on unmetered Wi-Fi).
+- **Networks that pass only HTTP/HTTPS** (user): HyperDHT is UDP, so it is blocked outright there. Fallback: carry the DHT over WebSocket on TCP 443 (Holepunch `@hyperswarm/dht-relay`) to a relay peer, or have peers tunnel traffic dressed as HTTPS. Detect: DHT not ready after N s, then switch.
+- The READY line of `pears/tools/station.js` prints the catalog key first and the station key second; phones need the second.
+
 ## Backlog: security and key management (user, 7 Nov: more important once there are users besides the user)
 
 - **Threat model** for the mesh: hostile peers, an inflated listener count, eclipse (a phone cut off from honest peers), and key loss or theft. Starting points: `docs/kademlia-research.md` §5, design note §12 (census).
