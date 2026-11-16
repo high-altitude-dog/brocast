@@ -146,7 +146,13 @@ class Run {
     this.mesh.swarm.join(topic(this.catalog.key), { server: this.p.announce && this.share, client: true })
     this.mesh.swarm.flush().then(found)
     this.phase = 'getting the set list'
+    // Wait for the list itself: over a slow path (a relay) the first update can finish before the station has sent any of it (15 Nov).
     await this.catalog.update({ wait: true })
+    while (this.catalog.length === 0 && !state.stopping) {
+      await new Promise((resolve) => setTimeout(resolve, 1000))
+      await this.catalog.update({ wait: true }).catch(() => {})
+    }
+    if (state.stopping) return
     await this.readEdition()
     // A newer edition (new sets, a new list) is read as soon as it arrives, from the station or any peer that has it.
     this.catalog.on('append', () => this.readEdition().catch((e) => fail('CATALOG', e)))

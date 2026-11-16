@@ -1,0 +1,2 @@
+{ "name": "brocast-relay", "private": true, "type": "module",
+  "dependencies": { "hyperdht": "6.36.0", "blind-relay": "1.6.1", "hypercore-crypto": "3.7.0" } }

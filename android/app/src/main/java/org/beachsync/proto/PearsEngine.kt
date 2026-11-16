@@ -162,6 +162,7 @@ object PearsEngine {
                 .put("seed", seed(ctx)).put("stationKey", key).put("profile", "balanced").put("share", sharing).put("count", counted)
                 .put("showCountry", showCountry).put("countryTable", countryTable(ctx)?.path)
                 .put("blocked", JSONArray(blocked.toList())).put("app", appVersion(ctx))
+                .apply { ctx.getSharedPreferences("proto", Context.MODE_PRIVATE).getString("relay", "")?.takeIf { it.matches(Regex("[0-9a-f]{64}")) }?.let { put("relayThrough", it) } }
                 .put("dirs", JSONObject().put("store", store.path).put("music", lib.folder.path))) {
                 call(CMD_SUBSCRIBE, JSONObject().put("hz", 1)) {}
             }

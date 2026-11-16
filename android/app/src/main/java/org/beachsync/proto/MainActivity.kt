@@ -388,6 +388,9 @@ class MainActivity : ComponentActivity(), BenchActions {
         // A station's key fetches the library over the Pears mesh instead of from the server. adb: am start ... --es station <64 hex digits>, or "-" for the server.
         state.stationKey = intent?.getStringExtra("station")?.let { if (it == "-") "" else it } ?: prefs.getString(KEY_STATION, "") ?: ""
         prefs.edit().putString(KEY_STATION, state.stationKey).apply()
+        // A blind relay for peers that can't reach each other directly (client-isolated Wi-Fi; user, 15 Nov). adb: --es relay <64 hex digits>, or "-" for none.
+        // Kept out of the source: the key locates the server that runs it.
+        intent?.getStringExtra("relay")?.let { prefs.edit().putString("relay", if (it == "-") "" else it.lowercase()).apply() }
         state.stream = prefs.getBoolean(KEY_STREAM, false)
         state.policy = when (prefs.getString(KEY_POLICY, "AUTO")) { "GPS" -> Policy.GPS_ONLY; "NTP" -> Policy.NTP_ONLY; else -> Policy.AUTO }
         state.channel = Renderer.BOTH   // Stereo at every app start (hand-off 18); a change lasts until the app restarts
