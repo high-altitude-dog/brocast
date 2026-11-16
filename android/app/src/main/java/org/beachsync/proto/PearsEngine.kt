@@ -146,6 +146,7 @@ object PearsEngine {
         val lib = library ?: return
         error = null
         sharing = !metered(ctx)
+        Log.i("BeachSync", "Mesh: start station=${key.take(8)} relay=${ctx.getSharedPreferences("proto", Context.MODE_PRIVATE).getString("relay", "")?.take(8)} sharing=$sharing")
         if (fresh) {
             startBoot = android.os.SystemClock.elapsedRealtime(); startWallMs = System.currentTimeMillis()
             stages.fill(null); stationSeen = false; stationGoneAt = null; offlineSinceMs = null
@@ -192,7 +193,7 @@ object PearsEngine {
         val text = String(body)
         when (ev) {
             EV_STATUS -> JSONObject(text).let { s -> status = s; view = MeshView.of(s, sharing, counted, moments(s)); library?.meshProgress(s); app?.let { a -> view?.let { v -> KeptLedger.update(a, v, library) } } }
-            EV_CATALOG -> JSONObject(text).optJSONObject("library")?.let { library?.fromMesh(it.toString()) }
+            EV_CATALOG -> { Log.i("BeachSync", "Mesh: catalog edition ${JSONObject(text).opt("edition")}"); JSONObject(text).optJSONObject("library")?.let { library?.fromMesh(it.toString()) } }
             EV_BUILT -> library?.meshBuilt()
             EV_WARNING -> Log.w("BeachSync", "Mesh: $text")
             EV_FATAL -> { error = JSONObject(text).optString("text").lineSequence().firstOrNull() ?: "engine stopped"; Log.e("BeachSync", "Mesh: $text") }

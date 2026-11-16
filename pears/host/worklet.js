@@ -93,6 +93,9 @@ function oneSecond (buf, k) {
   return buf.subarray(from, at)
 }
 
+/** Diagnostics for adb (logcat tag BeachSync, 'Mesh:'); added 15 Nov when a phone on store Wi-Fi never reached the station. */
+const trace = (text) => emit(EV.warning, { code: 'TRACE', text })
+
 class Run {
   constructor ({ seed, stationKey, dirs, profile: prof = 'balanced', lan = true, relayThrough, share = true, count = true, showCountry = false, countryTable = null, blocked = [], app = '' }) {
     this.p = profile(prof)
@@ -103,7 +106,8 @@ class Run {
     this.stationKey = b4a.from(stationKey, 'hex')
     this.mesh = new Mesh({
       dir: dirs.store, seed: b4a.from(seed, 'hex'), maxPeers: this.p.maxPeers, lan,
-      relayThrough: relayThrough ? b4a.from(relayThrough, 'hex') : null
+      relayThrough: relayThrough ? b4a.from(relayThrough, 'hex') : null,
+      onconn: (r) => trace('conn ' + JSON.stringify({ peer: r.peer, side: r.side, outcome: r.outcome, path: r.path, ms: r.ms, relay: r.relay || undefined }))
     })
     // The nym, from this phone's own signature (shuffle 0 until the wizard can shuffle), and the listener count: this phone joins the
     // gossiped sketch unless counting is off (Privacy mode), and passes on what it hears either way.
@@ -135,10 +139,16 @@ class Run {
   async main () {
     const dht = this.mesh.swarm.dht
     let r = null
+    let tries = 0
+    await dht.ready().catch(() => {})
+    trace('dht ready: ' + JSON.stringify({ host: dht.host, port: dht.port, firewalled: dht.firewalled, randomized: dht.randomized, share: this.share, relay: !!this.mesh.relayKey }))
     while (!r && !state.stopping) { // the station's pointer record: the station key is all the phone is given
-      r = await dht.mutableGet(this.stationKey, { refresh: () => true }).catch(() => null)
+      let err = null
+      r = await dht.mutableGet(this.stationKey, { refresh: () => true }).catch((e) => { err = e; return null })
+      if (!r && ++tries % 10 === 1) trace('station record not found yet (try ' + tries + ')' + (err ? ': ' + (err.code || err.message) : ''))
       if (!r) await new Promise((resolve) => setTimeout(resolve, 1000))
     }
+    if (r) trace('station record found after ' + tries + ' misses')
     if (state.stopping) return
     this.catalog = this.mesh.store.get({ key: b4a.from(decodeRecord(r.value).catalog, 'hex') })
     await this.catalog.ready()
@@ -146,6 +156,7 @@ class Run {
     this.mesh.swarm.join(topic(this.catalog.key), { server: this.p.announce && this.share, client: true })
     this.mesh.swarm.flush().then(found)
     this.phase = 'getting the set list'
+    trace('joined the catalog topic; waiting for the set list')
     // Wait for the list itself: over a slow path (a relay) the first update can finish before the station has sent any of it (15 Nov).
     await this.catalog.update({ wait: true })
     while (this.catalog.length === 0 && !state.stopping) {
@@ -153,6 +164,7 @@ class Run {
       await this.catalog.update({ wait: true }).catch(() => {})
     }
     if (state.stopping) return
+    trace('set list: ' + this.catalog.length + ' editions')
     await this.readEdition()
     // A newer edition (new sets, a new list) is read as soon as it arrives, from the station or any peer that has it.
     this.catalog.on('append', () => this.readEdition().catch((e) => fail('CATALOG', e)))
