@@ -518,3 +518,15 @@ A new screen, opened from a new button at the **top right of the home screen**; 
 2. **Scan a station:** scan a station QR code shown by another phone (the same idea as Pass it on's code, but for a whole station).
 - On the **first app start**, the new button is animated to encourage a tap; it stops once tapped.
 - Please design the button, its first-start animation, the screen (list, empty and searching states, scan) and what happens after a station is picked.
+
+## 16 Nov: h63 + h64 built (gaps against the design)
+
+- SET LIST button: `#161B21` and pressed `#1E242C` aren't in tokens.json, so it uses `bg` and `track` (border `grid`). Add them as tokens if they matter.
+- Set list sheet: no **Tracks** row (sets have no track lists yet) and no **Where it came from** (needs the h58 block log, next in the queue). Keep opens Kept, as every set is kept in the beta.
+- Running order: no 300 ms slide when Now moves on. "Earlier today" counts from local midnight or the edition's start, whichever is later. "by HH:MM" on a missing set is the previous set's start.
+- Settings: Archive has only Open Kept (no Keep modes, size limit or Open archive: nothing behind them in the beta). Advanced has Sync view, Beat sync view and Camera test card; Strict mode isn't built. Receiving and Where it came from rows wait for h58.
+- Settings › You opens the identity flow at Your name / Back up (Brocast on a computer = Back up with the seeder role); it's still the demo flow.
+- Not built from h64: anything that depends on Find a station (h62).
+
+## 16 Nov: Kept stats row wraps (built h64, Galaxy SM-A166B)
+LISTENING `14 h 43 m` wraps to two lines at 1080 px wide (the three stat columns are equal width; the mono figure is too wide). Needs a shorter form (`14h 43m`), a smaller figure, or a wider column. Screenshot on request.

@@ -13,6 +13,7 @@ import { Countries } from '../engine/countries.js'
 import { profile } from '../engine/policy.js'
 import { SetBuilder, serialOf } from '../engine/builder.js'
 import { hedge } from '../engine/hedge.js'
+import { SourceLog } from '../engine/sources.js'
 import { nymFrom, nymProof, nymText } from '../engine/nym.js'
 import { PACKETS, blocks as fileBlocks } from '../engine/blocks.js'
 
@@ -125,6 +126,7 @@ class Run {
     this.helloTimer = setInterval(() => this.mesh.setHello({ ...this.helloBase, heldPct: this.total ? Math.floor((100 * this.held.size) / this.total) : (this.phase === 'all sets held' ? 100 : null) }), 10000)
     try { this.countries = countryTable ? Countries.load(countryTable) : null } catch (e) { this.countries = null; emit(EV.warning, { code: 'COUNTRIES', text: String(e) }) }
     this.gossip = setInterval(() => this.mesh.gossip(), 2000)
+    this.srcTimer = setInterval(() => { for (const s of this.sets ?? []) s.src.flush() }, 5000)
     this.rate = { at: now(), byPeer: new Map() } // last snapshot's totals, for kb/s
     this.held = new Set()
     this.inflight = new Map()
@@ -190,7 +192,14 @@ class Run {
       hedge(core, { mode: 'delayed', afterMs: 1000 }) // duplicate blocks: a second peer is asked only after 1 s in flight
       const s = { n, it, blocks: it.blocks, core, got: 0, cleared: 0 }
       s.builder = new SetBuilder({ music: this.dirs.music, id: it.id, blocks: it.blocks, serial: serialOf(core.key), sha: it.blake2b })
-      core.on('download', (index, bytes, from) => this.peer(from).rx += bytes)
+      // Where it came from (hand-off 58): the first verified copy of each block names its sender; the time is from when it was asked for.
+      s.src = new SourceLog(this.dirs.music + '/' + it.id + '.src', it.blocks, it.block_seconds ?? this.bs)
+      core.on('download', (index, bytes, from) => {
+        this.peer(from).rx += bytes
+        const k = hex(from.remotePublicKey)
+        const asked = this.inflight.get(n + ':' + index)
+        s.src.record(index, k, asked == null ? null : now() - asked, () => this.describe(k))
+      })
       core.on('upload', (index, bytes, to) => this.peer(to).tx += bytes)
       if (this.share) this.mesh.proofs.offer(core)
       this.sets.push(s)
@@ -226,6 +235,17 @@ class Run {
         this.sendStatus()
       }
     } finally { this.importing = false }
+  }
+
+  /** A source, as the log keeps it the first time it sends a block: nym, country at the time, route, and whether it's the station. */
+  describe (k) {
+    let route = null
+    for (const c of this.mesh.conns) if (c.outcome === 'open' && c.peer === k.slice(0, 8)) route = c.path
+    const host = [...this.mesh.swarm.connections].find((c) => hex(c.remotePublicKey) === k)?.rawStream?.remoteHost
+    let country = 'unknown'
+    if (!this.mesh.shows.get(k)) country = 'hidden'
+    else if (route !== 'relayed' && this.countries) country = this.countries.lookup(isPrivate(host) ? this.mesh.swarm.dht.host : host) ?? 'unknown'
+    return { nym: this.mesh.peerInfo.get(k)?.nym ?? null, country, route, station: this.seeds?.has(k) ?? false }
   }
 
   peer (conn) {
@@ -276,6 +296,7 @@ class Run {
       if (upTo > s.cleared) { const from = s.cleared; s.cleared = upTo; await s.core.clear(from, upTo) }
     }
     if (!r) return
+    s.src.flush()
     if (r === 'built') emit(EV.built, { setId: s.it.id, path: this.dirs.music + '/' + s.it.id + '.opus', blake2b: s.it.blake2b })
     else emit(EV.warning, { code: 'MISMATCH', text: s.it.id + ' failed its BLAKE2b check' })
     this.sendStatus()
@@ -365,6 +386,8 @@ class Run {
     clearInterval(this.statusTimer)
     clearInterval(this.gossip)
     clearInterval(this.helloTimer)
+    clearInterval(this.srcTimer)
+    for (const s of this.sets) s.src.flush()
     for (const s of this.sets) { while (s.builder.busy) await new Promise((resolve) => setTimeout(resolve, 20)) }
     await Promise.race([this.mesh.close(), new Promise((resolve) => setTimeout(resolve, 1500))]) // the API's 2 s limit
   }

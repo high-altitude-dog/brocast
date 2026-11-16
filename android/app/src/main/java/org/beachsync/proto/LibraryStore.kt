@@ -110,6 +110,8 @@ class LibraryStore private constructor(ctx: Context) : Thread("library") {
     /** The registry's names for the set's artists, joined, or null if it has none. */
     fun artistNames(id: String): String? = setArtists[id]?.mapNotNull { artists[it]?.first }?.takeIf { it.isNotEmpty() }?.joinToString(" & ")
 
+    /** Which peer sent each block (h58), written by the engine; read with [BlockSources.read]. */
+    fun sourcesFile(id: String) = File(dir, "$id.src")
     /** The set's beat and bar grid, saved by [SetBeatAnalyser]. */
     fun beatsFile(id: String) = File(dir, "$id.beats")
     /** The set's sound features at [BeatFeatures.PER_S] frames a second; `.feat` held the older 8-a-second ones. */
@@ -216,7 +218,8 @@ class LibraryStore private constructor(ctx: Context) : Thread("library") {
         val now = System.currentTimeMillis() * 1_000_000L
         val edition = editionAt(editions, now - dMs * 1_000_000L) ?: run { status = "The library is empty"; return true }
         val keep = editions.flatMap { it.items }.map { it.id }.toSet()
-        dir.listFiles()?.forEach { f -> if (f.name.endsWith(".opus") && f.name.removeSuffix(".opus") !in keep) f.delete() }
+        // A set's file and its source log (h58, `<id>.src`, written by the engine) go together.
+        dir.listFiles()?.forEach { f -> val ext = f.name.substringAfterLast('.', ""); if ((ext == "opus" || ext == "src") && f.name.substringBeforeLast('.') !in keep) f.delete() }
         val n = Math.floorDiv(now - dMs * 1_000_000L - edition.startNs, 1_000_000_000L)
         // Then anything in an edition still to come, so the files are here before it takes over.
         val order = (edition.dueOrder(n) + editions.flatMap { it.items }).distinctBy { it.id }
