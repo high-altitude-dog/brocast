@@ -143,3 +143,18 @@ private fun BeatCell(i: Int, p: org.beachsync.proto.SetBeats.Pos?, modifier: Mod
         Alignment.Center,
     ) { BasicText("${i + 1}", style = Tokens.Text.valueSmall.style(if (lit) Ink.bg else if (p == null) Ink.muted else Ink.textSecondary).copy(fontSize = 13.sp)) }
 }
+
+/** The playing set's beat at flowtime [utc] (the beat counter's numbers), for other screens. Null when nothing plays from the library. */
+internal class BeatHere(val pos: org.beachsync.proto.SetBeats.Pos?, val hasGrid: Boolean)
+
+internal fun beatHere(state: BenchState, utc: Long): BeatHere? {
+    val s = state.session ?: return null
+    val lib = state.library ?: return null
+    if (!s.s.library) return null
+    val m = s.stream?.manifest ?: return null
+    val pos = (utc - m.startNs - m.dMs * 1_000_000L).toDouble() * 48000.0 / 1e9
+    val n = Math.floorDiv(Math.floor(pos).toLong(), 48000L)
+    val (item, block) = segmentAt(lib.editions, n) ?: return null
+    val grid = lib.beats(item.id)
+    return BeatHere(grid?.at(block * 48000.0 + (pos - n * 48000.0)), grid != null)
+}

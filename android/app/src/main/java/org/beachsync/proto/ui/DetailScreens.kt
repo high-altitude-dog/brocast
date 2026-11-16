@@ -30,6 +30,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.withFrameNanos
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -399,8 +402,8 @@ fun TimeSignalsScreen(state: BenchState, actions: BenchActions, openSatellites: 
                     style = Tokens.Text.valueSmall.style(if (s != null && chosen != null) Ink.accent else Ink.muted),
                 )
             }
-            SourcesField(s, boot, picked) { picked = it }
-            BasicText("Tap the satellites, the mast or the hourglass to see what each is. Sunrise and sunset for where you are, worked out on this phone.", style = Tokens.Text.small.style())
+            SourcesField(s, boot, picked, state) { picked = it }
+            BasicText("Signals land on the beat: the clock that keeps everyone in time also keeps the bars. Tap the satellites, the mast or the hourglass to see what each is. Sunrise and sunset for where you are, worked out on this phone.", style = Tokens.Text.small.style())
         }
         Card {
             BasicText("SKY", style = Tokens.Text.cardLabel.style())
@@ -448,7 +451,7 @@ fun TimeSignalsScreen(state: BenchState, actions: BenchActions, openSatellites: 
 }
 
 @Composable
-private fun SourcesField(s: Session?, boot: Long, picked: Int?, onPick: (Int) -> Unit) {
+private fun SourcesField(s: Session?, boot: Long, picked: Int?, state: BenchState, onPick: (Int) -> Unit) {
     // Hand-off 52: a picture, not a node diagram. Satellites (GPS), a far-too-tall Alexandra Palace-style mast (NTP), the phone on the
     // ground (FLOWTIME) with an hourglass (hold), and the sun on its arc between this place's sunrise and sunset.
     val ctx = LocalContext.current
@@ -479,6 +482,18 @@ private fun SourcesField(s: Session?, boot: Long, picked: Int?, onPick: (Int) ->
     val warm = Color(0xFFFFD27A)
     // Tap places, as fractions: phone, satellites, hourglass, mast.
     val spots = listOf(0.45f to 0.74f, 0.2f to 0.22f, 0.33f to 0.8f, 0.8f to 0.45f)
+    // Hand-off 61: the signals land on the beat. Phase comes from flowtime and the set's beat grid (the beat counter's numbers), redrawn
+    // every frame only while the library plays; the frame clock stops when the screen is off or this page is gone. Stopped: a still picture.
+    val playing = s != null && s.s.library
+    var frame by remember { mutableLongStateOf(Session.nowBoot()) }
+    LaunchedEffect(playing) { while (playing) withFrameNanos { frame = Session.nowBoot() } }
+    val reduce = remember { runCatching { android.provider.Settings.Global.getFloat(ctx.contentResolver, android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f }.getOrDefault(false) } || ScreenPrefs.noFlashing
+    val utcNow = if (playing) FlowTime.fit()?.utcAt(frame) else null
+    val here = utcNow?.let { beatHere(state, it) }
+    val beatPos = here?.pos
+    // No beat grid, or no steady beat: one pulse a second, no ring.
+    val phase: Float? = when { here == null -> null; beatPos != null -> beatPos.beatFrac.toFloat(); else -> (Math.floorMod(utcNow, 1_000_000_000L) / 1e9).toFloat() }
+    val beatInBar = beatPos?.beatInBar ?: -1
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
     Canvas(Modifier.fillMaxWidth().height(236.dp).clip(RoundedCornerShape(12.dp)).semantics { contentDescription = "Time sources as a picture, with ${chosen?.name ?: "none"} in charge. Tap the satellites, the mast or the hourglass." }
         .pointerInput(Unit) {
@@ -545,11 +560,55 @@ private fun SourcesField(s: Session?, boot: Long, picked: Int?, onPick: (Int) ->
         val pw = 26.dp.toPx(); val ph = 44.dp.toPx()
         drawRoundRect(Color(0xFF0A0C0F), Offset(phone.x - pw / 2, phone.y - ph / 2), Size(pw, ph), androidx.compose.ui.geometry.CornerRadius(5.dp.toPx()))
         drawRoundRect(if (chosen != null) Ink.accent else Ink.faint, Offset(phone.x - pw / 2, phone.y - ph / 2), Size(pw, ph), androidx.compose.ui.geometry.CornerRadius(5.dp.toPx()), style = Stroke(2.dp.toPx()))
+        if (phase != null && chosen != null) {
+            val ph1 = 1f - phase
+            if (!reduce) {
+                // Beat 1: a ring spreads over the ground from the phone, gone by 60% of the bar; the glow brightens.
+                if (beatPos != null) {
+                    val bar = (beatInBar + phase) / 4f
+                    if (bar < 0.6f) {
+                        val rx = (12 + 138 * bar / 0.6f).dp.toPx(); val ry = (4 + 22 * bar / 0.6f).dp.toPx()
+                        drawOval(Ink.accent.copy(alpha = 0.6f * (1 - bar / 0.6f)), Offset(phone.x - rx, ground - ry), Size(rx * 2, ry * 2), style = Stroke(1.5.dp.toPx()))
+                    }
+                    if (beatInBar == 0) drawCircle(Ink.accent.copy(alpha = 0.35f * ph1), 34.dp.toPx(), phone)
+                }
+                // A pulse runs down each lit line, eased in, landing on the top of the phone on the beat.
+                val top = Offset(phone.x, phone.y - ph / 2)
+                val t = phase * phase
+                fun pulse(from: Offset) {
+                    val at = Offset(from.x + (top.x - from.x) * t, from.y + (top.y - from.y) * t)
+                    drawCircle(Ink.accent.copy(alpha = 0.35f), 5.dp.toPx(), at); drawCircle(Color(0xFFF4FFE0), 2.dp.toPx(), at)
+                }
+                if (gpsLit) for (sat in sats) pulse(sat)
+                if (ntpLit) pulse(tip)
+                // The mast sends one arc a beat: bright when internet time leads.
+                val ar = (4 + 30 * phase).dp.toPx(); val aerial = Offset(tip.x, tip.y - 12.dp.toPx())
+                drawArc((if (ntpLit) Ink.accent.copy(alpha = 0.9f) else Ink.muted.copy(alpha = 0.35f)).copy(alpha = (if (ntpLit) 0.9f else 0.35f) * ph1), 200f, 140f, false, Offset(aerial.x - ar, aerial.y - ar), Size(ar * 2, ar * 2), style = Stroke(1.2.dp.toPx()))
+                // The phone fills with accent and fades over the beat.
+                drawRoundRect(Ink.accent.copy(alpha = 0.55f * ph1), Offset(phone.x - pw / 2 + 2.dp.toPx(), phone.y - ph / 2 + 2.dp.toPx()), Size(pw - 4.dp.toPx(), ph - 4.dp.toPx()), androidx.compose.ui.geometry.CornerRadius(4.dp.toPx()))
+            } else if (beatInBar == 0) {
+                drawRoundRect(Ink.accent.copy(alpha = 0.2f), Offset(phone.x - pw / 2 + 2.dp.toPx(), phone.y - ph / 2 + 2.dp.toPx()), Size(pw - 4.dp.toPx(), ph - 4.dp.toPx()), androidx.compose.ui.geometry.CornerRadius(4.dp.toPx()))
+            }
+        }
+        // Four beat dots on the phone, the current beat lit (grey with no beat).
+        if (phase != null) for (i in 0..3) {
+            val c = if (beatPos != null && i == beatInBar) Ink.accent else Ink.faint
+            drawCircle(c, 1.3.dp.toPx(), Offset(phone.x + (i - 1.5f) * 4.dp.toPx(), phone.y + ph / 2 - 6.dp.toPx()))
+        }
         picked?.let { val (fx, fy) = spots[it]; drawCircle(Color.White, 30.dp.toPx(), Offset(w * fx, h * fy), style = Stroke(2.dp.toPx())) }
         drawIntoCanvas { c ->
             val nc = c.nativeCanvas
             paint.textSize = 7.5f.sp.toPx(); paint.color = Ink.text.toArgb()
             nc.drawText("FLOW", phone.x, phone.y - 1.dp.toPx(), paint); nc.drawText("TIME", phone.x, phone.y + 8.dp.toPx(), paint)
+            if (phase != null) {
+                paint.textAlign = Paint.Align.LEFT; paint.textSize = 8.sp.toPx()
+                val lx = phone.x + 22.dp.toPx()
+                paint.color = (if (beatPos != null) Ink.accent else Ink.muted).toArgb()
+                nc.drawText(if (beatPos != null) "BAR ${beatPos.bar + 1}" else "NO BEAT", lx, phone.y - 2.dp.toPx(), paint)
+                paint.color = Ink.textSecondary.toArgb()
+                nc.drawText(if (beatPos != null) "${beatPos.bpm.roundToInt()} BPM" else "1 s ticks", lx, phone.y + 9.dp.toPx(), paint)
+                paint.textAlign = Paint.Align.CENTER
+            }
             paint.textSize = 9.sp.toPx()
             fun label(t1: String, t2: String, x: Float, y: Float, lit: Boolean, align: Paint.Align = Paint.Align.CENTER) {
                 paint.textAlign = align
