@@ -1,4 +1,4 @@
-# UI spec (hand-off 63)
+# UI spec (hand-off 64)
 
 Field names come from Claude Code's "Fields that exist today" table in `feedback.md`, as of 1 Nov 2026. If one has been renamed since, use the new name.
 
@@ -1325,3 +1325,51 @@ Boards: Settings, Receiving (from Settings), Where it came from · pick a set. S
 | Settings rows | In DELIVERY, under Share with other listeners: **Receiving** (`● Meadow Hours arriving · 64% · 1.8 MB/s`, or `Nothing arriving`) and **Where it came from** (`Which listener sent each block of a set`). 60 px rows with ›. |
 | Receiving screen | Back `Settings`; `PEER-TO-PEER` / `Receiving` + one line. The Receiving box (same as on Now playing, hand-off 57). QUEUED (next sets, `waiting`). ARRIVED RECENTLY: rows with photo, name, flag + artist, `arrived 17:02 · 9 listeners`, a mini block-map preview (10×4) and `91% listeners`; tap → Where it came from. Idle: `Nothing arriving right now` + when the next set is fetched. |
 | Pick a set | Back `Settings`; `Where it came from` + one line; search; ARRIVING (live set, `64% here · still arriving` in station colour), ON THIS PHONE · NEWEST FIRST; same row style; tap → Where it came from for that set. |
+
+## How to reach every screen (hand-off 64, user 15 Nov: "Check to ensure that all screens that we have designed have an intuitive UI pathway")
+Checked every phone board's links on the canvas. Fixed in this hand-off: **bold**. States, rules and spec boards (…States, …Views, Badge/Beat/Buffer states, test cards' rules) aren't screens and are left out.
+
+| Screen | Way in |
+|---|---|
+| Now playing | App start; Back from every top-level screen |
+| Settings | Home header, top left |
+| Time signals | Home header clock icon; tapping the clock or the sync detail on home |
+| Time signals sources sheet | Tap a satellite, the mast or the hourglass on Time signals |
+| Satellites (3D) | Satellites tile on home; Time signals › satellites |
+| Headphone lag (Calibration) | Home header headphones icon; Settings › Calibration |
+| Earcup test, Two-phone test, results | Calibration |
+| Calibration prompts | Shown automatically (new output, drift) |
+| Archive | Home header archive icon; Settings › Open archive |
+| **Kept** | **KEPT pill in the Now playing box; Settings › Archive › Open Kept**; Archive |
+| **Find a station** | Home header **Find**, top right (first start: pulsing) |
+| **Find a station · scan** | **The Scan a code tab** (tabs are now links) |
+| Station page | Home: station name ›; Find a station rows; scan sheet. **Back now returns to Find a station** |
+| **Start a station (4 steps) and Publish** | **Find a station › Your own station › Start a station** (last row). Back links now say Find a station |
+| **Your station · on air** | **Find a station: ON AIR · YOUR STATION row above Now when you run one** |
+| Your station · co-host | Your station › Co-hosts |
+| Set list | Now playing box › SET LIST |
+| Set sheet (Tracks, Keep, Pass it on, Where it came from) | Tap a set in the Set list (and an item in Kept) |
+| Pass it on | Set sheet › Pass it on; the receiver uses **Find › Scan a code** (board text fixed, was "Brocast › Add › Scan") |
+| Receiving box | Home, under the clock, while a set arrives |
+| Receiving (full screen) | Settings › Delivery › Receiving |
+| Where it came from | Receiving box map; Settings › Where it came from (set picker); set sheet; Receiving screen › arrived recently |
+| Block provenance | Tap a square in Where it came from › Proof; Buffer tiles |
+| Swarm | Home: listening count; Mesh card; Receiving box |
+| Swarm · listener details | Tap a listener on Swarm or a row in the Receiving box (second tap) |
+| Co-listener countries, You kept people listening | Cards on Swarm |
+| Buffer | Beat counter AHEAD tile on home |
+| Event log | Latest-event row on home |
+| Nudge control | Auto row on home |
+| Artist photo | Photo in the Now playing box |
+| **Sync view** | **Settings › Advanced › Sync view** (spec said so; the row was missing from the board) |
+| Camera test card | Sync view states › test card |
+| Stereo pair | Settings › Stereo pair |
+| Data and sharing (+ Advanced, Data log) | Settings › Delivery › Data and sharing |
+| News on the button | Settings › News on the headphone button |
+| **Your name, Back up your key, Brocast on a computer** | **Settings › You** (new section). First start runs the Identity flow (Welcome → Back up) |
+| First listen, First use: sharing | First start |
+| Silent reactions | Tray on Now playing under the Mesh card (spec h53; not drawn on the Main board to keep it readable) |
+| Notification, lock screen | System surfaces |
+| Upload page (running order, publish, colours, artists) | The station's web upload page navigation |
+| Stations (old list) | Superseded by Find a station; no longer linked |
+| Test bench | Prototype only; not in the app |

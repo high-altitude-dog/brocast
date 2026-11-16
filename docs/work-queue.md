@@ -13,10 +13,12 @@ Context: on 15 Nov, on client-isolated public Wi-Fi, station → Galaxy → Moto
 
 ## Claude Desktop hand-offs, in build order (user, 15 Nov: "do them in whichever order you prefer")
 
-1. **h61 Time signals on the beat.** Phase from flowtime and the beat grid; screen only, smallest. First.
-2. **h58 Where it came from.** Engine: per-set source log (source table + one byte per verified block, kept with the set, never uploaded); then the screen, Receiving box colours, entries from Receiving/Library/Kept. Also gives the Receiving box real senders.
-3. **Find a station** (brief 15 Nov in design/feedback.md; Desktop designing). Engine: the mesh station directory (signed listings on a topic, h60 item 2) and a station QR. New top-right home button, Settings to top left, first-start animation.
-4. **h59 + h60 Your own station.** Largest: station key pair and catalog writer on the phone, on-phone Opus encode, holder counts, edition rules, co-host key handover (encrypted QR, 4-digit code) and fork safety. Needs 3's directory first.
+Done: h61 Time signals on the beat (`deb628a`).
+
+1. **h64 + h63 (screens on data we already have).** h64: a way into every screen (KEPT pill opens Kept, Settings › Archive › Open Kept, Settings › Advanced › Sync view, a new Settings "You" section, fixed back links). h63: the SET LIST button replaces the Library bar on Now playing; the Set list screen (running order from the signed edition, all sets, status on this phone, set sheet). Leave the Receiving and Where-it-came-from rows until 2.
+2. **h58 engine: per-block source log**, then the Where it came from screen, the Receiving screen and the set picker (h63 item 4), and the Receiving box's real senders and colours.
+3. **h62 Find a station.** The engine needs the mesh station directory (signed listings on a topic; h60 item 2) and a `brocast://station/<key>` QR. Header changes (Settings to top left, Find to top right with the first-start pulse), the Find screen with its radar, lists and scan, states, and switching with Undo.
+4. **h59 + h60 Your own station.** The largest: station keys and catalog writer on the phone, Opus encoding on the phone, holder counts, edition rules, co-host key handover and fork safety. Needs 3's directory.
 
 ## Mesh findings from the 15 Nov phone test
 
