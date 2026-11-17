@@ -98,7 +98,7 @@ export class Mesh {
     }
   }
 
-  /** One connection record. Path: 'lan' for a private address; 'relayed' if relay counters moved; 'direct' if only
+  /** One connection record. Path: 'relayed' if relay counters moved (checked first); 'lan' for a private address; 'direct' if only
    * punches.open moved (the remote's firewall is open); otherwise 'punched'. A punch that succeeds in round 1 (both
    * sides' openSession through consistent NATs) moves no counter, so firewalled with no counters is a punch too
    * (step 2, from hyperdht 6.36's connect.js and holepuncher.js; inferred, not documented). */
@@ -113,8 +113,9 @@ export class Mesh {
     if (outcome === 'open') {
       // Relayed traffic arrives from our own connection to the relay, so its address gives a relayed stream away.
       const viaRelay = !!this.relayKey && this.conns.some((x) => x.relay && x.remote === (host ? host + ':' + raw.remotePort : null))
-      if (isPrivate(host)) path = 'lan'
-      else if (viaRelay || (relaying && relaying.successes) || conn.forcedRelay) path = 'relayed'
+      // Relay first: a relayed stream can show a private address (16 Nov, café Wi-Fi via the VM relay logged 'lan').
+      if (viaRelay || (relaying && relaying.successes) || conn.forcedRelay) path = 'relayed'
+      else if (isPrivate(host)) path = 'lan'
       else if (punches && punches.open && !punches.consistent && !punches.random) path = 'direct'
       else path = dht.firewalled ? 'punched' : 'direct'
     }
