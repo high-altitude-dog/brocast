@@ -151,7 +151,7 @@ internal val LOCAL_DIGITS = DateTimeFormatter.ofPattern("HH:mm:ss z", Locale.UK)
 fun eventTime(e: Event): String = e.utc?.let { CLOCK_DIGITS.format(Instant.ofEpochSecond(0, it)) } ?: "--:--:--"
 
 @Composable
-fun TestBench(state: BenchState, actions: BenchActions, openLog: (Lane?) -> Unit, openNudge: () -> Unit) {
+fun TestBench(state: BenchState, actions: BenchActions, openLog: (Lane?) -> Unit, openNudge: () -> Unit, openVisualiser: () -> Unit = {}) {
     val running = state.session != null
     Column(
         Modifier.fillMaxSize().background(Ink.bg).safeDrawingPadding().imePadding().verticalScroll(rememberScrollState())
@@ -188,6 +188,20 @@ fun TestBench(state: BenchState, actions: BenchActions, openLog: (Lane?) -> Unit
         EventRow(state.eventLog) { openLog(null) }
         NudgeRow(state, openNudge)
         StatusGrid(state, openLog)
+        // Features under test (user, 17 Nov), behind one switch (TestFeatures), off by default and remembered. In release builds
+        // too since 19 Nov, so a GitHub install can open the Visualiser.
+        run {
+            val ctx = androidx.compose.ui.platform.LocalContext.current
+            Row(Modifier.fillMaxWidth().heightIn(min = Tokens.Space.touchTarget.dp).toggleable(TestFeatures.on) { TestFeatures.set(ctx, it) },
+                verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    BasicText("Test features", style = Tokens.Text.body.style())
+                    BasicText("Find a station in the home header; the Visualiser", style = Tokens.Text.small.style(Ink.textSecondary))
+                }
+                BasicText(if (TestFeatures.on) "ON" else "OFF", style = Tokens.Text.valueSmall.style(if (TestFeatures.on) Ink.accent else Ink.muted))
+            }
+            if (TestFeatures.on) LinkRow(openVisualiser) { BasicText("Visualiser (node look on flowtime)", Modifier.weight(1f), Tokens.Text.body.style()) }
+        }
     }
 }
 

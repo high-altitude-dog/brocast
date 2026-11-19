@@ -530,3 +530,94 @@ A new screen, opened from a new button at the **top right of the home screen**; 
 
 ## 16 Nov: Kept stats row wraps (built h64, Galaxy SM-A166B)
 LISTENING `14 h 43 m` wraps to two lines at 1080 px wide (the three stat columns are equal width; the mono figure is too wide). Needs a shorter form (`14h 43m`), a smaller figure, or a wider column. Screenshot on request.
+
+## 18 Nov: web player page redesign (user) — design brief
+
+**From:** the web workstream, at the user's request: "do a redesign of the page to make it look great."
+
+**What we need:** a finished visual design for the one-screen Brocast web player, handed off the same way as your Android screens, so the web workstream can build it.
+
+**Where things stand:** the page works. A listener opens a link, taps Play, and hears the station in sync. The current look was put together by the build session as a stopgap from the Now playing Minimal board. Its answers to requests R1 to R6 were provisional, and this redesign replaces them.
+
+See the current page in every state: `../web/docs/shell-states.png` (next to this repo). The page code is in `../web/src/shell/`.
+
+### The brief
+
+Make this the best-looking screen in Brocast. Someone opening a link for the first time should understand within seconds what it is, feel that something is live right now, and want to tap Play.
+
+You are free to rework the layout, hierarchy, type, colour and motion. It should still clearly belong to Brocast.
+
+### What's on the screen
+
+| Element | What it shows | Notes |
+|---|---|---|
+| Brand | BROCAST | The current `SCREEN · MINIMAL` label is a leftover and can go |
+| Link status | Reaching the station, Station linked, Reconnecting, Relay closed, Not connected | Tones: neutral, accent, warn |
+| Clock | Station time to the second, with a zone label, plus the listener's local time when it differs | Updates once a second, from the page's first moments |
+| Now playing | Set title and artist | An unnamed set shows `ID` with an `UNNAMED` tag. Before the catalog arrives the title is `Brocast` |
+| Play button | Play, Stop, or waiting (disabled) | The main action. Sound can only start from this tap |
+| Sync badge | Mark, words, a ± figure, and a detail line | See the table below |
+| Notice | A title and a sentence | Appears only when something is wrong |
+| Output lag | A number field in ms, with a hint for Bluetooth or slow speakers | Up to 3 digits. It needs a home, but shouldn't compete with Play |
+
+#### Sync badge states
+
+| State | Mark and words | Tone | Detail line |
+|---|---|---|---|
+| Stopped | ■ STOPPED, ± figure once known | neutral | clock ready, or getting time |
+| Starting | ▲ REJOINING, ± figure | warn | getting the set due now |
+| Playing | ▲ INTERNET TIME, ± figure | warn | stratum 2 · buffer 20 s · output not calibrated (or output lag 120 ms) |
+| No time | ✕ NOT IN SYNC | danger | No time source |
+| No audio | ✕ NOT IN SYNC | danger | No stream |
+
+The badge must stay honest. Please don't make a warn state look like a success state, and keep the ± figure readable.
+
+#### Notices
+
+- This browser can't play Brocast
+- This link is incomplete
+- Already playing in another tab
+- Stored sets can't be read
+- Brocast couldn't start
+- This month's allowance is used up
+- Too many browsers are listening
+- Nothing is scheduled
+- Can't reach the station
+- Sound couldn't start
+
+You may rewrite the wording. Each notice has to keep its meaning, and the page may need to show one in place of the Play button when playing is impossible.
+
+### Limits the design has to respect
+
+- **Everything is self-hosted.** The page runs cross-origin isolated, so it can't load fonts, images or scripts from another site. Fonts must be OFL or similarly open, and supplied as files.
+- **Light on the processor.** Sync timing shares the page's main thread. Avoid continuous canvas drawing, large blurs and heavy animated filters. Small CSS transform and opacity animations are fine. Please respect reduced-motion settings.
+- **No audio-reactive visuals for now.** The page has no level or beat data to drive them.
+- **Sizes.** Phones from 320 px wide are the main target, in Chrome on Android. Desktop browsers come second, so please decide what the wider layout does (R6).
+- **Touch and contrast.** Keep touch targets at least as large as your Android token, with readable contrast outdoors.
+- **The page must stay in front.** Background and screen-off play aren't built yet. If you think listeners need telling, please design how.
+- **Short sessions.** The relay may be off, and the page then shows it can't reach the station. That state should look deliberate.
+
+### Data that doesn't exist yet
+
+There's no artwork, listener count, set list, or progress through the set on this screen. The running order is available to the page, so "next up" or progress could be added. Please mark anything like that as optional, so the first build doesn't depend on it.
+
+### What to hand back
+
+1. A handoff in your usual format, covering every state above on a phone and on desktop.
+2. Any new or changed design tokens, with exact values.
+3. Font files or names, with their licences.
+4. Final wording for anything you changed.
+5. Your answers to R1 to R6: the tap-to-start state, the time-source wording, what replaces the Use satellites row, the plain failure states, where the lag field sits, and the desktop layout.
+
+Other screens are out of scope. Please keep server addresses, keys and artist names out of the handoff, because that repo is public.
+
+## 18 Nov: VISUALS marker on the set list and station manager (user asked; built without a hand-off)
+
+The user asked for sets with visuals to be marked in the app's set list and the web station manager. Built as a stopgap, please review and design it properly:
+- **App (debug, behind Test features):** a small outlined accent chip reading VISUALS on the detail line of each Set list row (Running order and All sets), and "VISUALS Ready on this phone" in the set sheet. Shown when the set's `.viz` and `.nodes` are both on this phone.
+- **Station manager:** the same chip beside the set's title in the running order and in Not in the order. Shown when both files are in the library's `visuals/` folder.
+- **Idea:** a state for visuals that exist at the station but haven't reached this phone (no delivery path exists yet).
+
+## 19 Nov: the relay as a peer (user decision)
+
+The station's QR code now also carries its relay's key, so a phone installed from GitHub can reach the station on networks that block phone-to-phone traffic. The user decided that **every phone sees the relay as a peer with its own nym**, like any listener, in Swarm, the Receiving box, Where it came from and the peer lists. Design question for Claude Desktop: should a relay peer carry a mark (it forwards, it doesn't listen or hold sets), and how does the station QR screen show that a relay is included?

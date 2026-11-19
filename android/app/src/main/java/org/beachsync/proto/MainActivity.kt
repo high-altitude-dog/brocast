@@ -69,10 +69,15 @@ class MainActivity : ComponentActivity(), BenchActions {
     private var earcupRuns = 3
     /** Pass it on (hand-off 53): a brocast://pass link, from the camera app or the in-app scan. */
     private var incomingPass by mutableStateOf<org.beachsync.proto.ui.PassLink?>(null)
+    // Debug builds: `am start --es open visualiser [--es visQuery …]` opens the visualiser spike, also into a running app without
+    // restarting it, so a run (the music) carries on. The count makes a repeat request reopen it.
+    private var visRequest by mutableStateOf(0 to "")
+    private fun takeVisRequest(i: Intent?) { if (BuildConfig.DEBUG && i?.getStringExtra("open") == "visualiser") visRequest = visRequest.first + 1 to (i.getStringExtra("visQuery") ?: "") }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         org.beachsync.proto.ui.PassLink.parse(intent.dataString)?.let { incomingPass = it }
+        takeVisRequest(intent)
     }
 
     /** Asked only from Now playing's card or Calibration's row, once Bluetooth headphones are connected, because their name is the only reason the app wants this. */
@@ -162,14 +167,19 @@ class MainActivity : ComponentActivity(), BenchActions {
             var whereFrom by remember { mutableStateOf(home) }
             var identityAt by remember { mutableStateOf(0 to 0) }   // Settings › You opens the identity flow at a step and role
             LaunchedEffect(incomingPass) { if (incomingPass != null) page = Page.PASS_RECEIVE }
+            LaunchedEffect(Unit) { takeVisRequest(intent); org.beachsync.proto.ui.TestFeatures.load(this@MainActivity) }
+            LaunchedEffect(visRequest) { if (visRequest.first > 0) page = Page.VIS }
             var artistItem by remember { mutableStateOf<String?>(null) }
             var cardSetup by remember { mutableStateOf<org.beachsync.proto.ui.TestCardSetup?>(null) }
-            BackHandler(page != home) {
+            var visFromSeam by remember { mutableStateOf(false) }   // the visualiser was entered from the Live Seam, so it folds back into Now playing
+            val leaveVisual = { if (visFromSeam) { visFromSeam = false; org.beachsync.proto.ui.SeamPortal.returning = true; page = home } else page = Page.BENCH }
+            BackHandler(page == Page.VIS) { leaveVisual() }
+            BackHandler(page != home && page != Page.VIS) {
                 if (page == Page.EARCUP) cancelEarcup()
-                page = when (page) { Page.LOG, Page.NUDGE -> from; Page.EARCUP -> Page.CALIBRATION; Page.ADVANCED, Page.DATALOG -> Page.DATA; Page.SYNC_LINE -> Page.SYNC; Page.DATA, Page.IDENTITY, Page.CARD_SETUP, Page.NEWS -> Page.SETTINGS; Page.CARD -> Page.CARD_SETUP; Page.PASS_GIVE -> passFrom; Page.KEPT -> keptFrom; Page.WHERE -> whereFrom; Page.WHERE_PICK -> Page.SETTINGS; Page.ARTIST -> if (artistFrom == Page.KEPT) Page.KEPT else home; else -> home }
+                page = when (page) { Page.LOG, Page.NUDGE -> from; Page.EARCUP -> Page.CALIBRATION; Page.ADVANCED, Page.DATALOG -> Page.DATA; Page.SYNC_LINE -> Page.SYNC; Page.DATA, Page.IDENTITY, Page.CARD_SETUP, Page.NEWS -> Page.SETTINGS; Page.CARD -> Page.CARD_SETUP; Page.PASS_GIVE -> passFrom; Page.KEPT -> keptFrom; Page.WHERE -> whereFrom; Page.WHERE_PICK -> Page.SETTINGS; Page.VIS -> Page.BENCH; Page.ARTIST -> if (artistFrom == Page.KEPT) Page.KEPT else home; else -> home }
             }
             when (page) {
-                Page.NOW -> NowPlaying(state, this, { logLane = null; from = Page.NOW; page = Page.LOG }, { from = Page.NOW; page = Page.NUDGE }, { page = Page.BENCH }, { page = Page.SETTINGS }, { page = Page.SIGNALS }, { page = Page.CALIBRATION }, { page = Page.SATELLITES }, { page = Page.STEREO }, { page = Page.ARTIST }, { page = Page.SWARM }, { page = Page.BUFFER }, { keptFrom = Page.NOW; page = Page.KEPT }, { id -> whereId = id; whereFrom = Page.NOW; page = Page.WHERE }) { page = Page.SET_LIST }
+                Page.NOW -> NowPlaying(state, this, { logLane = null; from = Page.NOW; page = Page.LOG }, { from = Page.NOW; page = Page.NUDGE }, { page = Page.BENCH }, { page = Page.SETTINGS }, { page = Page.SIGNALS }, { page = Page.CALIBRATION }, { page = Page.SATELLITES }, { page = Page.STEREO }, { page = Page.ARTIST }, { page = Page.SWARM }, { page = Page.BUFFER }, { keptFrom = Page.NOW; page = Page.KEPT }, { id -> whereId = id; whereFrom = Page.NOW; page = Page.WHERE }, openFind = { page = Page.FIND }, openVisual = { visFromSeam = true; page = Page.VIS }) { page = Page.SET_LIST }
                 Page.KEPT -> KeptScreen(state, { page = keptFrom }, { id -> artistFrom = Page.KEPT; artistItem = id; page = Page.ARTIST }, { id -> passGive = id; passFrom = Page.KEPT; page = Page.PASS_GIVE }) {
                     org.beachsync.proto.ui.scanPassCode(this) { link -> if (link != null) incomingPass = link else android.widget.Toast.makeText(this, "That isn't a Brocast code", android.widget.Toast.LENGTH_SHORT).show() }
                 }
@@ -197,7 +207,9 @@ class MainActivity : ComponentActivity(), BenchActions {
                 Page.DATA -> DataSharingScreen({ page = Page.SETTINGS }, { page = Page.DATALOG }, { page = Page.ADVANCED })
                 Page.ADVANCED -> DataSharingAdvancedScreen { page = Page.DATA }
                 Page.DATALOG -> DataLogScreen { page = Page.DATA }
-                Page.BENCH -> TestBench(state, this, { logLane = it; from = Page.BENCH; page = Page.LOG }, { from = Page.BENCH; page = Page.NUDGE })
+                Page.BENCH -> TestBench(state, this, { logLane = it; from = Page.BENCH; page = Page.LOG }, { from = Page.BENCH; page = Page.NUDGE }) { page = Page.VIS }
+                Page.FIND -> org.beachsync.proto.ui.FindStationScreen(state, state.stationKey.trim().lowercase(), { key -> state.stationKey = key; save(); applyStation(); page = home }, { link -> incomingPass = link }) { page = home }
+                Page.VIS -> androidx.compose.runtime.key(visRequest) { org.beachsync.proto.ui.VisualiserScreen(state, visRequest.second, visFromSeam) { leaveVisual() } }
                 Page.LOG -> EventLogScreen(state, logLane) { page = from }
                 Page.NUDGE -> StreamGapScreen(state, this) { page = from }
             }
@@ -439,7 +451,7 @@ class MainActivity : ComponentActivity(), BenchActions {
         if (state.library != null) applyStation()
     }
 
-    private enum class Page { NOW, BENCH, LOG, NUDGE, SETTINGS, SIGNALS, CALIBRATION, EARCUP, SATELLITES, SYNC, SYNC_LINE, BEAT, STEREO, ARTIST, SWARM, BUFFER, DATA, ADVANCED, DATALOG, IDENTITY, KEPT, CARD_SETUP, CARD, NEWS, PASS_GIVE, PASS_RECEIVE, SET_LIST, WHERE, WHERE_PICK }
+    private enum class Page { NOW, BENCH, LOG, NUDGE, SETTINGS, SIGNALS, CALIBRATION, EARCUP, SATELLITES, SYNC, SYNC_LINE, BEAT, STEREO, ARTIST, SWARM, BUFFER, DATA, ADVANCED, DATALOG, IDENTITY, KEPT, CARD_SETUP, CARD, NEWS, PASS_GIVE, PASS_RECEIVE, SET_LIST, WHERE, WHERE_PICK, VIS, FIND }
 
     companion object {
         /** Kept outside the activity, so a test run survives the screen being rebuilt. */

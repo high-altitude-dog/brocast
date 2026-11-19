@@ -186,10 +186,19 @@ def decoded_frames(path: str) -> int:
         raise ValueError("couldn't decode the Opus file")
     return total // 4
 
+VISUAL_EXTS = ("viz", "nodes")
+
+
+RENDER_STEP = re.compile(r"^\d\d:\d\d:\d\d ([0-9a-f]{32}) (start|done|FAIL|SKIP)\b")
+RENDER_STALLED_S = 3600   # a render writes to its log far more often than this
+
+
 class Library:
-    def __init__(self, directory: str, reserve_gb: float, max_gb: float):
+    def __init__(self, directory: str, reserve_gb: float, max_gb: float, render_dir: str = ""):
         self.directory = directory
+        self.render_dir = render_dir   # the visualiser's render job, read only: out/ (files and render.log) and in/ (ids.txt)
         self.sets_dir = os.path.join(directory, "sets")
+        self.visuals_dir = os.path.join(directory, "visuals")   # <set id>.viz and .nodes, from the visualiser's pipeline
         self.incoming = os.path.join(directory, "incoming")
         self.reserve = int(reserve_gb * GB)
         self.max = int(max_gb * GB)
@@ -259,8 +268,16 @@ class Library:
             except OSError:
                 pass
 
+    def has_visual(self, set_id: str) -> bool:
+        """True once both of the set's visual files are here and neither is empty."""
+        try:
+            return all(os.path.getsize(os.path.join(self.visuals_dir, f"{set_id}.{ext}")) > 0 for ext in VISUAL_EXTS)
+        except OSError:
+            return False
+
     def sets(self) -> list[dict]:
         out = []
+        renders = self.render_progress()
         for set_id in os.listdir(self.sets_dir):
             if ID.match(set_id):
                 try:
@@ -268,8 +285,53 @@ class Library:
                 except (OSError, ValueError):
                     continue
                 m["progress"] = self.progress.get(set_id)
+                m["visual_state"] = self.visual_state(set_id, renders)
+                m["visual"] = self.has_visual(set_id)
                 out.append(m)
         return sorted(out, key=lambda m: m["added"], reverse=True)
+
+    def render_progress(self) -> dict:
+        """What the render job has said: its queue, each set's latest step, and how long ago it last wrote to its log."""
+        found = {"queue": set(), "last": {}, "quiet_s": None}
+        if not self.render_dir:
+            return found
+        try:
+            with open(os.path.join(self.render_dir, "in", "ids.txt")) as f:
+                found["queue"] = {line.strip() for line in f if ID.match(line.strip())}
+        except OSError:
+            pass
+        log = os.path.join(self.render_dir, "out", "render.log")
+        try:
+            with open(log, errors="replace") as f:
+                for line in f:
+                    if m := RENDER_STEP.match(line):
+                        found["last"][m.group(1)] = m.group(2)
+            found["quiet_s"] = time.time() - os.path.getmtime(log)
+        except OSError:
+            pass
+        return found
+
+    def visual_state(self, set_id: str, renders: dict) -> str:
+        """ready, working, stalled, failed, blocked, queued or none."""
+        def whole(folder: str) -> bool:
+            try:
+                return all(os.path.getsize(os.path.join(folder, f"{set_id}.{ext}")) > 0 for ext in ("viz", "nodes"))
+            except OSError:
+                return False
+        if whole(os.path.join(self.directory, "visuals")) or (self.render_dir and whole(os.path.join(self.render_dir, "out"))):
+            return "ready"
+        step = renders["last"].get(set_id)
+        if step == "start":
+            return "working" if renders["quiet_s"] is not None and renders["quiet_s"] < RENDER_STALLED_S else "stalled"
+        if step == "FAIL":
+            return "failed"
+        if set_id not in renders["queue"]:
+            return "none"
+        try:
+            empty = os.path.getsize(os.path.join(self.render_dir, "in", f"{set_id}.f32")) == 0
+        except OSError:
+            empty = True
+        return "blocked" if step == "SKIP" or empty else "queued"
 
     def on_air(self) -> dict | None:
         try:
@@ -389,6 +451,11 @@ class Library:
         if any(i["id"] == set_id for e in self.read_library()["editions"] for i in e["items"]):
             raise ValueError("this set is in the running order: take it out and publish first")
         shutil.rmtree(os.path.join(self.sets_dir, set_id))
+        for ext in VISUAL_EXTS:
+            try:
+                os.remove(os.path.join(self.visuals_dir, f"{set_id}.{ext}"))
+            except OSError:
+                pass
         draft = self.draft()
         if draft and set_id in draft:
             self.save_draft([i for i in draft if i != set_id])
@@ -528,15 +595,29 @@ class Library:
         return [], False
 
     def rematch(self):
-        """Matches every set the user hasn't confirmed by hand."""
+        """Matches every set the user hasn't confirmed by hand. A set whose file had no artist tag takes the name of its sure match."""
+        names = {a["id"]: a["name"] for a in self.artists()}
         for s in self.sets():
-            if s.get("artist_confirmed"):
-                continue
-            ids, sure = self.match(s["artist"]) if s.get("artist") else ([], False)
-            if not ids:
-                ids, sure = self.match_title(s.get("title") or "")
-            if ids != s.get("artist_ids") or sure != s.get("artist_sure"):
-                self.update(s["id"], artist_ids=ids, artist_sure=sure)
+            ids, sure, fields = s.get("artist_ids") or [], s.get("artist_sure"), {}
+            if not s.get("artist_confirmed"):
+                ids, sure = self.match(s["artist"]) if s.get("artist") else ([], False)
+                if not ids:
+                    ids, sure = self.match_title(s.get("title") or "")
+                if ids != s.get("artist_ids") or sure != s.get("artist_sure"):
+                    fields.update(artist_ids=ids, artist_sure=sure)
+            if not s.get("artist") and ids and sure and all(i in names for i in ids):
+                fields["artist"] = " & ".join(names[i] for i in ids)
+            if fields:
+                self.update(s["id"], **fields)
+
+    def set_artist(self, set_id: str, name: str):
+        """The artist's name as typed on the page. Published orders keep the name they went out with; the next order carries this one."""
+        name = name.strip()
+        if not name:
+            raise ValueError("a set needs an artist name")
+        self.update(set_id, artist=name, artist_confirmed=False)
+        self.rematch()
+        self.publish_library()
 
     def confirm_artists(self, set_id: str, ids: list[str]):
         known = {a["id"] for a in self.artists()}
@@ -817,11 +898,15 @@ h1 { font-size: 30px; margin: 0; display: inline; } .head { display: flex; align
 .bar.locked { border: 1px solid var(--grid); background: var(--surface); } .bar .text { flex: 1; }
 .chip { font-family: var(--mono); font-size: 12px; font-weight: 700; letter-spacing: .08em; padding: 3px 8px; border-radius: 4px; }
 .chip.draft { background: var(--warn); color: var(--on-accent); } .chip.queued { background: var(--accent); color: var(--on-accent); } .chip.locked { background: var(--grid); }
+.chip.visual { display: inline-block; margin-left: 8px; padding: 1px 6px; font-size: 11px; color: var(--accent); border: 1px solid var(--accent); vertical-align: middle; }
 table { width: 100%; border-collapse: collapse; } th { text-align: left; font-weight: 600; padding: 8px; } td { padding: 10px 8px; border-bottom: 1px solid var(--border); vertical-align: middle; }
 tr.moved td { background: rgba(255, 181, 71, .06); } tr.moved td:first-child { box-shadow: inset 2px 0 var(--warn); } tr.over td { border-top: 2px solid var(--accent); }
+tr.air td { background: color-mix(in srgb, var(--accent) 12%, transparent); } tr.air td:first-child { box-shadow: inset 3px 0 var(--accent); } tr.air .set-title { font-weight: 700; }
 .handle { cursor: grab; color: var(--muted); font-size: 18px; user-select: none; } .handle.fixed { cursor: not-allowed; opacity: .3; }
 .thumb { width: 44px; height: 44px; border-radius: 8px; background: var(--track); object-fit: cover; display: grid; place-items: center; font-family: var(--mono); font-weight: 700; }
 .set-title { font-weight: 600; font-size: 16px; } .tag-moved { color: var(--warn); font-family: var(--mono); font-size: 11px; font-weight: 700; letter-spacing: .08em; }
+.artist-edit { border: 0; background: none; padding: 2px 0; min-height: 0; color: inherit; font: inherit; text-align: left; cursor: pointer; } .artist-edit::after { content: " ✎"; color: var(--faint); } .artist-edit.empty { color: var(--muted); }
+.vis { white-space: nowrap; color: var(--muted); } .vis.ready { color: var(--accent); } .vis.working { color: var(--text); } .vis.bad { color: #E5484D; }
 .st-played { color: var(--faint); } .st-air { color: var(--accent); } .dots { border: 0; min-height: 0; padding: 4px 10px; color: var(--muted); font-size: 18px; }
 .menu { position: absolute; background: var(--surface); border: 1px solid var(--grid); border-radius: 10px; padding: 6px; z-index: 5; min-width: 200px; }
 .menu div { padding: 8px 12px; border-radius: 6px; cursor: pointer; } .menu div:hover { background: var(--track); } .menu .off { color: var(--faint); cursor: default; }
@@ -864,7 +949,7 @@ dialog::backdrop { background: rgba(0, 0, 0, .7); } .cols { display: grid; grid-
   <section id="view-order">
     <div class="head"><h1>Running order</h1><span class="muted" id="live"></span></div>
     <div id="bars"></div>
-    <table><thead><tr><th></th><th class="label">#</th><th></th><th class="label">Set</th><th class="label">Artist</th><th class="label">Length</th><th class="label">Plays (<span id="tz"></span>)</th><th class="label">Colour</th><th class="label">Status</th><th></th></tr></thead>
+    <table><thead><tr><th></th><th class="label">#</th><th></th><th class="label">Set</th><th class="label">Artist</th><th class="label">Length</th><th class="label">Plays (<span id="tz"></span>)</th><th class="label">Colour</th><th class="label">Visuals</th><th class="label">Status</th><th></th></tr></thead>
       <tbody id="rows"></tbody></table>
     <p class="muted small">Drag a row by its handle, or use ⋯ › Move up / Move down / Move to… Times are for the next loop after publishing. The set on air can't be moved until it ends.</p>
     <div id="out"></div>
@@ -924,6 +1009,7 @@ dialog::backdrop { background: rgba(0, 0, 0, .7); } .cols { display: grid; grid-
 </aside>
 <dialog id="pub"></dialog>
 <dialog id="colour-dlg"></dialog>
+<dialog id="artist-dlg" style="width: min(480px, 94vw)"></dialog>
 <script>
 const $ = id => document.getElementById(id);
 const headers = {"X-Brocast": "1"};
@@ -962,7 +1048,7 @@ const colorParam = c => Object.entries(c).map(([k, v]) => k + ":" + v.slice(1)).
 async function saveDraft(o) { order = o; render(); await fetch("/api/draft?order=" + o.join(",") + "&colors=" + colorParam(colors), {method: "POST", headers}); }
 function move(id, to) {
   const o = order.filter(x => x !== id); o.splice(Math.max(0, Math.min(to, o.length)), 0, id);
-  const air = onAirId(); if (air && order.indexOf(air.id) !== o.indexOf(air.id)) { alert("The set on air can't move until it ends."); return; }
+  const air = onAirId(); if (air && air.id === id) { alert("The set on air can't move until it ends."); return; }   // others may cross it: publishing carries on after it by id
   saveDraft(o);
 }
 function closeMenu() { if (menu) { menu.remove(); menu = null; } }
@@ -979,15 +1065,36 @@ function openMenu(btn, id, inOrder) {
     opt("Take out of the order", !fixed && order.length > 1, () => saveDraft(order.filter(x => x !== id)));
   } else opt("Add to the end of the order", true, () => saveDraft(order.concat([id])));
   const inEdition = [d.live, d.queued].some(e => e && e.items.some(x => x.id === id));
+  opt("Edit artist…", true, () => editArtist(id));
   opt("Put on the test stream", true, () => act("/api/sets/" + id + "/air", "POST"));
   opt("Delete set", !inEdition, () => { if (confirm("Delete this set from the server?")) act("/api/sets/" + id, "DELETE"); });
   document.body.append(menu);
 }
+function editArtist(id) {
+  const s = d.sets.find(x => x.id === id), dlg = $("artist-dlg"); if (!s) return;
+  const input = el("input"); input.type = "text"; input.maxLength = 200; input.value = s.artist || ""; input.setAttribute("list", "artist-names"); input.setAttribute("aria-label", "Artist");
+  const cancel = el("button", "Cancel"), save = el("button", "Save", "primary"), btns = el("div"); btns.style.cssText = "display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px";
+  const ready = () => { save.disabled = !input.value.trim(); }; input.oninput = ready; ready();
+  const go = async () => { if (save.disabled) return; save.disabled = true; if (await act("/api/sets/" + id + "/artist?name=" + encodeURIComponent(input.value.trim()), "POST")) dlg.close(); else ready(); };
+  input.onkeydown = e => { if (e.key === "Enter") { e.preventDefault(); go(); } };
+  cancel.onclick = () => dlg.close(); save.onclick = go; btns.append(cancel, save);
+  const note = el("p", "Shows here now. Listeners see it after the next published order.", "muted small");
+  dlg.replaceChildren(el("div", "Edit artist", "label"), el("p", s.title, "set-title"), input, note, btns); dlg.showModal(); input.select();
+}
+function artistCell(s) {
+  const td = el("td"), b = el("button", s.artist || "Add artist", "artist-edit" + (s.artist ? "" : " empty")); b.title = "Edit artist";
+  b.onclick = e => { e.stopPropagation(); editArtist(s.id); }; td.append(b); return td;
+}
+const VISUAL_STATES = {ready: ["Ready", "ready", "Visual files are finished"], working: ["In progress", "working", "Rendering now"], queued: ["Queued", "", "Waiting for its turn to render"],
+  stalled: ["Stalled", "bad", "The render has written nothing for over an hour"], failed: ["Failed", "bad", "The render stopped with an error"],
+  blocked: ["Blocked", "bad", "Its beat analysis file is empty, so it can't render"], none: ["—", "", "Not in the render queue"]};
+function visualCell(s) { const [text, c, why] = VISUAL_STATES[s.visual_state] || VISUAL_STATES.none, td = el("td", text, ("vis " + c).trim()); td.title = why; return td; }
 function thumb(s) {
   const a = (s.artist_ids || [])[0] && d.artists.find(x => x.id === s.artist_ids[0]);
   if (a && a.v) { const i = el("img", null, "thumb"); i.src = "/api/artists/" + a.id + "/1x1.jpg?v=" + a.v; i.alt = ""; return i; }
   return el("div", (s.artist || s.title || "?").replace(/[^A-Za-z]/g, "").slice(0, 2).toUpperCase(), "thumb");
 }
+function visualChip() { const c = el("span", "VISUALS", "chip visual"); c.title = "This set has visuals on the server"; return c; }
 function render() {
   const sets = byId(), base = baseOrder(), moved = movedIds(base, order), air = onAirId();
   const colorsChanged = !sameColors(colors, baseColors());
@@ -1028,12 +1135,13 @@ function render() {
     const s = sets[id]; if (!s) return;
     const tr = el("tr"); if (moved.has(id)) tr.className = "moved";
     const fixed = air && air.id === id;
+    if (fixed) tr.classList.add("air");   // the set playing now stands out (user, 19 Nov)
     const h = el("td", "⠿", "handle" + (fixed ? " fixed" : "")); tr.draggable = !fixed;
     tr.ondragstart = e => { dragging = true; e.dataTransfer.setData("text/plain", id); };
     tr.ondragend = () => { dragging = false; };
     tr.ondragover = e => { e.preventDefault(); tr.classList.add("over"); }; tr.ondragleave = () => tr.classList.remove("over");
     tr.ondrop = e => { e.preventDefault(); tr.classList.remove("over"); dragging = false; const from = e.dataTransfer.getData("text/plain"); if (from && from !== id) move(from, order.filter(x => x !== from).indexOf(id)); };
-    const t = el("td"); t.append(el("div", s.title, "set-title"));
+    const t = el("td"), name = el("div", s.title, "set-title"); if (s.visual) name.append(visualChip()); t.append(name);
     if (moved.has(id)) t.append(el("div", base.includes(id) ? (order.indexOf(id) < base.indexOf(id) ? "MOVED ↑" : "MOVED ↓") : "NEW", "tag-moved"));
     const th = el("td"); th.append(thumb(s));
     const t0 = startOf(k), t1 = t0 + secondsOf(id) * SEC;
@@ -1043,7 +1151,7 @@ function render() {
     const cc = el("td", null, "colcell"); const own = colors[id];
     const mark = el("span", null, own ? "cdot" : "cring"); if (own) mark.style.background = own;
     cc.append(mark, document.createTextNode(own ? colourName(own) : "Station")); cc.onclick = e => { e.stopPropagation(); setColourPop(cc, id, k); };
-    tr.append(h, el("td", String(k + 1), "mono muted"), th, t, el("td", s.artist || "—"), el("td", hms(s.seconds), "mono"), el("td", hm(t0) + "–" + hm(t1), "mono"), cc, st, md);
+    tr.append(h, el("td", String(k + 1), "mono muted"), th, t, artistCell(s), el("td", hms(s.seconds), "mono"), el("td", hm(t0) + "–" + hm(t1), "mono"), cc, visualCell(s), st, md);
     rows.append(tr);
   });
   const out = $("out"); out.replaceChildren();
@@ -1051,7 +1159,8 @@ function render() {
   if (left.length) {
     out.append(el("div", "Not in the order", "label"));
     for (const s of left) { const r = el("div", null, "row"); r.style.cssText = "display:flex;gap:12px;align-items:center;padding:8px 0";
-      r.append(thumb(s), el("span", s.title, "set-title"), el("span", s.artist || "", "muted"));
+      const name = el("span", s.title, "set-title"); if (s.visual) name.append(visualChip());
+      r.append(thumb(s), name, el("span", s.artist || "", "muted"));
       const add = el("button", "Add to the order"); add.onclick = () => saveDraft(order.concat([s.id])); r.append(add); out.append(r); }
   }
 }
@@ -1419,6 +1528,9 @@ def make_handler(lib: Library):
                 if url.path == "/api/queued/message":
                     lib.edit_message((q.get("message") or [""])[0][:MESSAGE_MAX + 1])
                     return self.reply()
+                if a := re.fullmatch(r"/api/sets/([0-9a-f]{32})/artist", url.path):
+                    lib.set_artist(a.group(1), field("name"))
+                    return self.reply()
                 if a := re.fullmatch(r"/api/sets/([0-9a-f]{32})/artists", url.path):
                     lib.confirm_artists(a.group(1), [i for i in field("ids").split(",") if ID.match(i)])
                     return self.reply()
@@ -1480,8 +1592,9 @@ def main():
     p.add_argument("--bind", default="127.0.0.1")
     p.add_argument("--reserve-gb", type=float, default=3, help="free space the shared disk must always keep")
     p.add_argument("--max-gb", type=float, default=8, help="most the library may use")
+    p.add_argument("--render-dir", default="", help="the visualiser's render job (out/ and in/), read only, for the Visuals column")
     a = p.parse_args()
-    lib = Library(a.library, a.reserve_gb, a.max_gb)
+    lib = Library(a.library, a.reserve_gb, a.max_gb, a.render_dir)
     print(f"upload page on {a.bind}:{a.port}, library in {a.library}", flush=True)
     ThreadingHTTPServer((a.bind, a.port), make_handler(lib)).serve_forever()
 

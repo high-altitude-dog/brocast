@@ -1,4 +1,4 @@
-# UI spec (hand-off 64)
+# UI spec (hand-off 67)
 
 Field names come from Claude Code's "Fields that exist today" table in `feedback.md`, as of 1 Nov 2026. If one has been renamed since, use the new name.
 
@@ -31,7 +31,7 @@ Field names come from Claude Code's "Fields that exist today" table in `feedback
 
 | Element | Shows | Source | States and taps | Status |
 |---|---|---|---|---|
-| Header | Left, three lines (9 Nov): your nym as the eyebrow (`AMBER FIG HERON`); the **station name** `Beach Sync Radio ▾` (15 px bold, opens Stations); `● ≈ 1.2 M listening` (opens Swarm; the mesh's estimate, always with `≈`, ±3%). Inside an event, the event name replaces your nym. Right: icon buttons (44 × 44, 6 px apart) for Time signals, Calibration, Archive and Settings. Board grew 30 px. | Listener key nym; station name from its announcement; mesh listener estimate | Station line opens Stations; count opens Swarm | later (demo data now) |
+| Header | Left, three lines (9 Nov): your nym as the eyebrow (`AMBER FIG HERON`); the **station name** `Brocast Radio ▾` (15 px bold, opens Stations); `● ≈ 1.2 M listening` (opens Swarm; the mesh's estimate, always with `≈`, ±3%). Inside an event, the event name replaces your nym. Right: icon buttons (44 × 44, 6 px apart) for Time signals, Calibration, Archive and Settings. Board grew 30 px. | Listener key nym; station name from its announcement; mesh listener estimate | Station line opens Stations; count opens Swarm | later (demo data now) |
 | Now playing box (user, 15 Nov) | **Its own card**, like the Sync and Event log boxes (`#12161B`, 1 px `#222932`, radius 14, padding 10/12/12), labelled `NOW PLAYING` (10 px, 0.14em, grey). Inside: the **artist photo 96 × 96** (was 52; rounded 12, cropped at the photo's focus point; tap opens Artist photo) and beside it, top-aligned: the **track title** 20 px bold, now using the column's full width, **scrolling** when it doesn't fit (fade on the right edge); `Artist · Set name` 13 px; then at the bottom of the column two **compact pills**, same size: **STEREO** (two rings + `STEREO`, press and hold to change channel) and **KEPT** (bookmark + `KEPT`; tap opens Kept). Pills are 26 px tall with 10.5 px text, each with an invisible 44 px touch area. The bookmark badge on the photo is gone (now the KEPT pill). Along the bottom of the card: `LIBRARY`, a 3 px bar, `38 of 52 sets`. The card adds about 70 px; the clock and everything below move down. | Set record, artist photo, channel, Kept, library count | As before for each part | now |
 | (before 15 Nov) | The **artist photo** (52 px square, rounded 12, cropped at the photo's focus point) with **Kept** as a small bookmark in its corner (keeping locked on for the beta; the bookmark is its own 44 px target that **opens Kept**, user 7 Nov), then track title (20 px, bold, one line) and `artist · set` (13 px, `textSecondary`), then the **channel chip** on the right (see Channel control), then the **library line**: `LIBRARY`, a thin bar and `38 of 52 sets` | Artist entry; file record and cue list; channel setting; library download state | The photo opens Artist photo. The chip needs press and hold. With no photo: the artist's initials in accent on a dark tile. | later |
 | Brocast clock | A dial. Along the top of the bezel, curved: `TEDDINGTON · GREENWICH`, with an accent meridian tick at 12 o'clock between the two names. Inside: the zone (GMT or BST), HH:MM:SS large, the **time-source pictogram**, then local time. Updates once a second; no sub-second dial and no ns digits. | Flowtime | See the Times rule | now |
@@ -584,7 +584,7 @@ User, 7 Nov: a full-screen card filmed by a third phone (slow motion if it can) 
 
 Your 13:48 ASK; design §11a: every station is a public key, global, no local-only mode; a phone can follow any number.
 
-**Entry:** on Now playing the station name becomes its own header line (`Beach Sync Radio ▾`, 15 px bold) under your nym, and opens Stations. The listener count line under it still opens Swarm. (Applied to Now playing in hand-off 50.)
+**Entry:** on Now playing the station name becomes its own header line (`Brocast Radio ▾`, 15 px bold) under your nym, and opens Stations. The listener count line under it still opens Swarm. (Applied to Now playing in hand-off 50.)
 
 | Stations element | Shows |
 |---|---|
@@ -663,10 +663,10 @@ From the Pears step 1 and 2 results (8 Nov): finding a station by key takes abou
 |---|---|
 | Card | Station tile, name, its key words; a ring with the elapsed time (`4.1 s · usually 7 to 8 s`). |
 | Stages | `Finding the station` → `Getting the set list` → `First music arrived` (5 s ready, verified; playback starts here) → `Rest of the sets` (background, `41 of 66 MB`, usually 30 to 70 s on home Wi-Fi). Each ticks with its time; the current one spins; later ones are dim. Engine states: finding station, getting the set list, fetching, all sets held. |
-| Playing, rest still coming | The card folds into Now playing at stage 3; stage 4 carries on in Buffer. Event log: `Started Beach Sync Radio in 7.4 s`, then `All sets held · 52 s`. |
+| Playing, rest still coming | The card folds into Now playing at stage 3; stage 4 carries on in Buffer. Event log: `Started Brocast Radio in 7.4 s`, then `All sets held · 52 s`. |
 | From memory | Cached record and set list tick at once (0.1 s, 0.3 s); only music is fetched, about 1 to 2 s. |
 | Over 20 s | Amber box `Taking longer than usual · 23 s`, what's stuck, that the station's servers are being tried; Keep trying, Pick another station, What's happening? |
-| Can't find it | After 60 s with no record: `Can't find Beach Sync Radio right now.` plus causes; keeps looking in the background and says when it appears. |
+| Can't find it | After 60 s with no record: `Can't find Brocast Radio right now.` plus causes; keeps looking in the background and says when it appears. |
 
 ## Mesh moments
 
@@ -761,7 +761,7 @@ User, 8 Nov: redesign the page; reorder sets; announce to listeners. 1440 wide, 
 
 | Area | Shows |
 |---|---|
-| Left rail | `BEACH SYNC RADIO · STATION`; Running order (6 sets), Upload (1 in progress), Artists (5 · 1 to confirm), Disk (41 GB free), **Colour** (a dot and the colour's name); footer: tunnel only, no login. |
+| Left rail | `BROCAST RADIO · STATION`; Running order (6 sets), Upload (1 in progress), Artists (5 · 1 to confirm), Disk (41 GB free), **Colour** (a dot and the colour's name); footer: tunnel only, no login. |
 | Running order | Title, `Live: edition 14 since 09:00 · loops every 7:54:53`. Table: drag handle, #, thumbnail, set, artist, length, plays (UK, for the next loop), status (`played` muted, `● on air` accent, `ready`), ⋯ (Move up / Move down / Move to…). The on-air set can't be moved. Moved rows: amber tint and `MOVED ↑`. |
 | Draft bar | Amber, `DRAFT`: what changed and that nothing reaches listeners until published; Discard; **Publish order…** |
 | Track order | `TRACK ORDER · LATER`: once sets have track lists, a set opens to its tracks and reorders the same way. |
@@ -788,10 +788,10 @@ User, 8 Nov: a colour per station, like the lights on silent-disco headphones, s
 | Part | Rule |
 |---|---|
 | Palette | Lime `#C8FF4D` (default), Chartreuse `#DEFF5C`, Lemon `#F4F56A`, Pistachio `#B8F2A0`, Spring `#7DFF7A`, Mint `#6BFFB8`, Seafoam `#5CF2D0`, Ice `#A6E4FF`, Sky `#7CC8FF`, Bluebell `#86A8FF`, Hyacinth `#A2A6FF`, Lavender `#BCA8FF`, Purple `#A98BFF`, Violet `#C483FF`, Orchid `#DE8CFF`, Lilac `#E6B3FF`, Magenta `#FF7AE0`, Pink `#FF8FC8`, Bubblegum `#FFB0D9`, Blush `#FFC4CF`, Iris `#9E95FF`. Each is at least 7 : 1 against `#0A0C0F` (the dark text on filled buttons) and against the card colour. None is amber, red or the news cyan. |
-| Dialog | Picking a swatch opens `Change the station colour to Violet?` with Now playing in the current colour and the new one side by side; **When**: Now (fades over 2 s on every phone; offline phones get it on reconnect) or At the next set; **Tell listeners**: `Beach Sync Radio is Violet now` for 4 s (on by default); the contrast figures; Cancel / Change to Violet (filled in the new colour). |
+| Dialog | Picking a swatch opens `Change the station colour to Violet?` with Now playing in the current colour and the new one side by side; **When**: Now (fades over 2 s on every phone; offline phones get it on reconnect) or At the next set; **Tell listeners**: `Brocast Radio is Violet now` for 4 s (on by default); the contrast figures; Cancel / Change to Violet (filled in the new colour). |
 | What takes it | Everything accent today: beat cells, clock ring and FLOWTIME arc, constellation, in-sync pill, buttons, switches, links, mesh card, Kept highlights, lock-screen and notification accents. **Every tint is the station colour at an alpha** (past beats 22%, outlines 35–55%, glows 14–22%); today some boards hard-code `rgba(200,255,77,…)`, so make it one token. |
 | What doesn't | Amber warnings and LIMIT, red errors, cyan news (the running-order card follows the station colour since 15 Nov), grey off/receive-only, white text. Status never depends on the colour alone. |
-| Phone | A toast at the top of Now playing when it changes (dot, `Beach Sync Radio is Violet now`, `Set by the station · fades in over 2 s`). Stations list: a bar of each station's colour by its name; the one you're on says `LISTENING` in its colour. |
+| Phone | A toast at the top of Now playing when it changes (dot, `Brocast Radio is Violet now`, `Set by the station · fades in over 2 s`). Stations list: a bar of each station's colour by its name; the one you're on says `LISTENING` in its colour. |
 | Delivery | A field in the station's signed announcement, spread over the mesh like the running order, kept for offline. Missing or unknown: Lime. No flashing on: change is instant. Minimal level: only the beat cells and clock ring use it. |
 | Colour per set (9 Nov) | Upload page running order gets a **COLOUR** column: a filled dot + name for a set with its own colour, a ring in the station colour + `Station` otherwise. Click opens a popover `Colour for Golden Hour Set` (times): `Use the station colour (Lime)`, the 21 swatches, a preview line (`Overpass ● → ● every phone changes on beat 1 of the first bar`). Goes into the draft like a move (`Golden Hour Set: Lemon`); live on Publish. Screen `screens/admin-set-colour.png`. |
 | Set colour on phones | On **beat 1 of the new set's first bar**, as the sound reaches the ears, the accent fades to the set's colour over 2 s (No flashing: instant), so the crowd changes together. Set colour if it has one, else station colour; never changes the station colour. No toast. Coming up and Stations list show the set's colour dot; Kept tracks keep the colour of their set. |
@@ -909,7 +909,7 @@ User, 9 Nov (mesh ideas). Six emoji, no text, nothing to moderate.
 
 | Part | Rule |
 |---|---|
-| Giver | Kept › a set › Pass it on, or Now playing › ⋯ › Pass this set on: set header, a QR code (`brocast://pass/<station key>/<set>?via=<your key>`), `Let them scan this with Brocast`, `SIGNED BY BEACH SYNC RADIO`. |
+| Giver | Kept › a set › Pass it on, or Now playing › ⋯ › Pass this set on: set header, a QR code (`brocast://pass/<station key>/<set>?via=<your key>`), `Let them scan this with Brocast`, `SIGNED BY BROCAST RADIO`. |
 | Receiver | Brocast › Add › Scan: shows the set and who it's from (`SIGNED`) before anything downloads. Camera app opens Brocast. |
 | Moving | Both phones: `Sending to Teal Plum Ibis` / `Getting it from Amber Fig Heron`, %, path (`Same Wi-Fi · straight between you`), rate, time left. |
 | Done | `KEPT` · `Plays offline, in sync with the station when it's on air.` Every block checked against the station signature; withdrawn sets leave Kept too. |
@@ -1373,3 +1373,9 @@ Checked every phone board's links on the canvas. Fixed in this hand-off: **bold*
 | Upload page (running order, publish, colours, artists) | The station's web upload page navigation |
 | Stations (old list) | Superseded by Find a station; no longer linked |
 | Test bench | Prototype only; not in the app |
+
+## Name (hand-off 65, user 15 Nov)
+The app is **Brocast**; the default station is **Brocast Radio** (tile initials `BR`). Every board and this spec now use these names (was Beach Sync / Beach Sync Radio / `BS`). The repository folder name is unchanged.
+
+## Web player (hand-off 66, 18 Nov)
+The web player's full spec is `design/handoff-66.md` (badge, notices, tokens, fonts, motion, R1–R6) with the layout replaced by `design/handoff-67.md` (photo-led v2, user 18 Nov). Boards: Web player, Web player · every state, Web player · desktop. Fonts in `design/web-fonts/`.

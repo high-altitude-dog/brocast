@@ -27,6 +27,10 @@ UI and visual design happens in Claude Desktop. Code happens here. Work passes b
 - Each hand-off is committed, so `git diff` shows what changed in the design. Read that diff before building.
 - Claude Desktop owns screens and visuals. Claude Code owns code and the written spec's engineering. Don't do each other's work.
 
+## Other Claude Code sessions
+
+The web and visualiser sessions coordinate with this one through `../comms/` (outside this repo): this session writes `../comms/main.log` and reads `web.log` and `vis.log`. The protocol is `../comms/README.md`: CLAIM before work, DEPLOY before any VM change.
+
 ## Live channel with Claude Desktop
 
 Two append-only logs in `comms/`, which git ignores. Each side writes one and reads the other. This section is the protocol, so never put messages in this file.

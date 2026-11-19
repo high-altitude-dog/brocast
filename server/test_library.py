@@ -131,8 +131,26 @@ def main():
             check(api("DELETE", "/api/air")[0] == 200, "it can be taken off air")
             time.sleep(0.1)
             check(json.loads(call(STREAM, "GET", "/manifest.json")[1])["source"] == "clicks-split", "and the clicks come back")
+            visual = lambda: next(x for x in sets()["sets"] if x["id"] == b["id"])["visual"]
+            vis = os.path.join(lib, "visuals")
+            os.makedirs(vis, exist_ok=True)
+            viz, nodes = os.path.join(vis, b["id"] + ".viz"), os.path.join(vis, b["id"] + ".nodes")
+            check(not visual(), "a set with no visual files isn't marked as having visuals")
+            with open(viz, "wb") as f:
+                f.write(b"v")
+            check(not visual(), "nor is one with only its .viz")
+            open(nodes, "wb").close()
+            check(not visual(), "nor one with an empty .nodes")
+            with open(nodes, "wb") as f:
+                f.write(b"n")
+            check(visual(), "both files mark it as having visuals")
+            check(next(x for x in sets()["sets"] if x["id"] == b["id"])["visual_state"] == "ready", "and the Visuals column says ready")
+            check(api("POST", f"/api/sets/{b['id']}/artist?name=Someone%20New")[0] == 200, "an artist can be edited")
+            check(next(x for x in sets()["sets"] if x["id"] == b["id"])["artist"] == "Someone New", "and the new name is kept")
+            check(api("POST", f"/api/sets/{b['id']}/artist?name=%20")[0] == 400, "a blank artist is refused")
             check(api("DELETE", "/api/sets/" + b["id"])[0] == 200, "then it can be deleted")
             check(not os.path.exists(os.path.join(lib, "sets", b["id"])), "which removes its files")
+            check(not os.path.exists(viz) and not os.path.exists(nodes), "and its visual files")
         finally:
             admin.terminate()
             stream.terminate()

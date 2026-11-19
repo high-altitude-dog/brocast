@@ -2,6 +2,21 @@
 
 Work agreed but not started. Newest first. Move an item out when it is built.
 
+## CRITICAL PATH (user, 19 Nov): done by the end of the next session
+
+**Goal:** a user downloads and installs the APK from GitHub, scans the QR of a station, and receives all of the station's sets/tracks and visualisations over Pears. Everything else waits until this works.
+
+Where it stands (checked 19 Nov): the in-app scan of a `brocast://station/<key>` code already switches station (`ui/FindStation.kt`), and sets already arrive over the mesh by station key (`5e9eca5`, MeshSupply `98bd8f4`). Gaps, in build order:
+
+1. **Visualisations over the mesh.** User 19 Nov: send them over Pears in whichever chunk size gives the best UX (pick and justify it; the visual must be complete before its set starts on the screen). Today `.viz` and `.nodes` reach a phone only by hand (`LibraryStore.visFile`). The station must publish them in its signed catalog (`pears/tools/station.js`), the engine must fetch and verify them like sets (`pears/host/worklet.js`), and the app must save them where `VisualiserScreen` looks.
+2. ~~The visualiser in the release APK.~~ Done 19 Nov (user: "do it"): `preBuild` copies `visualiser/looks` into every build, a release build refuses to build without it, and the Test features switch (which opens the Visualiser) is in release builds too. Not yet committed or released.
+3. **A station QR.** User 19 Nov: the QR is the Ed25519 public key of the user who made the station. `station.js` should print the `brocast://station/<key>` code (terminal QR and PNG). Note: its READY line prints the station key second.
+4. **A station that stays up long enough** to deliver the whole library. Decided (user, 19 Nov): the laptop station may run up to 1 hour each time it's started (`station.js --minutes`, default and cap 60). Everything else keeps the 10-minute default.
+5. **Relay for a fresh install.** Decided (user 19 Nov): **the station QR carries the relay's key** (e.g. `brocast://station/<key>?relay=<key>`; the relay key stays out of the repo and the APK), and **every peer sees the relay as a peer with its own nym** (it shows in the peer lists and Swarm like any listener, so the relay needs its own identity key and must speak `brocast/hello/1`). Background: a GitHub install has no relay key (adb only). Fine where hole punching works (home Wi-Fi, mobile data). Optional: carry the relay key in the station QR.
+6. **New GitHub release** (release key, scan for server details), then the end-to-end check on a phone with the app removed. User 19 Nov: "yes" to both; still ask before starting the test run itself.
+
+Parked behind the critical path: the 15 Nov list below, Android NTP rules and verbose test-mode NTP log (user 18 Nov), Running Order highlight on the upload page (user 19 Nov; the live page belongs to the visualiser session's copy), hand-offs h59/h60/h62 directory.
+
 ## Next session (user, 15 Nov)
 
 1. **Release with the relay.** Publish a new GitHub release so phones installed from GitHub get the relay support and the engine's catalog-wait fix (commit `193df04`). The relay key stays out of the APK and the repo; give it by adb (`--es relay`) or a later in-app setting.

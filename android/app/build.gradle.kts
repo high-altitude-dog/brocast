@@ -211,3 +211,17 @@ val copyGnssTable = tasks.register<Copy>("copyGnssTable") {
 android.sourceSets["main"].assets.srcDir(gnssAssets)
 
 tasks.named("preBuild") { dependsOn(generateTokens, copyGnssTable) }
+
+// The visualiser (../../visualiser): the page for the Visualiser screen, in every build (user, 19 Nov: the critical path needs it in
+// the GitHub release). A debug build skips it when the visualiser folder isn't next to this repo; a release build refuses to.
+val visualiserLooks = rootDir.resolve("../../visualiser/looks").normalize()
+val copyVisualiser by tasks.registering(Sync::class) {
+    onlyIf { visualiserLooks.isDirectory }
+    from(visualiserLooks)
+    into(layout.buildDirectory.dir("visualiser/assets/visualiser/looks"))
+}
+android.sourceSets["main"].assets.srcDir(layout.buildDirectory.dir("visualiser/assets"))
+tasks.named("preBuild") { dependsOn(copyVisualiser) }   // before every task that reads assets, lint included
+tasks.matching { it.name == "mergeReleaseAssets" }.configureEach {
+    doFirst { check(visualiserLooks.resolve("index.html").isFile) { "release build needs the visualiser page at $visualiserLooks" } }
+}

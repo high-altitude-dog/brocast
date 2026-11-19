@@ -28,6 +28,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import org.beachsync.proto.Edition
 import org.beachsync.proto.FlowTime
@@ -118,6 +119,26 @@ private fun have(lib: LibraryStore, item: LibraryItem): Have = when {
     lib.file(item.id).exists() -> Have.HERE
     lib.partPct in 0..99 && lib.partTitle == item.title -> Have.ARRIVING
     else -> Have.NOT_YET
+}
+
+/** Whether set [id]'s visual is on this phone, behind Test features. Looked at again every 5 s, so a visual that arrives shows up. */
+@Composable
+private fun rememberHasVisual(lib: LibraryStore, id: String): Boolean {
+    val here by produceState(false, lib, id) {
+        while (true) { value = withContext(Dispatchers.IO) { lib.hasVisual(id) }; delay(5000) }
+    }
+    return TestFeatures.on && here
+}
+
+/** Marks a set that has a visual. */
+@Composable
+private fun VisualChip() {
+    BasicText(
+        "VISUALS",
+        Modifier.border(1.dp, Ink.accent, RoundedCornerShape(4.dp)).padding(horizontal = 5.dp, vertical = 1.dp),
+        Tokens.Text.cardLabel.style(Ink.accent).copy(fontSize = 10.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold),
+        maxLines = 1,
+    )
 }
 
 /** The 44 px button that replaces the Library bar at the foot of the Now playing box. */
@@ -267,10 +288,11 @@ private fun SetRow(lib: LibraryStore, item: LibraryItem, time: String?, bpm: Int
         else -> Modifier.background(Ink.surface, shape).border(Tokens.Stroke.card.dp, Ink.border, shape)
     }
     val status = have(lib, item)
+    val visual = rememberHasVisual(lib, item.id)
     val detail = lengthText(item.seconds) + (bpm?.let { " · $it BPM" } ?: "")
     Row(
         Modifier.fillMaxWidth().then(box).clickable(role = Role.Button, onClick = onClick).padding(horizontal = if (compact) 0.dp else 12.dp, vertical = if (compact) 8.dp else 12.dp)
-            .semantics { contentDescription = listOfNotNull(time?.let { "Plays $it" }, nowLabel, item.title, item.artist.ifEmpty { null }, detail, when (status) { Have.HERE -> "on this phone"; Have.ARRIVING -> "arriving, ${lib.partPct}%"; Have.NOT_YET -> "not on this phone yet" }).joinToString(", ") },
+            .semantics { contentDescription = listOfNotNull(time?.let { "Plays $it" }, nowLabel, item.title, item.artist.ifEmpty { null }, detail, when (status) { Have.HERE -> "on this phone"; Have.ARRIVING -> "arriving, ${lib.partPct}%"; Have.NOT_YET -> "not on this phone yet" }, if (visual) "visuals available" else null).joinToString(", ") },
         verticalAlignment = Alignment.CenterVertically,
     ) {
         val fade = if (dim) Ink.textSecondary else Ink.text
@@ -284,11 +306,17 @@ private fun SetRow(lib: LibraryStore, item: LibraryItem, time: String?, bpm: Int
             if (now) BasicText(nowLabel!!, style = Tokens.Text.cardLabel.style(Ink.accent).copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold))
             BasicText(item.title, style = Tokens.Text.bodyStrong.style(fade), maxLines = 1, overflow = TextOverflow.Ellipsis)
             val artist = artistLine(lib, item)
-            if (compact) BasicText(listOf(artist, lengthText(item.seconds)).filter { it.isNotEmpty() }.joinToString(" · ") + if (outOfOrder) " · not in today's order" else "",
-                style = Tokens.Text.small.style(Ink.textSecondary), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (compact) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                BasicText(listOf(artist, lengthText(item.seconds)).filter { it.isNotEmpty() }.joinToString(" · ") + if (outOfOrder) " · not in today's order" else "",
+                    Modifier.weight(1f, fill = false), Tokens.Text.small.style(Ink.textSecondary), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (visual) VisualChip()
+            }
             else {
                 if (artist.isNotEmpty()) BasicText(artist, style = Tokens.Text.small.style(Ink.textSecondary), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                BasicText(detail, style = Tokens.Text.valueSmall.style(Ink.textSecondary).copy(fontSize = 12.sp), maxLines = 1)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    BasicText(detail, Modifier.weight(1f, fill = false), Tokens.Text.valueSmall.style(Ink.textSecondary).copy(fontSize = 12.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    if (visual) VisualChip()
+                }
             }
         }
         if (!dim) StatusMark(status, lib.partPct, if (compact) null else byTime)
@@ -348,6 +376,10 @@ private fun SetSheet(lib: LibraryStore, item: LibraryItem, playsAt: String?, bpm
                 },
                 style = Tokens.Text.small.style(if (status == Have.HERE) Ink.accent else Ink.textSecondary),
             )
+            if (rememberHasVisual(lib, item.id)) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                VisualChip()
+                BasicText("Ready on this phone", style = Tokens.Text.small.style(Ink.textSecondary))
+            }
             NavRow("Keep", "Kept already: every set stays on this phone in the beta", openKept)
             if (status != Have.NOT_YET) NavRow("Where it came from", "Which listener sent each block", whereFrom)
             if (status == Have.HERE) NavRow("Pass it on", "Show a code for the person next to you", passOn)

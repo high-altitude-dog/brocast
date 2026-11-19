@@ -118,6 +118,10 @@ class LibraryStore private constructor(ctx: Context) : Thread("library") {
     /** The set's sound features at [BeatFeatures.PER_S] frames a second; `.feat` held the older 8-a-second ones. */
     fun featuresFile(id: String) = File(dir, "$id.f32")
     fun oldFeaturesFile(id: String) = File(dir, "$id.feat")
+    /** The visualiser's files for a set (`viz` or `nodes`), made by the visualiser repo's pipeline; debug builds only use them for now. */
+    fun visFile(id: String, ext: String) = File(dir, "$id.$ext")
+    /** Whether this phone holds the set's whole visual. Touches the disk, so call it off the UI thread. */
+    fun hasVisual(id: String) = visFile(id, "viz").length() > 0 && visFile(id, "nodes").length() > 0
 
     private val beatCache = java.util.concurrent.ConcurrentHashMap<String, SetBeats>()
     private val beatLooked = java.util.concurrent.ConcurrentHashMap<String, Long>()

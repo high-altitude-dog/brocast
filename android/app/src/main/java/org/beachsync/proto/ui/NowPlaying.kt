@@ -92,7 +92,7 @@ private fun rememberSecondTick(): State<Long> = produceState(Session.nowBoot()) 
 private fun logScale(ns: Double) = if (ns.isNaN() || ns <= 0.0) 0f else ((log10(ns) - 3.0) / 4.0).coerceIn(0.0, 1.0).toFloat()
 
 @Composable
-fun NowPlaying(state: BenchState, actions: BenchActions, openLog: () -> Unit, openNudge: () -> Unit, openBench: () -> Unit, openSettings: () -> Unit, openSignals: () -> Unit, openCalibration: () -> Unit, openSatellites: () -> Unit, openStereo: () -> Unit, openArtist: () -> Unit, openSwarm: () -> Unit, openBuffer: () -> Unit, openKept: () -> Unit = {}, openWhere: (String) -> Unit = {}, openSetList: () -> Unit = {}) {
+fun NowPlaying(state: BenchState, actions: BenchActions, openLog: () -> Unit, openNudge: () -> Unit, openBench: () -> Unit, openSettings: () -> Unit, openSignals: () -> Unit, openCalibration: () -> Unit, openSatellites: () -> Unit, openStereo: () -> Unit, openArtist: () -> Unit, openSwarm: () -> Unit, openBuffer: () -> Unit, openKept: () -> Unit = {}, openWhere: (String) -> Unit = {}, openFind: () -> Unit = {}, openVisual: () -> Unit = {}, openSetList: () -> Unit = {}) {
     val boot by rememberSecondTick()
     val s = state.session
     val listen = {
@@ -112,13 +112,14 @@ fun NowPlaying(state: BenchState, actions: BenchActions, openLog: () -> Unit, op
     val ahead = lib?.let { l -> editionAt(l.editions, utcNow - l.dMs * 1_000_000L)?.let { ed -> playing?.let { aheadSeconds(ed, it.first, it.second) { item -> l.file(item.id).exists() } } } }
     val everythingHere = lib != null && playing != null && !dueMissing && ahead == null
     val chUi = rememberChannelUi()
+    val seam = rememberSeam(lib, TestFeatures.on && s != null)
     Box(Modifier.fillMaxSize()) {
     Column(
         Modifier.fillMaxSize().background(Ink.bg).safeDrawingPadding().verticalScroll(rememberScrollState())
             .padding(top = Tokens.Space.screenPaddingTop.dp, start = Tokens.Space.screenPaddingSide.dp, end = Tokens.Space.screenPaddingSide.dp, bottom = Tokens.Space.screenPaddingBottom.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Masthead(s, openBench, openSwarm, openSettings, openSignals, openCalibration)
+        Masthead(s, openBench, openSwarm, openSettings, openSignals, openCalibration, openFind)
         val mesh = org.beachsync.proto.PearsEngine.view
         mesh?.moments?.takeIf { !it.firstMusicDone }?.let { FirstListenCard(it, openSwarm) }
         if (state.headphonesNameOffer && out.icon.bluetooth && !out.named) HeadphonesNameCard(actions::askHeadphonesName, actions::notNowHeadphonesName)
@@ -150,6 +151,7 @@ fun NowPlaying(state: BenchState, actions: BenchActions, openLog: () -> Unit, op
                 }
             }
             ChannelHint(chUi)
+            LiveSeam(seam, lib, openVisual)
             SetListButton(state.library, openSetList)   // hand-off 63: replaces the Library bar
         }
         NewsCard()
@@ -199,6 +201,7 @@ fun NowPlaying(state: BenchState, actions: BenchActions, openLog: () -> Unit, op
     }
     // Asked once, as first listen folds away (hand-off 38).
     if (state.countryOffer && org.beachsync.proto.PearsEngine.view?.moments?.firstMusicDone == true) CountryAskSheet(actions::answerCountry)
+    SeamPortalLayer(seam)
     }
 }
 
@@ -239,11 +242,32 @@ private fun PlayStopButton(playing: Boolean, disabled: Boolean, onClick: () -> U
 
 /** Holding the station name opens the test bench: the developer way in, with nothing on screen for listeners to trip over. */
 @Composable
-private fun Masthead(s: Session?, openBench: () -> Unit, openSwarm: () -> Unit, openSettings: () -> Unit, openSignals: () -> Unit, openCalibration: () -> Unit) {
+private fun Masthead(s: Session?, openBench: () -> Unit, openSwarm: () -> Unit, openSettings: () -> Unit, openSignals: () -> Unit, openCalibration: () -> Unit, openFind: () -> Unit = {}) {
     // Live from the Pears engine when a station key is set; demo values otherwise.
     val live = org.beachsync.proto.PearsEngine.view
     val nym = live?.nym?.ifEmpty { null } ?: DemoMesh.NYM
     val listening = live?.let { listenerWords(it) } ?: "${DemoMesh.LISTENING} listening"
+    // Hand-off 62 (Test features): row 1 Settings top left, Time signals, Headphone lag, Archive, spacer, Find top right; row 2 the names.
+    if (TestFeatures.on) {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    for (icon in listOf(HeaderIcon.SETTINGS, HeaderIcon.TIME, HeaderIcon.CALIBRATION, HeaderIcon.ARCHIVE))
+                        IconBox(icon, when (icon) { HeaderIcon.SETTINGS -> openSettings; HeaderIcon.TIME -> openSignals; HeaderIcon.CALIBRATION -> openCalibration; else -> null })
+                }
+                Spacer(Modifier.weight(1f))
+                FindButton(openFind)
+            }
+            Column(
+                Modifier.fillMaxWidth().pointerInput(Unit) { detectTapGestures(onLongPress = { openBench() }, onTap = { openSwarm() }) }.semantics { contentDescription = "$nym, $listening. Tap for the swarm; hold to open the test bench." },
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                BasicText(nym, style = Tokens.Text.eyebrow.style())
+                BasicText("● $listening" + if (live == null) " · demo" else "", style = Tokens.Text.small.style(Ink.accent))
+            }
+        }
+        return
+    }
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Column(
             Modifier.weight(1f).pointerInput(Unit) { detectTapGestures(onLongPress = { openBench() }, onTap = { openSwarm() }) }.semantics { contentDescription = "$nym, $listening${if (live == null) ", demo data" else ""}. Tap for the swarm; hold to open the test bench." },

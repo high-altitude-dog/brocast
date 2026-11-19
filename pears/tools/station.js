@@ -84,8 +84,9 @@ if (capBytes) {
 }
 console.log('READY', hex(catalog.key), hex(mesh.keyPair.publicKey))
 console.log('NAT', JSON.stringify(mesh.nat()))
-// Auto-stop (user, 7 Nov): every seed server stops itself after --minutes, 10 by default, so none is left running.
-const minutes = Number(arg('minutes', 10))
+// Auto-stop (user, 7 Nov): every seed server stops itself after --minutes, so none is left running. The laptop station
+// may run up to an hour each time it's started (user, 19 Nov), long enough to deliver a whole library; 60 by default.
+const minutes = Math.min(60, Number(arg('minutes', 60)))
 setTimeout(() => { console.log(`AUTOSTOP after ${minutes} min`); process.kill(process.pid, 'SIGTERM') }, minutes * 60e3)
 
 process.on('SIGTERM', async () => {
