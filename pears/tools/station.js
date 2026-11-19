@@ -2,6 +2,7 @@
 // catalog, and serves. Prints `READY <catalog key> <station key>`, then a JSON summary on SIGTERM.
 // Usage: node tools/station.js --dir D --seed-file F --library DIR --block-seconds N  (BOOTSTRAP env: JSON host/port list)
 // With --library-json FILE (the server's library.json for those sets), the catalog carries it, so the app's timeline comes over the mesh too.
+// Each set's visual (<id>.viz + <id>.nodes, from --visuals DIR, default the library folder) goes in the catalog too (engine/visuals.js).
 import fs from 'node:fs'
 import path from 'node:path'
 import crypto from 'hypercore-crypto'
@@ -10,11 +11,13 @@ import { blocks, FORMAT } from '../engine/blocks.js'
 import { buildOgg, serialOf, blake2b } from '../engine/builder.js'
 import { topic, encodeRecord } from '../engine/index.js'
 import { EgressGuard, defaultAlert } from '../seeder/egress-guard.js'
+import { readVisual } from '../engine/visuals.js'
 
 const arg = (k, d) => { const i = process.argv.indexOf('--' + k); return i > 0 ? process.argv[i + 1] : d }
 const dir = arg('dir')
 const seedFile = arg('seed-file')
 const library = arg('library')
+const visuals = arg('visuals', library)
 const blockSeconds = Number(arg('block-seconds', 4)) // 4 s is the step 0 recommendation
 const libraryJson = arg('library-json') ? JSON.parse(fs.readFileSync(arg('library-json'), 'utf8')) : null
 const bootstrap = process.env.BOOTSTRAP ? JSON.parse(process.env.BOOTSTRAP) : undefined
@@ -39,7 +42,16 @@ for (const name of fs.readdirSync(library).filter((f) => f.endsWith('.opus')).so
   const all = []
   for (let i = 0; i < core.length; i++) all.push(await core.get(i))
   const b2 = blake2b(buildOgg(serialOf(core.key), all)) // the hash of the file every phone will build
-  items.push({ id, title: id, artist: '', blocks: core.length, seconds: core.length * blockSeconds, core: hex(core.key), blake2b: b2 })
+  const item = { id, title: id, artist: '', blocks: core.length, seconds: core.length * blockSeconds, core: hex(core.key), blake2b: b2 }
+  // Its visual, if rendered: a core named by the files' hashes, so a new render is a new core and an old phone's copy is never mixed in.
+  const vis = readVisual(visuals, id)
+  if (vis) {
+    const vc = store.get({ name: 'vis/' + id + '/' + vis.meta.viz.blake2b.slice(0, 16) + vis.meta.nodes.blake2b.slice(0, 16) })
+    await vc.ready()
+    if (vc.length === 0) await vc.append(vis.blocks)
+    item.visual = { core: hex(vc.key), blocks: vc.length, ...vis.meta }
+  }
+  items.push(item)
 }
 
 const catalog = store.get({ name: 'catalog' })
@@ -55,8 +67,10 @@ if (!same) {
 }
 
 const uploads = new Map()
-for (const it of items) {
-  store.get({ key: Buffer.from(it.core, 'hex') }).on('upload', (index, bytes, to) => {
+const served = items.flatMap((it) => [it.core, ...(it.visual ? [it.visual.core] : [])])
+console.log('VISUALS', items.filter((it) => it.visual).length + ' of ' + items.length + ' sets')
+for (const c of served) {
+  store.get({ key: Buffer.from(c, 'hex') }).on('upload', (index, bytes, to) => {
     const k = hex(to.remotePublicKey).slice(0, 8)
     uploads.set(k, (uploads.get(k) || 0) + bytes)
   })
@@ -80,7 +94,7 @@ if (capBytes) {
     }
   })
   try { guard.start() } catch { await mesh.close(); process.exit(0) }
-  for (const it of items) store.get({ key: Buffer.from(it.core, 'hex') }).on('upload', () => guard.check())
+  for (const c of served) store.get({ key: Buffer.from(c, 'hex') }).on('upload', () => guard.check())
 }
 console.log('READY', hex(catalog.key), hex(mesh.keyPair.publicKey))
 console.log('NAT', JSON.stringify(mesh.nat()))

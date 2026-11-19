@@ -16,9 +16,10 @@ import { hedge } from '../engine/hedge.js'
 import { SourceLog } from '../engine/sources.js'
 import { nymFrom, nymProof, nymText } from '../engine/nym.js'
 import { PACKETS, blocks as fileBlocks } from '../engine/blocks.js'
+import { haveVisual, writeVisual } from '../engine/visuals.js'
 
 const CMD = { hello: 1, start: 2, subscribe: 3, status: 4, stop: 5, block: 6, prefs: 7, react: 8, want: 9 }
-const EV = { status: 100, built: 102, warning: 103, fatal: 104, catalog: 105 }
+const EV = { status: 100, built: 102, warning: 103, fatal: 104, catalog: 105, visual: 106 }
 
 const t0 = Date.now()
 const now = () => Date.now() - t0
@@ -185,7 +186,7 @@ class Run {
     // The station's library list, as the server's library.json, so the app's timeline is the same whichever way the sets arrive.
     emit(EV.catalog, { edition: ed.edition, library: ed.library ?? null })
     for (const it of ed.items) {
-      if (this.byId.has(it.id)) continue
+      if (this.byId.has(it.id)) { await this.addVisual(this.byId.get(it.id), it.visual); continue }
       const n = this.sets.length
       const core = this.mesh.store.get({ key: b4a.from(it.core, 'hex') })
       await core.ready()
@@ -204,12 +205,43 @@ class Run {
       if (this.share) this.mesh.proofs.offer(core)
       this.sets.push(s)
       this.byId.set(it.id, s)
+      await this.addVisual(s, it.visual)
     }
     this.importHeld()
-    // Sets already on the phone (from the server, before the mesh) aren't fetched again.
-    this.todo = this.sets.filter((s) => !s.builder.done)
-    this.total = this.todo.reduce((a, s) => a + s.blocks, 0)
+    // Sets already on the phone (from the server, before the mesh) aren't fetched again; nor are visuals it holds.
+    this.todo = this.sets.filter((s) => !s.builder.done || (s.vis && !s.vis.done))
+    this.total = this.todo.filter((s) => !s.builder.done).reduce((a, s) => a + s.blocks, 0)
     this.phase = this.held.size < this.total ? 'fetching' : 'all sets held'
+  }
+
+  /** Set [s]'s visual from the catalog (engine/visuals.js): already held and checked, or a core to fetch before the set's audio. */
+  async addVisual (s, v) {
+    if (!v || s.vis?.v.core === v.core) return
+    const core = this.mesh.store.get({ key: b4a.from(v.core, 'hex') })
+    await core.ready()
+    hedge(core, { mode: 'delayed', afterMs: 1000 })
+    core.on('download', (index, bytes, from) => { this.peer(from).rx += bytes })
+    core.on('upload', (index, bytes, to) => this.peer(to).tx += bytes)
+    s.vis = { v, core, blocks: v.blocks, held: new Set(), done: haveVisual(this.dirs.music, s.it.id, v), cleared: false }
+    if (s.vis.done && !this.share) { await core.clear(0, v.blocks).catch(() => {}); s.vis.cleared = true }
+  }
+
+  /** Block [i] of set [s]'s visual is in the store; once all are, the files are checked and written where the visualiser looks. */
+  async gotVisual (s, vis, i) {
+    if (vis !== s.vis || vis.done) return
+    vis.held.add(i)
+    if (vis.held.size < vis.blocks || vis.writing) return
+    vis.writing = true
+    try {
+      const blocks = []
+      for (let k = 0; k < vis.blocks; k++) blocks.push(await vis.core.get(k, { wait: false }))
+      const r = writeVisual(this.dirs.music, s.it.id, vis.v, blocks)
+      vis.done = true
+      if (r === 'built') emit(EV.visual, { setId: s.it.id })
+      else emit(EV.warning, { code: 'VISUAL', text: s.it.id + ' visual failed its check: ' + r })
+      if (!this.share) { await vis.core.clear(0, vis.blocks).catch(() => {}); vis.cleared = true }
+    } catch (e) { emit(EV.warning, { code: 'VISUAL', text: s.it.id + ': ' + (e?.message || e) }) } finally { vis.writing = false }
+    this.sendStatus()
   }
 
   /**
@@ -258,6 +290,18 @@ class Run {
   fetchMore () {
     if (state.stopping) return
     for (const s of this.todo) {
+      // The set's visual first: it must be whole before the set starts on the screen, and it is ~5% of the set's bytes.
+      const vis = s.vis
+      if (vis && !vis.done) {
+        for (let i = 0; i < vis.blocks && this.inflight.size < this.window; i++) {
+          const key = 'v' + s.n + ':' + i
+          if (vis.held.has(i) || this.inflight.has(key)) continue
+          this.inflight.set(key, now())
+          vis.core.get(i, { timeout: 20000 }).then(() => this.gotVisual(s, vis, i), () => {}).finally(() => this.inflight.delete(key))
+        }
+        if (this.inflight.size >= this.window) return
+      }
+      if (s.builder.done) continue
       for (let i = 0; i < s.blocks && this.inflight.size < this.window; i++) {
         const key = s.n + ':' + i
         if (this.held.has(key) || this.inflight.has(key)) continue
@@ -373,7 +417,7 @@ class Run {
         edition: this.edition ?? null,
         held: this.held.size,
         total: this.total ?? null,
-        sets: this.sets.map((s) => ({ id: s.it.id, state: s.builder.done ? 'built' : 'building', pct: s.builder.done ? 100 : Math.floor((s.got / s.blocks) * 100), offered: s.builder.done ? s.core.contiguousLength >= s.blocks : null }))
+        sets: this.sets.map((s) => ({ id: s.it.id, state: s.builder.done ? 'built' : 'building', pct: s.builder.done ? 100 : Math.floor((s.got / s.blocks) * 100), offered: s.builder.done ? s.core.contiguousLength >= s.blocks : null, visual: !s.vis ? 'none' : s.vis.done ? 'held' : Math.floor((s.vis.held.size / s.vis.blocks) * 100) + '%' }))
       },
       ledger: { today: { downBytes: wire.rx, upBytes: wire.tx } }
     }
