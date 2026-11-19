@@ -22,16 +22,14 @@ class SetBeatAnalyser(private val store: LibraryStore) : Thread("set-beats") {
                 val out = store.beatsFile(item.id)
                 if (!f.exists() || (out.exists() && store.beats(item.id, fresh = true) != null)) continue
                 // An older version's file: resolved again from its saved raw results and sound features, in seconds, with no new analysis.
-                if (out.exists() && store.featuresFile(item.id).exists()) {
+                if (out.exists() && store.featuresFile(item.id).exists() && store.bassFile(item.id).exists()) {
                     val raw = SetBeats.decodeRaw(out.readText())
                     if (raw.isNotEmpty()) {
-                        val tmp = File(out.path + ".tmp")
-                        try { tmp.writeText(SetBeats.resolve(raw, readFloats(store.featuresFile(item.id))).encode(raw)); if (tmp.renameTo(out)) continue }
-                        catch (e: Exception) { Log.w(TAG, "re-resolve ${item.id}", e) }
+                        try { save(item.id, out, raw); continue } catch (e: Exception) { Log.w(TAG, "re-resolve ${item.id}", e) }
                     }
                 }
-                // Features from before 32 frames a second: the beat analysis is kept and only the sound features are worked out again.
-                if (out.exists() && !store.featuresFile(item.id).exists()) {
+                // Sound features missing (from before 32 frames a second, or before the bass note): the beat analysis is kept and only they are worked out again.
+                if (out.exists() && !(store.featuresFile(item.id).exists() && store.bassFile(item.id).exists())) {
                     val raw = SetBeats.decodeRaw(out.readText())
                     if (raw.isNotEmpty()) {
                         try { featuresOnly(item, f, out, raw); continue } catch (e: InterruptedException) { return } catch (e: Exception) { Log.w(TAG, "features for ${item.id}", e) }
@@ -60,6 +58,10 @@ class SetBeatAnalyser(private val store: LibraryStore) : Thread("set-beats") {
         java.io.RandomAccessFile(featFile, "rw").use { it.setLength(minOf(it.length(), firstBlock * perBlock * 4L)) }
         val features = BeatFeatures()
         val featOut = java.io.DataOutputStream(java.io.BufferedOutputStream(java.io.FileOutputStream(featFile, true)))
+        val bassFile = store.bassFile(item.id)
+        java.io.RandomAccessFile(bassFile, "rw").use { it.setLength(minOf(it.length(), firstBlock * BassChroma.PER_S * BassChroma.PCS * 4L)) }
+        val bass = BassChroma()
+        val bassOut = java.io.DataOutputStream(java.io.BufferedOutputStream(java.io.FileOutputStream(bassFile, true)))
         val started = System.nanoTime()
         var decodeNs = 0L; var analyseNs = 0L
         try {
@@ -70,50 +72,63 @@ class SetBeatAnalyser(private val store: LibraryStore) : Thread("set-beats") {
                     val t1 = System.nanoTime(); decodeNs += t1 - t0
                     blocks.addLast(pcm)
                     for (v in features.block(pcm)) featOut.writeFloat(v)
+                    for (v in bass.block(pcm)) bassOut.writeFloat(v)
                     if (blocks.size > SetBeats.LENGTH_S) blocks.removeFirst()
                     // Window w is the 16 s from block 8w: the same windows the live tracker uses.
                     val first = b - SetBeats.LENGTH_S + 1
                     if (first >= 0 && first % SetBeats.WINDOW_S == 0L && blocks.size == SetBeats.LENGTH_S) {
                         raw.add(grid.analyse(first, blocks.toList()))
-                        if (raw.size % 10 == 0) { featOut.flush(); part.writeText(SetBeats(emptyList()).encode(raw)) }
+                        if (raw.size % 10 == 0) { featOut.flush(); bassOut.flush(); part.writeText(SetBeats(emptyList()).encode(raw)) }
                     }
                     if (b % 10 == 0L) working = item.title to (100 * b / item.seconds.coerceAtLeast(1)).toInt()
                     analyseNs += System.nanoTime() - t1
                 }
             }
-        } finally { decoder.close(); featOut.close() }
-        val feat = readFloats(featFile)
-        val tmp = File(out.path + ".tmp")
-        tmp.writeText(SetBeats.resolve(raw, feat).encode(raw))
-        if (!tmp.renameTo(out)) throw IllegalStateException("couldn't save ${out.name}")
+        } finally { decoder.close(); featOut.close(); bassOut.close() }
+        save(item.id, out, raw)
         part.delete()
         Log.i(TAG, "${item.id}: ${raw.size} windows (from $resumedAt), ${raw.count { it != null }} with a beat, in ${(System.nanoTime() - started) / 1_000_000_000L} s: " +
             "decode ${decodeNs / 1_000_000_000L} s, analysis ${analyseNs / 1_000_000_000L} s")
     }
 
-    /** Works out only the sound features (decode and band energies, no beat analysis), then resolves the grid from the saved raw results. */
+    /** Resolves the grid from [raw] and the saved features, saves it, and carries this phone's corrections over from the grid it replaces. */
+    private fun save(id: String, out: File, raw: List<BeatGrid.Result?>) {
+        val old = if (out.exists()) SetBeats.decode(out.readText(), anyVersion = true) else null
+        val grid = SetBeats.resolve(raw, readFloats(store.featuresFile(id)), readFloats(store.bassFile(id)))
+        val tmp = File(out.path + ".tmp")
+        tmp.writeText(grid.encode(raw))
+        if (!tmp.renameTo(out)) throw IllegalStateException("couldn't save ${out.name}")
+        if (old != null && old.windows.size == grid.windows.size) store.carryBarFixes(id, old, grid)
+    }
+
+    /** Works out only the missing sound features (band energies and/or bass note; decode, no beat analysis), then resolves the grid from the saved raw results. */
     private fun featuresOnly(item: LibraryItem, f: File, out: File, raw: List<BeatGrid.Result?>) {
-        val featFile = store.featuresFile(item.id)
-        val part = File(featFile.path + ".part")
+        val featFile = store.featuresFile(item.id); val bassFile = store.bassFile(item.id)
+        val needFeat = !featFile.exists(); val needBass = !bassFile.exists()
+        val featPart = File(featFile.path + ".part"); val bassPart = File(bassFile.path + ".part")
         val decoder = OpusDecoder()
-        val features = BeatFeatures()
+        val features = BeatFeatures(); val bass = BassChroma()
         val started = System.nanoTime()
         try {
-            java.io.DataOutputStream(java.io.BufferedOutputStream(java.io.FileOutputStream(part))).use { featOut ->
-                OpusFile(f).use { file ->
-                    for (b in 0 until item.seconds) {
-                        for (v in features.block(decoder.decode(file.block(b)))) featOut.writeFloat(v)
-                        if (b % 10 == 0L) working = item.title to (100 * b / item.seconds.coerceAtLeast(1)).toInt()
+            java.io.DataOutputStream(java.io.BufferedOutputStream(java.io.FileOutputStream(featPart))).use { featOut ->
+                java.io.DataOutputStream(java.io.BufferedOutputStream(java.io.FileOutputStream(bassPart))).use { bassOut ->
+                    OpusFile(f).use { file ->
+                        for (b in 0 until item.seconds) {
+                            val pcm = decoder.decode(file.block(b))
+                            if (needFeat) for (v in features.block(pcm)) featOut.writeFloat(v)
+                            if (needBass) for (v in bass.block(pcm)) bassOut.writeFloat(v)
+                            if (b % 10 == 0L) working = item.title to (100 * b / item.seconds.coerceAtLeast(1)).toInt()
+                        }
                     }
                 }
             }
         } finally { decoder.close() }
-        if (!part.renameTo(featFile)) throw IllegalStateException("couldn't save ${featFile.name}")
-        val tmp = File(out.path + ".tmp")
-        tmp.writeText(SetBeats.resolve(raw, readFloats(featFile)).encode(raw))
-        if (!tmp.renameTo(out)) throw IllegalStateException("couldn't save ${out.name}")
+        if (needFeat && !featPart.renameTo(featFile)) throw IllegalStateException("couldn't save ${featFile.name}")
+        if (needBass && !bassPart.renameTo(bassFile)) throw IllegalStateException("couldn't save ${bassFile.name}")
+        featPart.delete(); bassPart.delete()
+        save(item.id, out, raw)
         store.oldFeaturesFile(item.id).delete()
-        Log.i(TAG, "${item.id}: features again at ${BeatFeatures.PER_S}/s in ${(System.nanoTime() - started) / 1_000_000_000L} s")
+        Log.i(TAG, "${item.id}: features again (bands $needFeat, bass $needBass) in ${(System.nanoTime() - started) / 1_000_000_000L} s")
     }
 
     private fun readFloats(f: File): FloatArray {

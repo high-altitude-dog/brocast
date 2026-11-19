@@ -118,6 +118,8 @@ class LibraryStore private constructor(ctx: Context) : Thread("library") {
     /** The set's sound features at [BeatFeatures.PER_S] frames a second; `.feat` held the older 8-a-second ones. */
     fun featuresFile(id: String) = File(dir, "$id.f32")
     fun oldFeaturesFile(id: String) = File(dir, "$id.feat")
+    /** The set's bass pitch classes at [BassChroma.PER_S] frames a second (19 Nov). */
+    fun bassFile(id: String) = File(dir, "$id.bass")
     /** The visualiser's files for a set (`viz` or `nodes`), made by the visualiser repo's pipeline; debug builds only use them for now. */
     fun visFile(id: String, ext: String) = File(dir, "$id.$ext")
     /** Whether this phone holds the set's whole visual. Touches the disk, so call it off the UI thread. */
@@ -164,6 +166,8 @@ class LibraryStore private constructor(ctx: Context) : Thread("library") {
                 val arr = j.getJSONArray(id)
                 val list = (0 until arr.length()).map { arr.getJSONObject(it) }.filter { it.optString("grid") == SetBeats.HEADER }
                     .map { SetBeats.Fix(it.getInt("from"), it.getInt("to"), it.getInt("shift")) }
+                // None yet for this grid version: keep this phone's own (carried over from the last version) rather than clear them.
+                if (list.isEmpty()) continue
                 val text = list.joinToString("\n") { "${it.fromW} ${it.toW} ${it.shift}" }
                 val f = File(dir, "$id.barfix")
                 if ((if (f.exists()) f.readText() else "") == text) continue
@@ -171,6 +175,16 @@ class LibraryStore private constructor(ctx: Context) : Thread("library") {
                 beatCache[id]?.fixes = list
             }
         } finally { c.disconnect() }
+    }
+
+    /** After a set's grid changes version: this phone's corrections re-expressed on the new grid, so each keeps the beat it marked. */
+    fun carryBarFixes(id: String, old: SetBeats, new: SetBeats) {
+        val before = readFixes(id)
+        if (before.isEmpty()) return
+        val after = SetBeats.carryFixes(before, old, new)
+        File(dir, "$id.barfix").writeText(after.joinToString("\n") { "${it.fromW} ${it.toW} ${it.shift}" })
+        beatCache.remove(id)
+        android.util.Log.i("SetBeats", "bar fixes $id carried to ${SetBeats.HEADER}: ${before.size} -> ${after.size} (the rest now agree)")
     }
 
     private fun readFixes(id: String): List<SetBeats.Fix> = try {

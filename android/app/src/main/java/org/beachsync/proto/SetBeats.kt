@@ -68,7 +68,7 @@ class SetBeats(val windows: List<Win?>) {
         const val RATE = 48000.0
         const val WINDOW_S = 8L
         const val LENGTH_S = 16
-        const val HEADER = "beats 7"   // 7: a move of the bar start needs a drop to confirm it (15 Nov); 6: short breaks vote too (15 Nov); 5: features at 32 frames a second (9 Nov); 4: drops and breaks vote for bar 1 (9 Nov); 3: the bar start can move within a track (8 Nov); older files are resolved again from their raw results
+        const val HEADER = "beats 8"   // 8: the bass note changing votes for bar 1 and can confirm a move (19 Nov); 7: a move of the bar start needs a drop to confirm it (15 Nov); 6: short breaks vote too (15 Nov); 5: features at 32 frames a second (9 Nov); 4: drops and breaks vote for bar 1 (9 Nov); 3: the bar start can move within a track (8 Nov); older files are resolved again from their raw results
         private const val REALIGN_COST = 4.5  // how much evidence a move of the bar start needs (tuned on 11 real sets, 8 Nov: no back-and-forth pairs)
         private const val FILL = 4            // a window with no beat borrows a good one up to this many windows away
         private const val SPAN = 8            // windows either side that vote on the bar start: about a minute each way
@@ -85,9 +85,9 @@ class SetBeats(val windows: List<Win?>) {
             }
         } catch (_: RuntimeException) { emptyList() }
 
-        fun decode(text: String): SetBeats? {
+        fun decode(text: String, anyVersion: Boolean = false): SetBeats? {
             val lines = text.lines().filter { it.isNotBlank() }.takeWhile { it != "raw" }
-            if (lines.firstOrNull() != HEADER) return null
+            if (lines.firstOrNull() != HEADER && !(anyVersion && lines.firstOrNull()?.startsWith("beats ") == true)) return null
             return try {
                 SetBeats(lines.drop(1).map { l ->
                     if (l == "-") null else l.split(' ').let { Win(it[0].toDouble(), it[1].toDouble(), it[2].toLong(), it[3].toFloat(), it.getOrNull(4) == "r") }
@@ -95,8 +95,30 @@ class SetBeats(val windows: List<Win?>) {
             } catch (_: RuntimeException) { null }
         }
 
+        /**
+         * A listener's corrections made on grid [old], re-expressed on grid [new] of the same file (same windows and tempo): each keeps the beat it
+         * marked as bar 1, so it becomes 0 (and is dropped) where the new grid already agrees.
+         */
+        fun carryFixes(fixes: List<Fix>, old: SetBeats, new: SetBeats): List<Fix> = fixes.flatMap { f ->
+            // Window by window (the new grid may move the bar start inside the stretch), then joined into runs of the same shift.
+            val per = (f.fromW..f.toW).map { w ->
+                val o = old.windows.getOrNull(w); val nw = new.windows.getOrNull(w)
+                w to if (o == null || nw == null) null else Math.floorMod(Math.round((o.downbeat + f.shift * o.period - nw.downbeat) / nw.period), 4L).toInt()
+            }
+            val out = ArrayList<Fix>()
+            var start = -1; var cur: Int? = null; var last = -1
+            fun close() { if (cur != null && cur != 0) out.add(Fix(start, last, cur!!)) }
+            for ((w, sh) in per) {
+                if (sh == null) continue
+                if (sh != cur) { close(); start = w; cur = sh }
+                last = w
+            }
+            close()
+            out
+        }
+
         /** From each window's own grid (null where it found no clear beat), in window order from the set's start, to one grid for the whole set. */
-        fun resolve(raw: List<BeatGrid.Result?>, feat: FloatArray = FloatArray(0)): SetBeats {
+        fun resolve(raw: List<BeatGrid.Result?>, feat: FloatArray = FloatArray(0), bass: FloatArray = FloatArray(0)): SetBeats {
             val n = raw.size
             // A window locked onto 2/3, 1/2, 3/2 or 2 times its neighbours' tempo has found the wrong pulse: drop it, so it borrows a neighbour.
             val clean = raw.mapIndexed { w, g ->
@@ -191,6 +213,55 @@ class SetBeats(val windows: List<Win?>) {
                     w = e
                 }
             }
+            // The bass note (visualiser hand-off, 19 Nov: it matched the listener's bar 1 in 5 of 5 corrections the music supports): for each beat,
+            // the cosine distance between the bass pitch classes of the two beats after it and the two before it, summed the same way.
+            val bassChange = HashMap<Int, DoubleArray>()
+            val winBass = HashMap<Int, DoubleArray>()
+            val bassBeat = HashMap<Long, Pair<Int, Double>>()   // per beat number: its window and distance, for confirming moves
+            val bFrames = bass.size / BassChroma.PCS
+            if (bFrames > 0) {
+                fun sum(from: Double, to: Double): FloatArray? {
+                    val a = max(0, BassChroma.frameAt(from)); val b = min(bFrames, BassChroma.frameAt(to))
+                    if (b <= a) return null
+                    val m = FloatArray(BassChroma.PCS)
+                    for (f in a until b) for (k in 0 until BassChroma.PCS) m[k] += bass[f * BassChroma.PCS + k]
+                    for (k in m.indices) m[k] /= (b - a)
+                    return m
+                }
+                fun cosd(a: FloatArray, b: FloatArray): Double? {
+                    var ab = 0.0; var aa = 0.0; var bb = 0.0
+                    for (k in a.indices) { ab += a[k] * b[k]; aa += a[k] * a[k]; bb += b[k] * b[k] }
+                    return if (aa < 1e-12 || bb < 1e-12) null else 1 - ab / Math.sqrt(aa * bb)
+                }
+                var w = 0
+                while (w < n) {
+                    val tr = track[w]
+                    val sums = DoubleArray(4)
+                    var e = w
+                    while (e < n && track[e] == tr) {
+                        if (filled[e] != null) {
+                            val p = period[e]
+                            val start = (WINDOW_S * e + 4) * RATE
+                            var j = Math.round((start - anchor[e]) / p)
+                            while (anchor[e] + j * p < start + WINDOW_S * RATE) {
+                                val at = anchor[e] + j * p
+                                val after = sum(at, at + 2 * p); val before = sum(at - 2 * p, at)
+                                val d = if (after != null && before != null) cosd(after, before) else null
+                                if (d != null) {
+                                    val ph = Math.floorMod(index[e] + j, 4L).toInt()
+                                    sums[ph] += d
+                                    winBass.getOrPut(e) { DoubleArray(4) }[ph] += d
+                                    bassBeat[index[e] + j] = e to d
+                                }
+                                j++
+                            }
+                        }
+                        e++
+                    }
+                    if (sums.sum() > 0) bassChange[tr] = sums
+                    w = e
+                }
+            }
             // EDM structure (hand-off research, 9 Nov): sections change on bar 1 of a phrase, and the clearest change is the low end (kick and bass)
             // leaving for a break or coming back for the drop. Each such moment votes strongly for its own beat as bar 1.
             val structural = HashMap<Int, DoubleArray>()
@@ -204,7 +275,21 @@ class SetBeats(val windows: List<Win?>) {
                 structural.getOrPut(w) { DoubleArray(4) }[Math.floorMod(index[w] + j, 4L).toInt()] += 1.0
             }
             // (A clap-on-2-and-4 cue was tried on 9 Nov, at 8 and 32 frames a second: it added nothing to this evidence.)
-            val phaseOf = barPhases(n, track, filled.map { it != null }, change, winChange, structural)
+            val phaseOf = barPhases(n, track, filled.map { it != null }, change, winChange, structural, bassChange, winBass)
+            // How strongly the bass note says beat [ph] starts the bars over windows [ws]: a t-like lead over the next beat (the sandbox's measure),
+            // or 0 with fewer than BASS_BARS bars of evidence.
+            fun bassLead(ws: IntRange, ph: Int): Double {
+                val vals = bassBeat.entries.filter { it.value.first in ws }
+                if (vals.size < 4 * BASS_BARS) return 0.0
+                val m = DoubleArray(4); val c = IntArray(4)
+                for ((i, v) in vals) { val k = Math.floorMod(i, 4L).toInt(); m[k] += v.second; c[k]++ }
+                if (c.any { it == 0 }) return 0.0
+                for (k in 0..3) m[k] /= c[k]
+                val all = vals.map { it.value.second }; val mu = all.average()
+                val sd = Math.sqrt(all.sumOf { (it - mu) * (it - mu) } / all.size) / Math.sqrt(all.size / 4.0) + 1e-9
+                val others = (0..3).filter { it != ph }.maxOf { m[it] }
+                return (m[ph] - others) / sd
+            }
             // A move of the bar start stands only if a drop or break lands on bar 1 in its new place before it moves again (user, 15 Nov: the
             // sound-change cue alone moved one set a beat early for 8 minutes). Otherwise the bar start stays where it was.
             if (CONFIRM_MOVES) {
@@ -217,7 +302,8 @@ class SetBeats(val windows: List<Win?>) {
                     var e = w
                     while (e < n && (phaseOf[e] == null || phaseOf[e] == ph) && track[e] == track[w]) e++
                     if (ph != held) {
-                        val confirmed = (w until e).any { c -> structural[c]?.let { v -> v.max() > 0 && (0..3).maxBy { v[it] } == ph } == true }
+                        val confirmed = (w until e).any { c -> structural[c]?.let { v -> v.max() > 0 && (0..3).maxBy { v[it] } == ph } == true } ||
+                            bassLead(w until e, ph) >= BASS_CONFIRM
                         if (confirmed) held = ph else for (c in w until e) if (phaseOf[c] != null) phaseOf[c] = held
                     }
                     w = e
@@ -247,6 +333,9 @@ class SetBeats(val windows: List<Win?>) {
         @JvmField var STRUCT_THRESH = 0.8    // how big a low-end change must be to count
         @JvmField var CONFIRM_MOVES = true  // a move needs a drop or break to confirm it
         @JvmField var SHORT_THRESH = 0.8     // the same, for the kick coming back after a short break
+        @JvmField var BASS_WEIGHT = 1.0      // the bass-note cue's weight against the band change (19 Nov: equal to start)
+        @JvmField var BASS_CONFIRM = 3.0     // a bass-note lead this strong confirms a move of the bar start, as a drop does
+        @JvmField var BASS_BARS = 16         // over at least this many bars
 
         /**
          * Where the low end (40–150 Hz: kick and bass) comes back after a break (true) or leaves for one (false), as feature frames: the steepest step
@@ -283,7 +372,8 @@ class SetBeats(val windows: List<Win?>) {
          * [REALIGN_COST] for each move. A DJ's mix that lands the next record on another beat of the bar moves it; a noisy window doesn't.
          * Null where a window has no evidence or its track has none.
          */
-        internal fun barPhases(n: Int, track: IntArray, has: List<Boolean>, change: Map<Int, DoubleArray>, winChange: Map<Int, DoubleArray>, structural: Map<Int, DoubleArray> = emptyMap()): Array<Int?> {
+        internal fun barPhases(n: Int, track: IntArray, has: List<Boolean>, change: Map<Int, DoubleArray>, winChange: Map<Int, DoubleArray>, structural: Map<Int, DoubleArray> = emptyMap(),
+                               bassChange: Map<Int, DoubleArray> = emptyMap(), winBass: Map<Int, DoubleArray> = emptyMap()): Array<Int?> {
             val out = arrayOfNulls<Int>(n)
             var w = 0
             while (w < n) {
@@ -293,10 +383,12 @@ class SetBeats(val windows: List<Win?>) {
                 val ids = (w until e).filter { has[it] }
                 if (change[tr] != null && ids.isNotEmpty()) {
                     // Each window's evidence, relative to its own mean, smoothed over ±2 windows; the track's own sums as a gentle prior.
-                    val track4 = change[tr]!!.let { t -> val m = t.average().coerceAtLeast(1e-9); DoubleArray(4) { t[it] / m - 1 } }
+                    fun rel(t: DoubleArray): DoubleArray { val m = t.average().coerceAtLeast(1e-9); return DoubleArray(4) { t[it] / m - 1 } }
+                    val track4 = rel(change[tr]!!).let { t -> bassChange[tr]?.let { b -> val r = rel(b); DoubleArray(4) { t[it] + BASS_WEIGHT * r[it] } } ?: t }
                     val ev = ids.map { c ->
                         val acc = DoubleArray(4)
                         for (o in -2..2) winChange[c + o]?.takeIf { track[c + o] == tr }?.let { v -> val m = v.average().coerceAtLeast(1e-9); for (k in 0..3) acc[k] += v[k] / m - 1 }
+                        for (o in -2..2) winBass[c + o]?.takeIf { track[c + o] == tr }?.let { v -> val m = v.average().coerceAtLeast(1e-9); for (k in 0..3) acc[k] += BASS_WEIGHT * (v[k] / m - 1) }
                         for (o in -STRUCT_REACH..STRUCT_REACH) structural[c + o]?.takeIf { track[c + o] == tr }?.let { v -> for (k in 0..3) acc[k] += STRUCT_WEIGHT * v[k] }
                         DoubleArray(4) { acc[it] + 0.1 * track4[it] }
                     }
@@ -357,18 +449,26 @@ class BeatFeatures {
         return out
     }
 
-    private fun fft() {
+    private fun fft() = Fft.run(re, im, cosT, sinT)
+}
+
+/** An in-place radix-2 FFT of [re]/[im] with twiddles [cosT]/[sinT] (length n/2). Shared by [BeatFeatures] and [BassChroma]. */
+internal object Fft {
+    fun twiddles(n: Int) = FloatArray(n / 2) { kotlin.math.cos(2 * Math.PI * it / n).toFloat() } to FloatArray(n / 2) { (-kotlin.math.sin(2 * Math.PI * it / n)).toFloat() }
+
+    fun run(re: FloatArray, im: FloatArray, cosT: FloatArray, sinT: FloatArray) {
+        val n = re.size
         var j = 0
-        for (i in 1 until N) {
-            var bit = N shr 1
+        for (i in 1 until n) {
+            var bit = n shr 1
             while (j and bit != 0) { j = j xor bit; bit = bit shr 1 }
             j = j xor bit
             if (i < j) { val a = re[i]; re[i] = re[j]; re[j] = a; val b = im[i]; im[i] = im[j]; im[j] = b }
         }
         var len = 2
-        while (len <= N) {
-            val step = N / len
-            for (s in 0 until N step len) for (k in 0 until len / 2) {
+        while (len <= n) {
+            val step = n / len
+            for (s in 0 until n step len) for (k in 0 until len / 2) {
                 val wr = cosT[k * step]; val wi = sinT[k * step]
                 val a = s + k; val b = a + len / 2
                 val tr = re[b] * wr - im[b] * wi; val ti = re[b] * wi + im[b] * wr
@@ -376,5 +476,68 @@ class BeatFeatures {
             }
             len = len shl 1
         }
+    }
+}
+
+/**
+ * The bass note over the set (visualiser hand-off, 19 Nov), for finding bar starts: [PER_S] frames a second, each the energy of 40–260 Hz folded into
+ * 12 pitch classes (C = 0) and scaled so the loudest is 1. The sound is filtered and decimated to 4 kHz, then a 2048-point FFT (about 2 Hz bins, 0.5 s).
+ * Feed it the set's 1 s blocks in order; plain Kotlin.
+ */
+class BassChroma {
+    companion object {
+        const val PER_S = 8
+        const val PCS = 12
+        private const val DEC = 12             // 48 kHz to 4 kHz
+        private const val N = 2048
+        private const val HOP = 4000 / PER_S
+        private const val TAPS = 121
+
+        /** The first frame whose window centre is at or after file sample [sample]. Frame g's centre is (g + 1) × HOP − N/2 at 4 kHz. */
+        fun frameAt(sample: Double): Int = Math.ceil((sample / DEC + N / 2) / HOP - 1).toInt()
+    }
+
+    // A windowed-sinc low-pass at 1.6 kHz (well under the 2 kHz Nyquist of 4 kHz), applied only at the kept samples.
+    private val taps = FloatArray(TAPS) { i ->
+        val x = i - (TAPS - 1) / 2.0; val fc = 1600.0 / 48000
+        val sinc = if (x == 0.0) 2 * fc else Math.sin(2 * Math.PI * fc * x) / (Math.PI * x)
+        (sinc * (0.54 - 0.46 * Math.cos(2 * Math.PI * i / (TAPS - 1)))).toFloat()
+    }
+    private val hist = FloatArray(TAPS - 1)        // the mono samples just before this block
+    private val ring = FloatArray(N); private var pos = 0
+    private val window = FloatArray(N) { (0.5 - 0.5 * kotlin.math.cos(2 * Math.PI * it / N)).toFloat() }
+    private val tw = Fft.twiddles(N)
+    private val re = FloatArray(N); private val im = FloatArray(N)
+    private val pc = IntArray(N / 2) { k ->
+        val f = k * 4000.0 / N
+        if (f < 40 || f > 260) -1 else Math.floorMod(Math.round(12 * Math.log(f / 440.0) / Math.log(2.0)).toInt() + 9, 12)
+    }
+
+    /** One 1 s stereo block (48000 frames) to PER_S × PCS values. */
+    fun block(stereo: ShortArray): FloatArray {
+        val frames = stereo.size / 2
+        val mono = FloatArray(hist.size + frames)
+        System.arraycopy(hist, 0, mono, 0, hist.size)
+        for (i in 0 until frames) mono[hist.size + i] = (stereo[2 * i] + stereo[2 * i + 1]) / 65536f
+        System.arraycopy(mono, frames, hist, 0, hist.size)
+        val out = FloatArray(PER_S * PCS)
+        var f = 0
+        for (o in 0 until frames / DEC) {
+            var acc = 0f
+            val end = hist.size + o * DEC   // newest input sample for this output
+            for (t in 0 until TAPS) acc += taps[t] * mono[end - t]
+            ring[pos] = acc; pos = (pos + 1) % N
+            if ((o + 1) % HOP == 0 && f < PER_S) { frame(out, f); f++ }
+        }
+        return out
+    }
+
+    private fun frame(out: FloatArray, f: Int) {
+        for (i in 0 until N) { re[i] = ring[(pos + i) % N] * window[i]; im[i] = 0f }
+        Fft.run(re, im, tw.first, tw.second)
+        val c = FloatArray(PCS)
+        for (k in pc.indices) if (pc[k] >= 0) c[pc[k]] += re[k] * re[k] + im[k] * im[k]
+        val top = c.max()
+        if (top > 1e-10f) for (k in 0 until PCS) out[f * PCS + k] = c[k] / top
     }
 }
