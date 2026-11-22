@@ -97,6 +97,16 @@ if (capBytes) {
   for (const c of served) store.get({ key: Buffer.from(c, 'hex') }).on('upload', () => guard.check())
 }
 console.log('READY', hex(catalog.key), hex(mesh.keyPair.publicKey))
+// The station QR (critical path gap 3): brocast://station/<key>, plus ?relay=<key> when --relay KEY is given (gap 5; the relay key stays out of the repo and the APK).
+const stationUrl = 'brocast://station/' + hex(mesh.keyPair.publicKey) + (arg('relay') ? '?relay=' + arg('relay') : '')
+console.log('STATION-URL', stationUrl)
+{
+  const QR = (await import('qrcode')).default
+  console.log(await QR.toString(stationUrl, { type: 'terminal', small: true }))
+  const png = path.join(dir, 'station-qr.png')
+  await QR.toFile(png, stationUrl, { width: 640, margin: 2 })
+  console.log('QR-PNG', png)
+}
 console.log('NAT', JSON.stringify(mesh.nat()))
 // Auto-stop (user, 7 Nov): every seed server stops itself after --minutes, so none is left running. The laptop station
 // may run up to an hour each time it's started (user, 19 Nov), long enough to deliver a whole library; 60 by default.

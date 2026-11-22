@@ -18,6 +18,7 @@
     "hyperdht": "6.36.0",
     "hyperswarm": "4.17.2",
     "protomux": "3.13.0",
+    "qrcode": "1.5.4",
     "sodium-universal": "5.0.1"
   },
   "devDependencies": {

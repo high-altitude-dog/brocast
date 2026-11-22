@@ -35,9 +35,13 @@ object TestFeatures {
     fun set(ctx: Context, v: Boolean) { on = v; ctx.getSharedPreferences("test_features", 0).edit().putBoolean("on", v).apply() }
 }
 
-/** A station code: `brocast://station/<64 hex key>`. */
+/** A station code: `brocast://station/<64 hex key>`, optionally `?relay=<64 hex key>` (the station's blind relay; critical path gap 5). */
 internal fun parseStationCode(raw: String?): String? =
-    Regex("^brocast://station/([0-9a-fA-F]{64})/?$").find(raw?.trim() ?: "")?.groupValues?.get(1)?.lowercase()
+    Regex("^brocast://station/([0-9a-fA-F]{64})/?(\\?relay=[0-9a-fA-F]{64})?$").find(raw?.trim() ?: "")?.groupValues?.get(1)?.lowercase()
+
+/** The relay key a station code carries, or null. */
+internal fun parseStationRelay(raw: String?): String? =
+    Regex("^brocast://station/[0-9a-fA-F]{64}/?\\?relay=([0-9a-fA-F]{64})$").find(raw?.trim() ?: "")?.groupValues?.get(1)?.lowercase()
 
 /** Until the mesh directory gives stations their four key words, a key is shown as its first 16 hex digits in fours. */
 internal fun keyShort(key: String) = key.take(16).chunked(4).joinToString(" ")
@@ -115,7 +119,11 @@ fun FindStationScreen(state: BenchState, currentKey: String, join: (String) -> U
         .startScan().addOnSuccessListener { r ->
             val key = parseStationCode(r.rawValue)
             when {
-                key != null -> found = key
+                key != null -> {
+                    // The code's relay key goes to the engine's setting, so a fresh GitHub install can reach peers behind client isolation.
+                    parseStationRelay(r.rawValue)?.let { ctx.getSharedPreferences("proto", android.content.Context.MODE_PRIVATE).edit().putString("relay", it).apply() }
+                    found = key
+                }
                 PassLink.parse(r.rawValue) != null -> setCode = PassLink.parse(r.rawValue)
                 else -> bad = true
             }
