@@ -54,6 +54,7 @@ PALETTE = {"Lime": "#C8FF4D", "Chartreuse": "#DEFF5C", "Lemon": "#F4F56A", "Pist
            "Ice": "#A6E4FF", "Sky": "#7CC8FF", "Bluebell": "#86A8FF", "Hyacinth": "#A2A6FF", "Lavender": "#BCA8FF", "Purple": "#A98BFF", "Violet": "#C483FF",
            "Orchid": "#DE8CFF", "Lilac": "#E6B3FF", "Magenta": "#FF7AE0", "Pink": "#FF8FC8", "Bubblegum": "#FFB0D9", "Blush": "#FFC4CF", "Iris": "#9E95FF"}
 NEWS_PUBLIC_URLS = {"npr": "https://feeds.npr.org/500005/podcast.xml"}
+TITLE_MAX = 200
 LIBRARY_NOTICE_S = 600     # how far ahead a new running order takes effect at the earliest, so every phone can fetch it
 MESSAGE_MAX = 140
 SEC = 1_000_000_000
@@ -619,6 +620,22 @@ class Library:
         self.rematch()
         self.publish_library()
 
+    def set_title(self, set_id: str, title: str):
+        """The set's name as typed on the page. Display only: published editions take it too, because a name never moves the timeline."""
+        title = " ".join(title.split())
+        if not title or len(title) > TITLE_MAX:
+            raise ValueError(f"a set name needs 1 to {TITLE_MAX} characters")
+        with self.lock:
+            if self.meta(set_id)["title"] == REEL_TITLE:
+                raise ValueError("the test reel keeps its name")
+            self.update(set_id, title=title)
+            lib = self.read_library()
+            for e in lib["editions"]:
+                for it in e.get("items", []):
+                    if it.get("id") == set_id:
+                        it["title"] = title
+            self.write_library(lib["editions"], lib["called_off"])
+
     def confirm_artists(self, set_id: str, ids: list[str]):
         known = {a["id"] for a in self.artists()}
         self.update(set_id, artist_ids=[i for i in ids if i in known], artist_sure=True, artist_confirmed=True)
@@ -905,6 +922,7 @@ tr.air td { background: color-mix(in srgb, var(--accent) 12%, transparent); } tr
 .handle { cursor: grab; color: var(--muted); font-size: 18px; user-select: none; } .handle.fixed { cursor: not-allowed; opacity: .3; }
 .thumb { width: 44px; height: 44px; border-radius: 8px; background: var(--track); object-fit: cover; display: grid; place-items: center; font-family: var(--mono); font-weight: 700; }
 .set-title { font-weight: 600; font-size: 16px; } .tag-moved { color: var(--warn); font-family: var(--mono); font-size: 11px; font-weight: 700; letter-spacing: .08em; }
+.title-edit { border: 0; background: none; padding: 0; min-height: 0; color: inherit; font: inherit; text-align: left; cursor: pointer; } .title-edit::after { content: " ✎"; color: var(--faint); font-weight: 400; } .title-input { font: inherit; width: min(100%, 28em); }
 .artist-edit { border: 0; background: none; padding: 2px 0; min-height: 0; color: inherit; font: inherit; text-align: left; cursor: pointer; } .artist-edit::after { content: " ✎"; color: var(--faint); } .artist-edit.empty { color: var(--muted); }
 .vis { white-space: nowrap; color: var(--muted); } .vis.ready { color: var(--accent); } .vis.working { color: var(--text); } .vis.bad { color: #E5484D; }
 .st-played { color: var(--faint); } .st-air { color: var(--accent); } .dots { border: 0; min-height: 0; padding: 4px 10px; color: var(--muted); font-size: 18px; }
@@ -913,7 +931,7 @@ tr.air td { background: color-mix(in srgb, var(--accent) 12%, transparent); } tr
 .card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 18px; display: flex; flex-direction: column; gap: 12px; }
 .card .row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
 .drop { border: 1px dashed var(--grid); border-radius: 12px; padding: 22px; text-align: center; cursor: pointer; } .drop.hot { border-color: var(--accent); }
-.steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; } .steps div { height: 4px; border-radius: 2px; background: var(--track); overflow: hidden; } .steps i { display: block; height: 100%; background: var(--accent); }
+.steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; } .steps div { height: 4px; border-radius: 2px; background: var(--track); overflow: hidden; } .steps i { display: block; height: 100%; background: var(--accent); }
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; } .grid2 label { font-size: 13px; color: var(--muted); display: flex; flex-direction: column; gap: 4px; }
 .disk { height: 8px; border-radius: 4px; background: var(--track); display: flex; overflow: hidden; } .disk i { display: block; height: 100%; }
 .confirm { border: 1px solid var(--warn); border-radius: 12px; padding: 10px 12px; display: flex; align-items: center; gap: 10px; }
@@ -1081,6 +1099,18 @@ function editArtist(id) {
   const note = el("p", "Shows here now. Listeners see it after the next published order.", "muted small");
   dlg.replaceChildren(el("div", "Edit artist", "label"), el("p", s.title, "set-title"), input, note, btns); dlg.showModal(); input.select();
 }
+function titleEdit(s, name) {   // the name in the running order edits in place: click, type, Enter saves, Esc cancels
+  const b = el("button", s.title, "title-edit"); b.title = "Edit name";
+  b.onclick = e => { e.stopPropagation(); dragging = true;
+    const input = el("input"); input.type = "text"; input.maxLength = 200; input.value = s.title; input.setAttribute("aria-label", "Set name"); input.className = "title-input";
+    let done = false;
+    const end = async save => { if (done) return; done = true; const v = input.value.split(/ +/).join(" ").trim(); dragging = false;
+      if (save && v && v !== s.title) await act("/api/sets/" + s.id + "/title?name=" + encodeURIComponent(v), "POST"); else await refresh(true); };
+    input.onkeydown = e2 => { if (e2.key === "Enter") { e2.preventDefault(); end(true); } else if (e2.key === "Escape") end(false); };
+    input.onblur = () => end(true); input.onclick = e2 => e2.stopPropagation(); input.draggable = false;
+    b.replaceWith(input); input.focus(); input.select(); };
+  name.prepend(b);
+}
 function artistCell(s) {
   const td = el("td"), b = el("button", s.artist || "Add artist", "artist-edit" + (s.artist ? "" : " empty")); b.title = "Edit artist";
   b.onclick = e => { e.stopPropagation(); editArtist(s.id); }; td.append(b); return td;
@@ -1141,7 +1171,7 @@ function render() {
     tr.ondragend = () => { dragging = false; };
     tr.ondragover = e => { e.preventDefault(); tr.classList.add("over"); }; tr.ondragleave = () => tr.classList.remove("over");
     tr.ondrop = e => { e.preventDefault(); tr.classList.remove("over"); dragging = false; const from = e.dataTransfer.getData("text/plain"); if (from && from !== id) move(from, order.filter(x => x !== from).indexOf(id)); };
-    const t = el("td"), name = el("div", s.title, "set-title"); if (s.visual) name.append(visualChip()); t.append(name);
+    const t = el("td"), name = el("div", null, "set-title"); if (s.title === "Test reel") name.textContent = s.title; else titleEdit(s, name); if (s.visual) name.append(visualChip()); t.append(name);
     if (moved.has(id)) t.append(el("div", base.includes(id) ? (order.indexOf(id) < base.indexOf(id) ? "MOVED ↑" : "MOVED ↓") : "NEW", "tag-moved"));
     const th = el("td"); th.append(thumb(s));
     const t0 = startOf(k), t1 = t0 + secondsOf(id) * SEC;
@@ -1227,23 +1257,28 @@ $("go").onclick = () => {
     sending = null; $("unpick").onclick(); ["title", "artist", "set"].forEach(k => $(k).value = ""); refresh(true); };
   x.send(f); jobs();
 };
-function job(name, size, a, b, c, labels, err) {
+// Four stages: upload, convert, sign, then the visual render (done by a separate job, so its bar only shows what the render's log says).
+function job(name, size, vals, labels, err) {
   const box = el("div"); box.style.marginTop = "8px";
   const r = el("div", null, "row"); r.append(el("span", name), el("span", size, "mono small")); box.append(r);
-  const steps = el("div", null, "steps"); for (const v of [a, b, c]) { const s = el("div"), i = el("i"); i.style.width = Math.round(v * 100) + "%"; s.append(i); steps.append(s); } box.append(steps);
-  const l = el("div", null, "steps small"); labels.forEach((t, k) => l.append(el("span", t, [a, b, c][k] > 0 ? "" : "muted"))); l.style.marginTop = "4px"; box.append(l);
+  const steps = el("div", null, "steps"); for (const v of vals) { const s = el("div"), i = el("i"); i.style.width = Math.round(v * 100) + "%"; s.append(i); steps.append(s); } box.append(steps);
+  const l = el("div", null, "steps small"); labels.forEach((t, k) => l.append(el("span", t, vals[k] > 0 ? "" : "muted"))); l.style.marginTop = "4px"; box.append(l);
   if (err) box.append(el("div", err, "bad small"));
   return box;
 }
+const VISUAL_STEP = {ready: [1, "Visuals · ready"], working: [.5, "Visuals · rendering"], queued: [0, "Visuals · queued"], none: [0, "Visuals · not queued"],
+  stalled: [.5, "Visuals · stalled"], failed: [0, "Visuals · failed"], blocked: [0, "Visuals · blocked"]};
 function jobs() {
   const box = $("jobs"); box.replaceChildren();
-  if (sending) box.append(job(sending.name, gb(sending.size), sending.frac, 0, 0, ["Uploading · " + Math.round(sending.frac * 100) + "%", "Converting", "Signing"]));
+  if (sending) box.append(job(sending.name, gb(sending.size), [sending.frac, 0, 0, 0], ["Uploading · " + Math.round(sending.frac * 100) + "%", "Converting", "Signing", "Visuals"]));
   if (!d) return;
-  for (const s of d.sets.filter(s => s.status !== "ready")) {
-    if (s.status === "failed") { const j = job(s.title || s.filename, "", 1, 0, 0, ["Uploaded", "Converting", "Signing"], "Failed: " + s.error);
+  const fresh = Date.now() / 1000 - 3600;   // a ready set stays listed while its visuals are unfinished, or for an hour if they were never queued
+  for (const s of d.sets.filter(s => s.status !== "ready" || (s.title !== "Test reel" && (["working", "queued", "stalled", "failed", "blocked"].includes(s.visual_state) || (s.visual_state === "none" && s.added > fresh))))) {
+    if (s.status === "failed") { const j = job(s.title || s.filename, "", [1, 0, 0, 0], ["Uploaded", "Converting", "Signing", "Visuals"], "Failed: " + s.error);
       const x = el("button", "Remove"); x.onclick = () => act("/api/sets/" + s.id, "DELETE"); j.append(x); box.append(j); }
-    else { const p = s.progress || 0; box.append(job(s.title || s.filename, "", 1, s.status === "queued" ? 0 : Math.max(.02, p), p >= 1 ? .5 : 0,
-      ["Uploaded", s.status === "queued" ? "Waiting" : "Converting · " + Math.round(p * 100) + "%", "Signing"])); }
+    else if (s.status === "ready") { const [v, t] = VISUAL_STEP[s.visual_state] || VISUAL_STEP.none; box.append(job(s.title || s.filename, "", [1, 1, 1, v], ["Uploaded", "Converted", "Signed", t])); }
+    else { const p = s.progress || 0; box.append(job(s.title || s.filename, "", [1, s.status === "queued" ? 0 : Math.max(.02, p), p >= 1 ? .5 : 0, 0],
+      ["Uploaded", s.status === "queued" ? "Waiting" : "Converting · " + Math.round(p * 100) + "%", "Signing", "Visuals"])); }
   }
 }
 function diskBar() {
@@ -1530,6 +1565,9 @@ def make_handler(lib: Library):
                     return self.reply()
                 if a := re.fullmatch(r"/api/sets/([0-9a-f]{32})/artist", url.path):
                     lib.set_artist(a.group(1), field("name"))
+                    return self.reply()
+                if a := re.fullmatch(r"/api/sets/([0-9a-f]{32})/title", url.path):
+                    lib.set_title(a.group(1), field("name"))
                     return self.reply()
                 if a := re.fullmatch(r"/api/sets/([0-9a-f]{32})/artists", url.path):
                     lib.confirm_artists(a.group(1), [i for i in field("ids").split(",") if ID.match(i)])
