@@ -196,6 +196,7 @@ object PearsEngine {
             EV_CATALOG -> { Log.i("BeachSync", "Mesh: catalog edition ${JSONObject(text).opt("edition")}"); JSONObject(text).optJSONObject("library")?.let { library?.fromMesh(it.toString()) } }
             EV_BUILT -> library?.meshBuilt()
             EV_VISUAL -> Log.i("BeachSync", "Mesh: visual for ${JSONObject(text).optString("setId")} built")
+            EV_PHOTO -> library?.photosArrived()
             EV_WARNING -> Log.w("BeachSync", "Mesh: $text")
             EV_FATAL -> { error = JSONObject(text).optString("text").lineSequence().firstOrNull() ?: "engine stopped"; Log.e("BeachSync", "Mesh: $text") }
         }
@@ -366,4 +367,5 @@ object PearsEngine {
     private const val EV_FATAL = 104
     private const val EV_CATALOG = 105
     private const val EV_VISUAL = 106
+    private const val EV_PHOTO = 107
 }

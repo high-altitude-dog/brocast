@@ -106,7 +106,11 @@ class LibraryStore private constructor(ctx: Context) : Thread("library") {
      * onto the phone by hand before the registry existed.
      */
     fun photo(id: String, crop: String = "1x1"): File =
-        setArtists[id]?.firstNotNullOfOrNull { artistFile(it, crop)?.takeIf { f -> f.exists() } } ?: File(dir, "$id.jpg")
+        photoRev.intValue.let { setArtists[id]?.firstNotNullOfOrNull { artistFile(it, crop)?.takeIf { f -> f.exists() } } ?: File(dir, "$id.jpg") }
+
+    /** Read by [photo], so a photo the engine writes over the mesh (23 Nov) recomposes whoever shows it. */
+    private val photoRev = androidx.compose.runtime.mutableIntStateOf(0)
+    fun photosArrived() { photoRev.intValue++ }
 
     /** The registry's names for the set's artists, joined, or null if it has none. */
     fun artistNames(id: String): String? = setArtists[id]?.mapNotNull { artists[it]?.first }?.takeIf { it.isNotEmpty() }?.joinToString(" & ")
@@ -269,7 +273,7 @@ class LibraryStore private constructor(ctx: Context) : Thread("library") {
                 } finally { c.disconnect() }
             } catch (e: IOException) { return }
         }
-        artistDir.listFiles()?.forEach { if (it.name !in wanted) it.delete() }
+        artistDir.listFiles()?.forEach { if (it.name !in wanted && !(it.name.endsWith(".tmp") && System.currentTimeMillis() - it.lastModified() < 60_000)) it.delete() } // a young .tmp is the engine's, mid-write
     }
 
     private fun get(item: LibraryItem, edition: Edition) {

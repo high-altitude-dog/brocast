@@ -17,9 +17,10 @@ import { SourceLog } from '../engine/sources.js'
 import { nymFrom, nymProof, nymText } from '../engine/nym.js'
 import { PACKETS, blocks as fileBlocks } from '../engine/blocks.js'
 import { haveVisual, writeVisual } from '../engine/visuals.js'
+import { havePhoto, writePhoto } from '../engine/photos.js'
 
 const CMD = { hello: 1, start: 2, subscribe: 3, status: 4, stop: 5, block: 6, prefs: 7, react: 8, want: 9 }
-const EV = { status: 100, built: 102, warning: 103, fatal: 104, catalog: 105, visual: 106 }
+const EV = { status: 100, built: 102, warning: 103, fatal: 104, catalog: 105, visual: 106, photo: 107 }
 
 const t0 = Date.now()
 const now = () => Date.now() - t0
@@ -185,6 +186,7 @@ class Run {
     this.bs = ed.block_seconds
     // The station's library list, as the server's library.json, so the app's timeline is the same whichever way the sets arrive.
     emit(EV.catalog, { edition: ed.edition, library: ed.library ?? null })
+    this.addPhotos(ed.photos ?? [])
     for (const it of ed.items) {
       if (this.byId.has(it.id)) { await this.addVisual(this.byId.get(it.id), it.visual); continue }
       const n = this.sets.length
@@ -212,6 +214,25 @@ class Run {
     this.todo = this.sets.filter((s) => !s.builder.done || (s.vis && !s.vis.done))
     this.total = this.todo.filter((s) => !s.builder.done).reduce((a, s) => a + s.blocks, 0)
     this.phase = this.held.size < this.total ? 'fetching' : 'all sets held'
+  }
+
+  /** The catalog's artist photos (engine/photos.js): each one not already on disk with the right hash is fetched, checked and written, two at a time. */
+  addPhotos (list) {
+    this.photoSeen ??= new Set()
+    const todo = list.filter((p) => !this.photoSeen.has(p.core) && (this.photoSeen.add(p.core), !havePhoto(this.dirs.music, p)))
+    const next = async () => {
+      for (let p; (p = todo.shift()) && !state.stopping;) {
+        try {
+          const core = this.mesh.store.get({ key: b4a.from(p.core, 'hex') })
+          await core.ready()
+          const r = writePhoto(this.dirs.music, p, await core.get(0, { timeout: 20000 }))
+          if (r === 'built') emit(EV.photo, { file: p.f })
+          else emit(EV.warning, { code: 'PHOTO', text: p.f + ' failed its check: ' + r })
+          if (!this.share) await core.clear(0, 1).catch(() => {})
+        } catch (e) { this.photoSeen.delete(p.core); setTimeout(() => this.addPhotos([p]), 30000) } // not found in time: asked again in 30 s
+      }
+    }
+    next(); next()
   }
 
   /** Set [s]'s visual from the catalog (engine/visuals.js): already held and checked, or a core to fetch before the set's audio. */

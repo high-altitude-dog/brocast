@@ -12,12 +12,15 @@ import { buildOgg, serialOf, blake2b } from '../engine/builder.js'
 import { topic, encodeRecord } from '../engine/index.js'
 import { EgressGuard, defaultAlert } from '../seeder/egress-guard.js'
 import { readVisual } from '../engine/visuals.js'
+import { readPhotos } from '../engine/photos.js'
 
 const arg = (k, d) => { const i = process.argv.indexOf('--' + k); return i > 0 ? process.argv[i + 1] : d }
 const dir = arg('dir')
 const seedFile = arg('seed-file')
 const library = arg('library')
 const visuals = arg('visuals', library)
+// With --artists DIR (<aid>-<crop>-<v>.jpg, the app's names), the photos of the library json's artists go in the catalog too (engine/photos.js).
+const artistsDir = arg('artists')
 const blockSeconds = Number(arg('block-seconds', 4)) // 4 s is the step 0 recommendation
 const libraryJson = arg('library-json') ? JSON.parse(fs.readFileSync(arg('library-json'), 'utf8')) : null
 const bootstrap = process.env.BOOTSTRAP ? JSON.parse(process.env.BOOTSTRAP) : undefined
@@ -54,20 +57,30 @@ for (const name of fs.readdirSync(library).filter((f) => f.endsWith('.opus')).so
   items.push(item)
 }
 
+// Artist photos: one core each, named by the hash; absent flag or no library json = none.
+const photos = []
+for (const p of artistsDir && libraryJson ? readPhotos(artistsDir, libraryJson.artists) : []) {
+  const pc = store.get({ name: 'photo/' + p.blake2b.slice(0, 32) })
+  await pc.ready()
+  if (pc.length === 0) await pc.append(p.buf)
+  photos.push({ f: p.f, bytes: p.bytes, blake2b: p.blake2b, core: hex(pc.key) })
+}
+
 const catalog = store.get({ name: 'catalog' })
 await catalog.ready()
 // A new edition whenever the sets or the library list change; phones always read the newest.
 const last = catalog.length ? JSON.parse(await catalog.get(catalog.length - 1)) : null
-const same = last && JSON.stringify(last.items) === JSON.stringify(items) && JSON.stringify(last.library ?? null) === JSON.stringify(libraryJson)
+const same = last && JSON.stringify(last.items) === JSON.stringify(items) && JSON.stringify(last.library ?? null) === JSON.stringify(libraryJson) && JSON.stringify(last.photos ?? []) === JSON.stringify(photos)
 if (!same) {
   await catalog.append(Buffer.from(JSON.stringify({
     edition: catalog.length + 1, start_ns: 0, block_format: FORMAT, block_seconds: blockSeconds, seeds: [hex(mesh.keyPair.publicKey)], items,
-    ...(libraryJson ? { library: libraryJson } : {})
+    ...(libraryJson ? { library: libraryJson } : {}), ...(photos.length ? { photos } : {})
   })))
 }
 
 const uploads = new Map()
-const served = items.flatMap((it) => [it.core, ...(it.visual ? [it.visual.core] : [])])
+const served = [...items.flatMap((it) => [it.core, ...(it.visual ? [it.visual.core] : [])]), ...photos.map((p) => p.core)]
+console.log('PHOTOS', photos.length)
 console.log('VISUALS', items.filter((it) => it.visual).length + ' of ' + items.length + ' sets')
 for (const c of served) {
   store.get({ key: Buffer.from(c, 'hex') }).on('upload', (index, bytes, to) => {
