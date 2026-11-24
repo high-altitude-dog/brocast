@@ -1,8 +1,8 @@
-# Beach Sync
+# Brocast
 
 **Listen to the same music, at the same instant, anywhere in the world.**
 
-Beach Sync is an Android app that plays music in sync across any number of phones. Everyone hears the same beat at the same moment, within milliseconds and aiming for better, whether they're on the same beach or on opposite sides of the planet. Think of a silent disco with no limit on size or distance, or a 24-hour radio station where every listener is on the same beat.
+Brocast is an Android app that plays music in sync across any number of phones. Everyone hears the same beat at the same moment, within milliseconds and aiming for better, whether they're on the same beach or on opposite sides of the planet. Think of a silent disco with no limit on size or distance, or a 24-hour radio station where every listener is on the same beat.
 
 The first channel is **electronic dance music sets**.
 
@@ -25,6 +25,14 @@ Calibration screens measure the delay of your own device, and results can be sha
 
 **Delivery that scales.** Sets are compressed (Opus), downloaded once and played locally in sync with flowtime. A peer-to-peer mesh shares the files between phones on the same network, over direct phone-to-phone links and across the internet, so reaching millions of listeners doesn't mean paying for millions of streams.
 
+## Install
+
+1. On an Android phone (arm64, Android 12 or later), download the APK from the [latest release](https://github.com/high-altitude-dog/brocast/releases/latest) and install it. Each release installs over the last one and keeps the sets already on the phone.
+2. Open Brocast, tap **Find** (top right), then **Scan**, and scan a station's QR code.
+3. The station's sets, their visuals and the artist photos arrive over the Pears peer-to-peer mesh, each checked against the station's signed catalog. Sets already on the phone aren't downloaded again.
+
+On Wi-Fi that blocks device-to-device traffic (many guest and public networks), the phone can only reach the station if the QR carries a relay key.
+
 ## Status
 
 Early and in active development. Library playback, GPS and NTP flowtime, the satellite view and the delay-calibration tools are built. Sync accuracy on real hardware is still being measured, so the figures above are design targets, not published results. The measurements, including the wired two-phone rig, are in the [prototype test guide](docs/prototype-test-guide.md).
@@ -34,6 +42,7 @@ Early and in active development. Library playback, GPS and NTP flowtime, the sat
 | Folder | What it is |
 |---|---|
 | `android/` | The Android app (Kotlin, Jetpack Compose) |
+| `pears/` | The Pears mesh engine (sets, visuals and artist photos between phones) and the station tool |
 | `server/` | The stream server and library tools |
 | `measure/` | Scripts that measure how far apart phones play the same sound |
 | `simtest/` | Desktop tests of the app's timing code |
