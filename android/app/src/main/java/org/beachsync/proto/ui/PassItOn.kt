@@ -187,10 +187,5 @@ fun QrCode(text: String, modifier: Modifier) {
     }
 }
 
-/** Brocast › Scan: Google's code scanner (no camera permission). A Brocast code opens the receiver. */
-fun scanPassCode(ctx: android.content.Context, found: (PassLink?) -> Unit) {
-    val opts = com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions.Builder().setBarcodeFormats(com.google.mlkit.vision.barcode.common.Barcode.FORMAT_QR_CODE).build()
-    com.google.mlkit.vision.codescanner.GmsBarcodeScanning.getClient(ctx, opts).startScan()
-        .addOnSuccessListener { found(PassLink.parse(it.rawValue)) }
-        .addOnFailureListener { found(null) }
-}
+/** Brocast › Scan: the in-app scanner. A Brocast code opens the receiver; closing it does nothing. */
+fun scanPassCode(ctx: android.content.Context, found: (PassLink?) -> Unit) = QrScan.start { if (it != null) found(PassLink.parse(it)) }

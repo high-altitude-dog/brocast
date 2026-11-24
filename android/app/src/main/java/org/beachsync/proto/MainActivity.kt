@@ -213,6 +213,7 @@ class MainActivity : ComponentActivity(), BenchActions {
                 Page.LOG -> EventLogScreen(state, logLane) { page = from }
                 Page.NUDGE -> StreamGapScreen(state, this) { page = from }
             }
+            org.beachsync.proto.ui.QrScanHost()   // the in-app QR scanner, over whichever page asked for it
             org.beachsync.proto.ui.SyncNudgeOverlays(state, this)   // the Sync view's Keep-it toast and sheet, over whichever page it left for
         }
     }

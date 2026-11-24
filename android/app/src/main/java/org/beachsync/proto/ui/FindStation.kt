@@ -102,7 +102,7 @@ private fun RadarIcon(color: androidx.compose.ui.graphics.Color, sweep: Boolean)
  * Hand-off 62: Find a station. The mesh directory (signed listings) isn't built in the engine yet, so On the mesh shows the
  * searching state, then nothing found, with the station you're on under NOW. Scan a code works now: a station code switches
  * station through the existing flow (the current one keeps playing until the new one is ready); a set code goes to Pass it on.
- * The scanner is Google's code scanner (no camera permission), not the designed in-app camera with brackets.
+ * The scanner is the in-app camera (QrScan.kt), plain without the designed brackets.
  */
 @Composable
 fun FindStationScreen(state: BenchState, currentKey: String, join: (String) -> Unit, openPass: (PassLink) -> Unit, back: () -> Unit) {
@@ -114,20 +114,20 @@ fun FindStationScreen(state: BenchState, currentKey: String, join: (String) -> U
     var found by remember { mutableStateOf<String?>(null) }
     var setCode by remember { mutableStateOf<PassLink?>(null) }
     var bad by remember { mutableStateOf(false) }
-    fun scan() = com.google.mlkit.vision.codescanner.GmsBarcodeScanning.getClient(ctx,
-        com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions.Builder().setBarcodeFormats(com.google.mlkit.vision.barcode.common.Barcode.FORMAT_QR_CODE).build())
-        .startScan().addOnSuccessListener { r ->
-            val key = parseStationCode(r.rawValue)
+    fun scan() = QrScan.start { raw ->
+        if (raw != null) {
+            val key = parseStationCode(raw)
             when {
                 key != null -> {
                     // The code's relay key goes to the engine's setting, so a fresh GitHub install can reach peers behind client isolation.
-                    parseStationRelay(r.rawValue)?.let { ctx.getSharedPreferences("proto", android.content.Context.MODE_PRIVATE).edit().putString("relay", it).apply() }
+                    parseStationRelay(raw)?.let { ctx.getSharedPreferences("proto", android.content.Context.MODE_PRIVATE).edit().putString("relay", it).apply() }
                     found = key
                 }
-                PassLink.parse(r.rawValue) != null -> setCode = PassLink.parse(r.rawValue)
+                PassLink.parse(raw) != null -> setCode = PassLink.parse(raw)
                 else -> bad = true
             }
         }
+    }
     Box(Modifier.fillMaxSize().background(Ink.bg)) {
         Column(
             Modifier.fillMaxSize().safeDrawingPadding().verticalScroll(rememberScrollState())
