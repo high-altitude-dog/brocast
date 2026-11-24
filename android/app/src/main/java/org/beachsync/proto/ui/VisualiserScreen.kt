@@ -15,6 +15,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
@@ -47,12 +49,17 @@ import kotlin.math.abs
  * `setFlowtimeBoot(s, bootNs, rate)` is called only when they differ by more than 0.5 ms (a new fit) or the page asks. Never the audio thread.
  */
 private const val ORIGIN = "https://appassets.androidplatform.net"
-private val LIB_FILE = Regex("[0-9a-f]{32}\\.(viz|nodes)")
+private val LIB_FILE = Regex("[0-9a-f]{32}\\.(viz|nodes|ft\\.nodes)")
 
 private class FlowLine(val id: String, val s: Double, val boot: Long, val rate: Double)
 
-private class Bridge(private val logFile: File) {
+private class Bridge(private val logFile: File, private val ctx: android.content.Context) {
     @Volatile var ready = false
+    /** Settings > Display > Full screen. Set by the screen; called here on the bridge thread, so it posts to the UI thread. */
+    @Volatile var onFull: (Boolean) -> Unit = {}
+    @JavascriptInterface fun fullscreen(on: Boolean) { android.os.Handler(android.os.Looper.getMainLooper()).post { onFull(on) } }
+    /** Settings > Display > Stems: which render the page draws; the Live Seam reads the same one (LiveSeam.kt). */
+    @JavascriptInterface fun stems(name: String) { if (name == "htdemucs" || name == "htdemucs_ft") ctx.getSharedPreferences("visualiser", 0).edit().putString("stems", name).apply() }
     @JavascriptInterface fun bootNs(): Double = android.os.SystemClock.elapsedRealtimeNanos().toDouble()
     @JavascriptInterface fun ready() { ready = true }
     /** `?report=1`: JSON arrays of log items, one per line. Called on the WebView's bridge thread, never the UI thread. */
@@ -79,12 +86,24 @@ fun VisualiserScreen(state: BenchState, query: String, fromSeam: Boolean = false
     val leave = { if (!left) { left = true; back() } }
     LaunchedEffect(Unit) { kotlinx.coroutines.delay(8000); pageReady = true }
     val ctx = androidx.compose.ui.platform.LocalContext.current
-    val bridge = remember { Bridge(File(ctx.getExternalFilesDir(null) ?: ctx.filesDir, "vis-log.jsonl")) }
+    val bridge = remember { Bridge(File(ctx.getExternalFilesDir(null) ?: ctx.filesDir, "vis-log.jsonl"), ctx.applicationContext) }
     var view by remember { mutableStateOf<WebView?>(null) }
     var shownId by remember { mutableStateOf<String?>(null) }
     var note by remember { mutableStateOf("Waiting for flowtime") }
     var missing by remember { mutableStateOf(false) }
     val sent = remember { object { var line: FlowLine? = null } }
+    // Full screen (the page's Settings): hide the status and navigation bars (a swipe from an edge shows them for a moment) and drop the
+    // padding round them, keeping clear only of a camera cutout. Leaving the screen always brings the bars back.
+    var full by remember { mutableStateOf(false) }
+    val hostView = androidx.compose.ui.platform.LocalView.current
+    bridge.onFull = { full = it }
+    DisposableEffect(full) {
+        val win = generateSequence(ctx) { (it as? android.content.ContextWrapper)?.baseContext }.filterIsInstance<android.app.Activity>().firstOrNull()?.window
+        val ctl = win?.let { androidx.core.view.WindowCompat.getInsetsController(it, hostView) }
+        val bars = androidx.core.view.WindowInsetsCompat.Type.systemBars()
+        if (full) { ctl?.systemBarsBehavior = androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE; ctl?.hide(bars) } else ctl?.show(bars)
+        onDispose { ctl?.show(bars) }
+    }
 
     LaunchedEffect(lib) {
         if (lib == null) { note = "No library"; return@LaunchedEffect }
@@ -118,7 +137,7 @@ fun VisualiserScreen(state: BenchState, query: String, fromSeam: Boolean = false
     }
 
     Box(Modifier.fillMaxSize().background(Color.Black)) {
-        AndroidView(modifier = Modifier.fillMaxSize().safeDrawingPadding(), factory = { c ->
+        AndroidView(modifier = Modifier.fillMaxSize().then(if (full) Modifier.windowInsetsPadding(androidx.compose.foundation.layout.WindowInsets.displayCutout) else Modifier.safeDrawingPadding()), factory = { c ->
             WebView.setWebContentsDebuggingEnabled(true)
             WebView(c).apply {
                 setBackgroundColor(android.graphics.Color.BLACK)
@@ -134,7 +153,7 @@ fun VisualiserScreen(state: BenchState, query: String, fromSeam: Boolean = false
                         val p = u.path ?: return null
                         val body = when {
                             p.startsWith("/vis/") && !p.contains("..") -> runCatching { c.assets.open("visualiser/" + p.removePrefix("/vis/")) }.getOrNull()
-                            p.startsWith("/lib/") && LIB_FILE.matches(p.removePrefix("/lib/")) -> lib?.visFile(p.removePrefix("/lib/").substringBefore('.'), p.substringAfterLast('.'))?.takeIf { it.exists() }?.inputStream()
+                            p.startsWith("/lib/") && LIB_FILE.matches(p.removePrefix("/lib/")) -> lib?.visFile(p.removePrefix("/lib/").substringBefore('.'), p.removePrefix("/lib/").substringAfter('.'))?.takeIf { it.exists() }?.inputStream()
                             else -> null
                         } ?: return WebResourceResponse("text/plain", "utf-8", 404, "Not found", emptyMap(), "".byteInputStream())
                         val mime = when (p.substringAfterLast('.')) { "html" -> "text/html"; "js", "mjs" -> "text/javascript"; "css" -> "text/css"; "json" -> "application/json"; "png" -> "image/png"; else -> "application/octet-stream" }

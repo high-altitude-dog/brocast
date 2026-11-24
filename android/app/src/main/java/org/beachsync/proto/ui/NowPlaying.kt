@@ -262,8 +262,7 @@ private fun Masthead(s: Session?, openBench: () -> Unit, openSwarm: () -> Unit, 
                 Modifier.fillMaxWidth().pointerInput(Unit) { detectTapGestures(onLongPress = { openBench() }, onTap = { openSwarm() }) }.semantics { contentDescription = "$nym, $listening. Tap for the swarm; hold to open the test bench." },
                 verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
-                BasicText(nym, style = Tokens.Text.eyebrow.style())
-                BasicText("● $listening" + if (live == null) " · demo" else "", style = Tokens.Text.small.style(Ink.accent))
+                NymLine(nym, "● $listening" + if (live == null) " · demo" else "")
             }
         }
         return
@@ -274,13 +273,21 @@ private fun Masthead(s: Session?, openBench: () -> Unit, openSwarm: () -> Unit, 
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             // The design wants your nym and "N listeners linked" here, opening Swarm. Neither exists yet (see design/feedback.md), so only the name stays. D lives on the Test bench.
-            BasicText(nym, style = Tokens.Text.eyebrow.style())
-            BasicText("● $listening" + if (live == null) " · demo" else "", style = Tokens.Text.small.style(Ink.accent))
+            NymLine(nym, "● $listening" + if (live == null) " · demo" else "")
         }
         // Archive isn't built, so its button is dimmed and does nothing.
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             for (icon in HeaderIcon.entries) IconBox(icon, when (icon) { HeaderIcon.SETTINGS -> openSettings; HeaderIcon.TIME -> openSignals; HeaderIcon.CALIBRATION -> openCalibration; else -> null })
         }
+    }
+}
+
+/** The nym and how many are listening, on one line (user, 21 Nov 2026). A long nym is cut short; the count always shows. */
+@Composable
+private fun NymLine(nym: String, listening: String) {
+    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        BasicText(nym, Modifier.weight(1f, fill = false).alignByBaseline(), style = Tokens.Text.eyebrow.style(), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+        BasicText(listening, Modifier.alignByBaseline(), style = Tokens.Text.small.style(Ink.accent), maxLines = 1)
     }
 }
 

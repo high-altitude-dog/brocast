@@ -120,6 +120,7 @@ private fun loadSeamNodes(id: String, f: File): SeamNodes? = runCatching {
 internal object SeamPortal {
     var returning by mutableStateOf(false)
     var cache: SeamNodes? = null
+    var cacheKey = ""   // which file the cache holds: the id, plus .ft when drawn from the htdemucs_ft render
 }
 
 @Stable
@@ -154,10 +155,14 @@ internal fun rememberSeam(lib: LibraryStore?, playing: Boolean): SeamState {
         while (true) {
             val id = earAt(lib, Session.nowBoot())?.first?.id
             val ready = id != null && lib.hasVisual(id)
+            // Settings > Stems in the visualiser (reported through the bridge): the strip follows the page when the set has an ft render.
+            val ft = ready && ctx.getSharedPreferences("visualiser", 0).getString("stems", null) == "htdemucs_ft" && lib.visFile(id!!, "ft.nodes").let { it.exists() && it.length() > 0 }
+            val key = if (ft) "$id.ft" else id
             when {
                 !ready -> seam.nodes = null
-                seam.nodes?.id != id -> {
-                    val loaded = SeamPortal.cache?.takeIf { it.id == id } ?: withContext(Dispatchers.IO) { loadSeamNodes(id!!, lib.visFile(id, "nodes")) }
+                seam.nodes?.id != id || SeamPortal.cacheKey != key -> {
+                    val loaded = SeamPortal.cache?.takeIf { it.id == id && SeamPortal.cacheKey == key } ?: withContext(Dispatchers.IO) { loadSeamNodes(id!!, lib.visFile(id, if (ft) "ft.nodes" else "nodes")) }
+                    SeamPortal.cacheKey = key!!
                     SeamPortal.cache = loaded
                     seam.nodes = loaded
                 }

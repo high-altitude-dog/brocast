@@ -6,8 +6,10 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.media.AudioAttributes
@@ -31,6 +33,15 @@ class SessionService : Service() {
     private var focus: AudioFocusRequest? = null
     private var media: MediaSession? = null
 
+    /**
+     * Headphones unplugged, or a Bluetooth headset or speaker switched off or out of range: Android is about to send the
+     * music to the phone's own speaker, so stop it instead (user, 21 Nov 2026). Runs on the main thread.
+     */
+    private val noisy = object : BroadcastReceiver() {
+        override fun onReceive(c: Context, i: Intent) { if (i.action == AudioManager.ACTION_AUDIO_BECOMING_NOISY) { Log.i(TAG, "output disconnected: stopping"); endRun() } }
+    }
+    private var noisyOn = false
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onCreate() {
@@ -42,6 +53,8 @@ class SessionService : Service() {
             .apply { acquire(WAKE_MAX_MS) }
         takeAudioFocus()
         takeMediaButton()
+        registerReceiver(noisy, IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY), RECEIVER_NOT_EXPORTED)
+        noisyOn = true
     }
 
     /**
@@ -122,6 +135,7 @@ class SessionService : Service() {
     }
 
     override fun onDestroy() {
+        if (noisyOn) { unregisterReceiver(noisy); noisyOn = false }
         News.stop()
         media?.release()
         media = null
