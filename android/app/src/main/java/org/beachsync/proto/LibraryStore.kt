@@ -215,7 +215,7 @@ class LibraryStore private constructor(ctx: Context) : Thread("library") {
         Process.setThreadPriority(Process.THREAD_PRIORITY_BACKGROUND)
         while (going) {
             if (meshKey.isNotEmpty()) { try { sleep(RETRY_MS) } catch (_: InterruptedException) { }; continue }   // PearsEngine fetches instead
-            val done = try { refresh(); try { refreshBarFixes() } catch (e: Exception) { Log.w("BeachSync", "bar fixes: $e") }; sync() } catch (e: Exception) { Log.w("BeachSync", "Library: $e"); summarise(e.message); false }
+            val done = try { refresh(); try { refreshBarFixes() } catch (e: Exception) { Log.w("BeachSync", "bar fixes: $e") }; sync() } catch (e: Exception) { Log.w("BeachSync", "Library: $e"); summarise(if (e is java.net.ConnectException || e is java.net.UnknownHostException || e is java.net.SocketTimeoutException || e is java.net.NoRouteToHostException) "waiting for a station" else e.message); false }
             try { sleep(if (done) REFRESH_MS else RETRY_MS) } catch (_: InterruptedException) { }
         }
     }

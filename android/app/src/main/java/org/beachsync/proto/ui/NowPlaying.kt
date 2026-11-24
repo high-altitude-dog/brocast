@@ -247,8 +247,8 @@ private fun Masthead(s: Session?, openBench: () -> Unit, openSwarm: () -> Unit, 
     val live = org.beachsync.proto.PearsEngine.view
     val nym = live?.nym?.ifEmpty { null } ?: DemoMesh.NYM
     val listening = live?.let { listenerWords(it) } ?: "${DemoMesh.LISTENING} listening"
-    // Hand-off 62 (Test features): row 1 Settings top left, Time signals, Headphone lag, Archive, spacer, Find top right; row 2 the names.
-    if (TestFeatures.on) {
+    // Hand-off 62, for everyone (a fresh install has Test features off and still needs Find): row 1 Settings top left, Time signals, Headphone lag, Archive, spacer, Find top right; row 2 the names.
+    run {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -265,29 +265,15 @@ private fun Masthead(s: Session?, openBench: () -> Unit, openSwarm: () -> Unit, 
                 NymLine(nym, "● $listening" + if (live == null) " · demo" else "")
             }
         }
-        return
-    }
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Column(
-            Modifier.weight(1f).pointerInput(Unit) { detectTapGestures(onLongPress = { openBench() }, onTap = { openSwarm() }) }.semantics { contentDescription = "$nym, $listening${if (live == null) ", demo data" else ""}. Tap for the swarm; hold to open the test bench." },
-            verticalArrangement = Arrangement.spacedBy(2.dp),
-        ) {
-            // The design wants your nym and "N listeners linked" here, opening Swarm. Neither exists yet (see design/feedback.md), so only the name stays. D lives on the Test bench.
-            NymLine(nym, "● $listening" + if (live == null) " · demo" else "")
-        }
-        // Archive isn't built, so its button is dimmed and does nothing.
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            for (icon in HeaderIcon.entries) IconBox(icon, when (icon) { HeaderIcon.SETTINGS -> openSettings; HeaderIcon.TIME -> openSignals; HeaderIcon.CALIBRATION -> openCalibration; else -> null })
-        }
     }
 }
 
-/** The nym and how many are listening, on one line (user, 21 Nov 2026). A long nym is cut short; the count always shows. */
+/** The nym and how many are listening, on one line (user, 21 Nov 2026). The nym keeps its width; the count is the one cut short. */
 @Composable
 private fun NymLine(nym: String, listening: String) {
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        BasicText(nym, Modifier.weight(1f, fill = false).alignByBaseline(), style = Tokens.Text.eyebrow.style(), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-        BasicText(listening, Modifier.alignByBaseline(), style = Tokens.Text.small.style(Ink.accent), maxLines = 1)
+        BasicText(nym, Modifier.alignByBaseline(), style = Tokens.Text.eyebrow.style(), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+        BasicText(listening, Modifier.weight(1f, fill = false).alignByBaseline(), style = Tokens.Text.small.style(Ink.accent), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
     }
 }
 
