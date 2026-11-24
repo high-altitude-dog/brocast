@@ -7,30 +7,32 @@
 // would save requests but not time (the transfer is bandwidth-bound) and make each stall longer; smaller ones only add requests.
 // A set's visual is fetched before its audio, so with ~5% of a set's bytes it is whole long before the set is due.
 //
-// Layout: one Hypercore per visual, holding the .viz bytes then the .nodes bytes. The catalog item (signed, in the station's log)
-// carries the core key and each file's length and BLAKE2b-256; a phone writes the files only after both hashes match.
+// Layout: one Hypercore per visual, holding the .viz bytes, the .nodes bytes, then the optional .ft.nodes (htdemucs_ft stems). The catalog item (signed, in the station's log)
+// carries the core key and each file's length and BLAKE2b-256 (an old catalog has no ft entry); a phone writes the files only after every listed hash matches.
 import fs from '#fs'
 import path from '#path'
 import { blake2b } from './builder.js'
 
 export const VIS_BLOCK = 64 * 1024
-export const VIS_FILES = ['viz', 'nodes']
+export const VIS_FILES = ['viz', 'nodes', 'ft.nodes']
+const listed = (v) => VIS_FILES.filter((ext) => v[ext])
 
-/** The station side: the visual files of set [id] in [dir], or null if either is missing. */
+/** The station side: the visual files of set [id] in [dir], or null if viz or nodes is missing; ft.nodes rides along when present. */
 export function readVisual (dir, id) {
-  const files = VIS_FILES.map((ext) => path.join(dir, id + '.' + ext))
-  if (!files.every((f) => fs.existsSync(f) && fs.statSync(f).size > 0)) return null
-  const bufs = files.map((f) => fs.readFileSync(f))
+  const has = (ext) => { const f = path.join(dir, id + '.' + ext); return fs.existsSync(f) && fs.statSync(f).size > 0 }
+  if (!has('viz') || !has('nodes')) return null
+  const exts = VIS_FILES.filter(has)
+  const bufs = exts.map((ext) => fs.readFileSync(path.join(dir, id + '.' + ext)))
   const all = Buffer.concat(bufs)
   const blocks = []
   for (let i = 0; i < all.length; i += VIS_BLOCK) blocks.push(all.subarray(i, i + VIS_BLOCK))
-  return { blocks, meta: Object.fromEntries(VIS_FILES.map((ext, k) => [ext, { bytes: bufs[k].length, blake2b: blake2b(bufs[k]) }])) }
+  return { blocks, meta: Object.fromEntries(exts.map((ext, k) => [ext, { bytes: bufs[k].length, blake2b: blake2b(bufs[k]) }])) }
 }
 
 /** Whether [music] already holds this visual, checked against the catalog's hashes. */
 export function haveVisual (music, id, v) {
   try {
-    return VIS_FILES.every((ext) => {
+    return listed(v).every((ext) => {
       const f = path.join(music, id + '.' + ext)
       return fs.existsSync(f) && fs.statSync(f).size === v[ext].bytes && blake2b(fs.readFileSync(f)) === v[ext].blake2b
     })
@@ -40,10 +42,13 @@ export function haveVisual (music, id, v) {
 /** The phone side: the whole visual from its blocks, checked, then each file written and renamed into [music]. 'built' or a reason. */
 export function writeVisual (music, id, v, blocks) {
   const all = Buffer.concat(blocks)
-  if (all.length !== v.viz.bytes + v.nodes.bytes) return 'length'
-  const parts = { viz: all.subarray(0, v.viz.bytes), nodes: all.subarray(v.viz.bytes) }
-  for (const ext of VIS_FILES) if (blake2b(parts[ext]) !== v[ext].blake2b) return 'mismatch'
-  for (const ext of VIS_FILES) {
+  const exts = listed(v)
+  if (all.length !== exts.reduce((n, ext) => n + v[ext].bytes, 0)) return 'length'
+  const parts = {}
+  let at = 0
+  for (const ext of exts) parts[ext] = all.subarray(at, at += v[ext].bytes)
+  for (const ext of exts) if (blake2b(parts[ext]) !== v[ext].blake2b) return 'mismatch'
+  for (const ext of exts) {
     const f = path.join(music, id + '.' + ext)
     fs.writeFileSync(f + '.tmp', parts[ext])
     fs.renameSync(f + '.tmp', f)

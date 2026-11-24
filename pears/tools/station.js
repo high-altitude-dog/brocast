@@ -2,7 +2,7 @@
 // catalog, and serves. Prints `READY <catalog key> <station key>`, then a JSON summary on SIGTERM.
 // Usage: node tools/station.js --dir D --seed-file F --library DIR --block-seconds N  (BOOTSTRAP env: JSON host/port list)
 // With --library-json FILE (the server's library.json for those sets), the catalog carries it, so the app's timeline comes over the mesh too.
-// Each set's visual (<id>.viz + <id>.nodes, from --visuals DIR, default the library folder) goes in the catalog too (engine/visuals.js).
+// Each set's visual (<id>.viz + <id>.nodes + optional <id>.ft.nodes, from --visuals DIR, default the library folder) goes in the catalog too (engine/visuals.js).
 import fs from 'node:fs'
 import path from 'node:path'
 import crypto from 'hypercore-crypto'
@@ -46,7 +46,7 @@ for (const name of fs.readdirSync(library).filter((f) => f.endsWith('.opus')).so
   // Its visual, if rendered: a core named by the files' hashes, so a new render is a new core and an old phone's copy is never mixed in.
   const vis = readVisual(visuals, id)
   if (vis) {
-    const vc = store.get({ name: 'vis/' + id + '/' + vis.meta.viz.blake2b.slice(0, 16) + vis.meta.nodes.blake2b.slice(0, 16) })
+    const vc = store.get({ name: 'vis/' + id + '/' + vis.meta.viz.blake2b.slice(0, 16) + vis.meta.nodes.blake2b.slice(0, 16) + (vis.meta['ft.nodes']?.blake2b.slice(0, 16) || '') })
     await vc.ready()
     if (vc.length === 0) await vc.append(vis.blocks)
     item.visual = { core: hex(vc.key), blocks: vc.length, ...vis.meta }
