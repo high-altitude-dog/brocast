@@ -13,6 +13,7 @@ import { topic, encodeRecord } from '../engine/index.js'
 import { EgressGuard, defaultAlert } from '../seeder/egress-guard.js'
 import { readVisual } from '../engine/visuals.js'
 import { readPhotos } from '../engine/photos.js'
+import { nymOfKey, nymText } from '../engine/nym.js'
 
 const arg = (k, d) => { const i = process.argv.indexOf('--' + k); return i > 0 ? process.argv[i + 1] : d }
 const dir = arg('dir')
@@ -30,6 +31,9 @@ const capBytes = arg('cloud-cap-bytes') ? Number(arg('cloud-cap-bytes')) : null
 if (!fs.existsSync(seedFile)) fs.writeFileSync(seedFile, crypto.randomBytes(32), { mode: 0o600, flag: 'wx' })
 // Step 2: every connection to the station, with its path, printed as `CONN {json}`.
 const mesh = new Mesh({ dir, seed: fs.readFileSync(seedFile), bootstrap, onconn: (r) => console.log('CONN', JSON.stringify(r)) })
+// The station's nym (user, 25 Nov: stations have nyms every device can see; nyms come from the public key alone, v2).
+const stationNym = nymText(nymOfKey(mesh.keyPair.publicKey))
+mesh.setHello({ app: 'station', engine: 'station', heldPct: 100 })
 const store = mesh.store.namespace('blocks-' + blockSeconds)
 
 const items = []
@@ -113,18 +117,30 @@ console.log('READY', hex(catalog.key), hex(mesh.keyPair.publicKey))
 // The station QR (critical path gap 3): brocast://station/<key>, plus ?relay=<key> when --relay KEY is given (gap 5; the relay key stays out of the repo and the APK).
 const stationUrl = 'brocast://station/' + hex(mesh.keyPair.publicKey) + (arg('relay') ? '?relay=' + arg('relay') : '')
 console.log('STATION-URL', stationUrl)
+console.log('NYM', stationNym)
 {
   const QR = (await import('qrcode')).default
   console.log(await QR.toString(stationUrl, { type: 'terminal', small: true }))
   const png = path.join(dir, 'station-qr.png')
   await QR.toFile(png, stationUrl, { width: 640, margin: 2 })
   console.log('QR-PNG', png)
+  // A page to show people: the nym, the QR and the link (the PNG alone can't say whose station it is).
+  const svg = await QR.toString(stationUrl, { type: 'svg', margin: 2 })
+  const page = path.join(dir, 'station-qr.html')
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
+  fs.writeFileSync(page, `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(stationNym)}</title>` +
+    `<body style="margin:0;background:#0b0d10;color:#e8eaed;font:16px system-ui;display:grid;place-items:center;min-height:100vh;text-align:center">` +
+    `<div><div style="letter-spacing:.2em;font-size:13px;opacity:.7">BROCAST STATION</div><h1 style="letter-spacing:.12em;margin:.3em 0 1em">${esc(stationNym)}</h1>` +
+    `<div style="background:#fff;border-radius:16px;padding:12px;width:min(80vw,420px);margin:auto">${svg}</div>` +
+    `<p style="font:12px ui-monospace,monospace;opacity:.7;word-break:break-all;max-width:420px;margin:1em auto">${esc(stationUrl)}</p></div></body>`)
+  console.log('QR-PAGE', page)
 }
 console.log('NAT', JSON.stringify(mesh.nat()))
-// Auto-stop (user, 7 Nov): every seed server stops itself after --minutes, so none is left running. The laptop station
-// may run up to an hour each time it's started (user, 19 Nov), long enough to deliver a whole library; 60 by default.
-const minutes = Math.min(60, Number(arg('minutes', 60)))
-setTimeout(() => { console.log(`AUTOSTOP after ${minutes} min`); process.kill(process.pid, 'SIGTERM') }, minutes * 60e3)
+// Auto-stop (user, 7 Nov): a seed server stops itself after --minutes, so none is left running by mistake; 60 by default. The laptop
+// station's data is unmetered, so it may run without a limit (user, 25 Nov): --minutes 0 runs until it's stopped.
+const minutes = Number(arg('minutes', 60))
+if (minutes > 0) setTimeout(() => { console.log(`AUTOSTOP after ${minutes} min`); process.kill(process.pid, 'SIGTERM') }, minutes * 60e3)
+else console.log('AUTOSTOP off: runs until stopped')
 
 process.on('SIGTERM', async () => {
   clearInterval(gossip)

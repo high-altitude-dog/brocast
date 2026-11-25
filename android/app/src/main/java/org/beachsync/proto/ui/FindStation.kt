@@ -159,7 +159,9 @@ fun FindStationScreen(state: BenchState, currentKey: String, join: (String) -> U
                 ) {
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         BasicText("Brocast Radio", style = Tokens.Text.bodyStrong.style())
-                        BasicText(if (currentKey.isEmpty()) "From the server" else "Station code ${keyShort(currentKey)}", style = Tokens.Text.small.style(Ink.textSecondary))
+                        // The station's nym once its hello has checked out (user, 25 Nov: every device shows it).
+                        val stationNym = org.beachsync.proto.PearsEngine.view?.stations?.firstOrNull { it.key.equals(currentKey, true) }?.nym
+                        BasicText(if (currentKey.isEmpty()) "From the server" else (stationNym?.let { "${nymCase(it)} · " } ?: "") + "Station code ${keyShort(currentKey)}", style = Tokens.Text.small.style(Ink.textSecondary))
                     }
                     BasicText("ON NOW", style = Tokens.Text.small.style(Ink.accent))
                 }

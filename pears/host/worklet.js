@@ -14,7 +14,9 @@ import { profile } from '../engine/policy.js'
 import { SetBuilder, serialOf } from '../engine/builder.js'
 import { hedge } from '../engine/hedge.js'
 import { SourceLog } from '../engine/sources.js'
-import { nymFrom, nymProof, nymText } from '../engine/nym.js'
+import { nymOfKey, nymText } from '../engine/nym.js'
+/** Anyone's nym from their key (v2), for a peer whose hello hasn't arrived yet. */
+const keyNym = (k) => { try { return nymText(nymOfKey(b4a.from(String(k), 'hex'))) } catch { return null } }
 import { PACKETS, blocks as fileBlocks } from '../engine/blocks.js'
 import { haveVisual, writeVisual } from '../engine/visuals.js'
 import { havePhoto, writePhoto } from '../engine/photos.js'
@@ -115,7 +117,7 @@ class Run {
     // The nym, from this phone's own signature (shuffle 0 until the wizard can shuffle), and the listener count: this phone joins the
     // gossiped sketch unless counting is off (Privacy mode), and passes on what it hears either way.
     const pk = this.mesh.keyPair.publicKey
-    this.nym = nymText(nymFrom(pk, 0, nymProof(this.mesh.keyPair.secretKey, 0)))
+    this.nym = nymText(nymOfKey(pk))
     if (count) this.mesh.sketch.add(pk, 0)
     this.mesh.setShowCountry(showCountry)
     this.mesh.setBlocked(blocked)
@@ -123,7 +125,7 @@ class Run {
     this.reactions = []
     this.mesh.onreaction = (k, e, mine) => { this.reactions.push({ k: k.slice(0, 8), e, at: Date.now(), mine }); if (this.reactions.length > 5000) this.reactions.splice(0, 1000) }
     // The hello (hand-off 46): this phone's nym proof, app and engine versions, and how much of the library it holds, refreshed every 10 s.
-    this.helloBase = { shuffle: 0, proof: hex(nymProof(this.mesh.keyPair.secretKey, 0)), app: String(app).slice(0, 32), engine: String(ENGINE.version) }
+    this.helloBase = { app: String(app).slice(0, 32), engine: String(ENGINE.version) }
     this.mesh.setHello({ ...this.helloBase, heldPct: null })
     this.helloTimer = setInterval(() => this.mesh.setHello({ ...this.helloBase, heldPct: this.total ? Math.floor((100 * this.held.size) / this.total) : (this.phase === 'all sets held' ? 100 : null) }), 10000)
     try { this.countries = countryTable ? Countries.load(countryTable) : null } catch (e) { this.countries = null; emit(EV.warning, { code: 'COUNTRIES', text: String(e) }) }
@@ -378,7 +380,7 @@ class Run {
   details (k) {
     const i = this.mesh.peerInfo.get(k)
     const rtt = this.mesh.rttMs(k)
-    return { nym: i?.nym ?? null, verified: i?.verified ?? false, app: i?.app ?? null, engineVersion: i?.engine ?? null, heldPct: i?.heldPct ?? null, rttMs: Number.isFinite(rtt) ? Math.round(rtt) : null, connectedAt: this.mesh.connectedAt.get(k) ?? null }
+    return { nym: i?.nym ?? keyNym(k), verified: true, app: i?.app ?? null, engineVersion: i?.engine ?? null, heldPct: i?.heldPct ?? null, rttMs: Number.isFinite(rtt) ? Math.round(rtt) : null, connectedAt: this.mesh.connectedAt.get(k) ?? null }
   }
 
   /** The last minute's reactions per emoji, and the last 5 s individually (short key, emoji, how long ago in ms). */

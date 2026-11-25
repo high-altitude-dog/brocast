@@ -24,5 +24,16 @@ export function nymFrom (publicKey, shuffle, proof) {
   return [words.colours[h[0] & 63], words.fruits[h[1] & 63], words.animals[h[2]]]
 }
 
+/**
+ * v2 (user, 25 Nov: "deterministic for everyone"): the nym comes from the public key alone, so any device can show anyone's nym, a
+ * station's straight from its link or QR. No proof and no shuffle. Same word lists as v1. Matches web/src/engine/station-nym.ts.
+ * Test vector: key 00 01 … 1f gives OPAL BANANA SCALLOP.
+ */
+const CONTEXT_V2 = b4a.from('brocast/nym/v2')
+export function nymOfKey (publicKey) {
+  const h = crypto.hash([CONTEXT_V2, publicKey])
+  return [words.colours[h[0] & 63], words.fruits[h[1] & 63], words.animals[h[2]]]
+}
+
 /** As shown on screen: `AMBER FIG HERON`. */
 export const nymText = (nym) => nym.join(' ').toUpperCase()

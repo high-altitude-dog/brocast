@@ -247,7 +247,8 @@ fun SwarmScreen(back: () -> Unit) {
                 lane(s, me, 0f, st == null || st.toYouKbps > 0, st?.path == "relayed", true, i, sq / 2 + 4.dp.toPx())
                 st?.let { nodeHits.add(it.key to s); if (it.key == openKey) drawCircle(Ink.text, sq * 0.9f, s, style = Stroke(2.dp.toPx())) }
                 drawRect(Ink.text, Offset(s.x - sq / 2, s.y - sq / 2), Size(sq, sq))
-                label("STATION", s.x, s.y - sq / 2 - 5.dp.toPx(), 9f, Ink.textSecondary)
+                // The station's nym from its hello (user, 25 Nov), like any listener's; "STATION" until it has checked out.
+                label(st?.nym?.let { "STATION · ${nymCase(it)}" } ?: "STATION", s.x, s.y - sq / 2 - 5.dp.toPx(), 9f, Ink.textSecondary)
             }
             // Found but not connected: grey dots on an outer ring, only once someone is connected.
             for (i in 0 until minOf(foundCount, 12)) {

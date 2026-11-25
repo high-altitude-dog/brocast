@@ -8,7 +8,7 @@ import crypto from 'hypercore-crypto'
 import b4a from 'b4a'
 import { Sketch } from './sketch.js'
 import { Proofs } from './proofs.js'
-import { nymFrom, nymText } from './nym.js'
+import { nymOfKey, nymText } from './nym.js'
 
 /** Everything a node needs, derived from its one secret seed, so one file backs it up. */
 export function keysFromSeed (seed) {
@@ -164,8 +164,9 @@ export class Mesh {
         encoding: c.json,
         onmessage: (m) => {
           if (!k || !m) return
+          // v2: the nym comes from the key the connection proved, so it needs nothing from the hello.
           let nym = null
-          try { const n = nymFrom(conn.remotePublicKey, m.shuffle | 0, b4a.from(String(m.proof || ''), 'hex')); nym = n ? nymText(n) : null } catch { nym = null }
+          try { nym = nymText(nymOfKey(conn.remotePublicKey)) } catch { nym = null }
           this.peerInfo.set(k, { nym, verified: nym !== null, app: String(m.app || '').slice(0, 32), engine: String(m.engine || '').slice(0, 32), heldPct: Number.isFinite(m.heldPct) ? Math.max(0, Math.min(100, m.heldPct)) : null })
         }
       })

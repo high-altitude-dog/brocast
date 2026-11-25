@@ -33,3 +33,13 @@ Each word:
 ## On the phone
 
 The engine computes nyms; the host only shows them (`me.nym`, `swarm.peers[].nym` in the engine API). So there's no `Nym.kt`, and no crypto needed in Kotlin.
+
+## v2: from the public key alone (user, 25 Nov 2026: "deterministic for everyone")
+
+Replaces v1's signed proof and shuffle. Any device can show anyone's nym from their key, including a station's straight from its link or QR.
+
+    h = BLAKE2b-256( utf8("brocast/nym/v2") ‖ publicKey[32] )      (hypercore-crypto: crypto.hash([CONTEXT, key]))
+    nym = colours[h[0] & 63], fruits[h[1] & 63], animals[h[2]]      (the v1 word lists, unchanged), shown in capitals
+
+Test vector: key 00 01 … 1f gives `OPAL BANANA SCALLOP`. Code: `pears/engine/nym.js` `nymOfKey`; the web page matches it (`web/src/engine/station-nym.ts`). The hello no longer carries a proof. Anyone could generate keys until one gives a nym that looks like someone else's, as with v1, so the key prefix stays the real identity.
+
