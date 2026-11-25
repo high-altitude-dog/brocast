@@ -118,6 +118,11 @@ class MainActivity : ComponentActivity(), BenchActions {
         PocketGuard.resumedAt = SystemClock.uptimeMillis()
         getSystemService(SensorManager::class.java).let { sm -> sm.getDefaultSensor(Sensor.TYPE_PROXIMITY)?.let { sm.registerListener(proximity, it, SensorManager.SENSOR_DELAY_NORMAL) } }
         A2dpCodec.connect(this)   // also after the permission is given in app settings
+        if (leftForFilesAccess) {
+            leftForFilesAccess = false
+            finishMusicChoice()
+            if (SharedLibrary.permitted() && !SharedLibrary.following(this)) android.widget.Toast.makeText(this, "Restart Brocast to keep your music in Music/Brocast", android.widget.Toast.LENGTH_LONG).show()
+        }
     }
 
     private val askForMic = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -145,6 +150,14 @@ class MainActivity : ComponentActivity(), BenchActions {
         val firstLaunch = !prefs.getBoolean(KEY_LAUNCHED, false) && prefs.all.isEmpty()   // an app updated from before this key isn't new
         prefs.edit().putBoolean(KEY_LAUNCHED, true).apply()
         state.headphonesNameOffer = !firstLaunch && !prefs.getBoolean(KEY_BT_NAME_ASKED, false)
+        state.musicChoice = SharedLibrary.choice(this)
+        state.musicFolderText = SharedLibrary.describe(this)
+        if (!SharedLibrary.chosen(this)) {
+            // A fresh install that finds Documents/Brocast from an earlier one asks first; anything else just starts with the default.
+            if (firstLaunch && SharedLibrary.earlierInstallFolder()) { state.musicFound = true; awaitingChoice = true }
+            else { SharedLibrary.setChoice(this, SharedLibrary.DOCS); state.musicChoice = SharedLibrary.DOCS; state.musicFolderText = SharedLibrary.describe(this) }
+        }
+        state.musicNotice = SharedLibrary.choice(this) == SharedLibrary.DOCS && !prefs.getBoolean(KEY_DOCS_NOTICE, false)
         load()
         state.session = session
         val testScript = intent?.hasExtra("tickPattern") == true || (intent?.hasExtra("soloSlot") == true && intent?.hasExtra("library") != true)
@@ -212,6 +225,11 @@ class MainActivity : ComponentActivity(), BenchActions {
                 Page.VIS -> androidx.compose.runtime.key(visRequest) { org.beachsync.proto.ui.VisualiserScreen(state, visRequest.second, visFromSeam) { leaveVisual() } }
                 Page.LOG -> EventLogScreen(state, logLane) { page = from }
                 Page.NUDGE -> StreamGapScreen(state, this) { page = from }
+            }
+            if (state.musicFound) { BackHandler {}; org.beachsync.proto.ui.FoundMusicScreen(state.musicChoiceError, ::answerFoundMusic) }
+            else if (state.musicChoiceOpen) {
+                BackHandler { closeMusicChoice() }
+                org.beachsync.proto.ui.MusicChoiceScreen(state.musicChoice, state.musicChoiceError, ::chooseMusicPlace) { closeMusicChoice() }
             }
             org.beachsync.proto.ui.QrScanHost()   // the in-app QR scanner, over whichever page asked for it
             org.beachsync.proto.ui.SyncNudgeOverlays(state, this)   // the Sync view's Keep-it toast and sheet, over whichever page it left for
@@ -359,6 +377,69 @@ class MainActivity : ComponentActivity(), BenchActions {
         else askForHeadsetName.launch(Manifest.permission.BLUETOOTH_CONNECT)
     }
 
+    /** The person went to All files access settings, so on return the library starts and a restart is suggested if it wasn't allowed in time. */
+    private var leftForFilesAccess = false
+    /** The library waits for the answer to "Found music from an earlier install". */
+    private var awaitingChoice = false
+
+    /** Whether the picker opens at Documents/Brocast (taking back an earlier install's music) or at Documents. */
+    private var pickAtBrocast = false
+
+    private val pickMusicFolder: androidx.activity.result.ActivityResultLauncher<Intent> = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { r ->
+        val tree = r.data?.data
+        if (r.resultCode != RESULT_OK || tree == null) return@registerForActivityResult
+        val path = SharedLibrary.pathFromTree(tree)
+        if (path == null || !SharedLibrary.pickable(tree)) { state.musicChoiceError = "Please pick a folder inside Documents or Download"; pickMusicFolder.launch(SharedLibrary.pickerIntent(pickAtBrocast)); return@registerForActivityResult }
+        try { contentResolver.takePersistableUriPermission(tree, Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION) } catch (e: Exception) { state.musicChoiceError = "Android would not keep that folder. Please pick another"; return@registerForActivityResult }
+        SharedLibrary.setChoice(this, SharedLibrary.FOLDER, tree, path)
+        finishMusicChoice()
+    }
+
+    override fun chooseMusicPlace(choice: String) {
+        state.musicChoiceError = ""
+        when (choice) {
+            SharedLibrary.FOLDER -> { pickAtBrocast = false; pickMusicFolder.launch(SharedLibrary.pickerIntent()) }
+            SharedLibrary.DOCS -> if (SharedLibrary.docsNeedsGrant(this)) { pickAtBrocast = true; pickMusicFolder.launch(SharedLibrary.pickerIntent(true)) }
+                else { SharedLibrary.setChoice(this, SharedLibrary.DOCS); finishMusicChoice() }
+            SharedLibrary.ALL -> { SharedLibrary.setChoice(this, SharedLibrary.ALL); leftForFilesAccess = true; startActivity(SharedLibrary.settingsIntent(this)) }
+            else -> { SharedLibrary.setChoice(this, SharedLibrary.APP); finishMusicChoice() }
+        }
+    }
+
+    override fun closeMusicChoice() { state.musicChoiceOpen = false; state.musicChoiceError = "" }
+
+    override fun answerFoundMusic(use: Boolean) {
+        state.musicChoiceError = ""
+        if (use) { pickAtBrocast = true; pickMusicFolder.launch(SharedLibrary.pickerIntent(true)); return }
+        SharedLibrary.setChoice(this, SharedLibrary.APP)
+        android.widget.Toast.makeText(this, "Starting fresh in app storage. The old Documents/Brocast folder is left untouched.", android.widget.Toast.LENGTH_LONG).show()
+        finishMusicChoice()
+    }
+
+    override fun dismissMusicNotice() { state.musicNotice = false; prefs.edit().putBoolean(KEY_DOCS_NOTICE, true).apply() }
+
+    private fun finishMusicChoice() {
+        state.musicChoiceOpen = false
+        state.musicFound = false
+        state.musicNotice = false
+        state.musicChoice = SharedLibrary.choice(this)
+        state.musicFolderText = SharedLibrary.describe(this)
+        // The library already opened its folder this start (the screens use it before the choice): when the choice moves it, start
+        // the app again so every part of it, the Pears engine included, uses the new folder. The move itself runs as it starts.
+        val open = LibraryStore.existing()
+        SharedLibrary.forget()
+        if (open != null && open.folder.path != SharedLibrary.dir(this).path) { restartApp(); return }
+        if (awaitingChoice) { awaitingChoice = false; applyStation() }
+    }
+
+    private fun restartApp() {
+        android.widget.Toast.makeText(this, "Moving your music to the new folder…", android.widget.Toast.LENGTH_SHORT).show()
+        val again = packageManager.getLaunchIntentForPackage(packageName)!!.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+        startActivity(again)
+        finishAffinity()
+        android.os.Process.killProcess(android.os.Process.myPid())
+    }
+
     override fun notNowHeadphonesName() {
         state.headphonesNameOffer = false
         prefs.edit().putBoolean(KEY_BT_NAME_ASKED, true).apply()
@@ -429,6 +510,7 @@ class MainActivity : ComponentActivity(), BenchActions {
 
     /** The library's source: the station's key over the mesh, or the server. Only acts on a change. */
     private fun applyStation() {
+        if (awaitingChoice) return   // the library starts once the music folder is chosen
         val key = state.stationKey.trim().lowercase()
         val privacy = !state.counted   // Be counted as a listener, a setting of its own since hand-off 36
         if (state.library != null && "$key/$privacy" == appliedStation) return
@@ -484,6 +566,7 @@ class MainActivity : ComponentActivity(), BenchActions {
         private const val KEY_COUNTRY_ASKED = "countryAsked"
         private const val KEY_CAL = "cal."
         private const val KEY_LAUNCHED = "launched"
+        private const val KEY_DOCS_NOTICE = "docsNoticeSeen"
         private const val KEY_BT_NAME_ASKED = "btNameAsked"
         private const val KEY_BT_NAME_REFUSED = "btNameRefused"
         private const val KEY_NUDGE_MANUAL = "nudgeManual"

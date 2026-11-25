@@ -99,6 +99,16 @@ class BenchState {
     var library by mutableStateOf<org.beachsync.proto.LibraryStore?>(null)
     /** Now playing may still offer "Show your headphones' name?" (hand-off 34): not at first launch, and only once. */
     var headphonesNameOffer by mutableStateOf(false)
+    /** The "Where should your music live?" screen is open: at first run, or from Settings. */
+    var musicChoiceOpen by mutableStateOf(false)
+    /** A fresh install found Documents/Brocast from an earlier install: the library waits for "Use it" or "Start fresh". */
+    var musicFound by mutableStateOf(false)
+    /** The one-time notice on Now playing that the music is kept in Documents/Brocast. */
+    var musicNotice by mutableStateOf(false)
+    var musicChoiceError by mutableStateOf("")
+    /** The stored choice (see [org.beachsync.proto.SharedLibrary]) and whether this start follows it, for the Settings row. */
+    var musicChoice by mutableStateOf("")
+    var musicFolderText by mutableStateOf("")
     /** A station's key: the library comes over the Pears mesh. Blank: from the server. */
     var stationKey by mutableStateOf("")
 }
@@ -127,6 +137,12 @@ interface BenchActions {
     /** Android's Nearby devices prompt, or app settings once Android has stopped asking. */
     fun askHeadphonesName()
     fun notNowHeadphonesName()
+    /** The person's answer on the music folder screen: SharedLibrary.FOLDER, ALL or APP. */
+    fun chooseMusicPlace(choice: String)
+    fun closeMusicChoice()
+    /** The earlier-install screen: true takes the music back through the folder picker, false starts fresh in app storage. */
+    fun answerFoundMusic(use: Boolean)
+    fun dismissMusicNotice()
 }
 
 /** A clock tick for the screen. It waits for a frame, so it stops while the app isn't visible. */

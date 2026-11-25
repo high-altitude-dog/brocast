@@ -122,6 +122,7 @@ fun NowPlaying(state: BenchState, actions: BenchActions, openLog: () -> Unit, op
         Masthead(s, openBench, openSwarm, openSettings, openSignals, openCalibration, openFind)
         val mesh = org.beachsync.proto.PearsEngine.view
         mesh?.moments?.takeIf { !it.firstMusicDone }?.let { FirstListenCard(it, openSwarm) }
+        if (state.musicNotice) MusicNoticeCard(actions::dismissMusicNotice)
         if (state.headphonesNameOffer && out.icon.bluetooth && !out.named) HeadphonesNameCard(actions::askHeadphonesName, actions::notNowHeadphonesName)
         // The Now Playing box (hand-off 54): photo, title, artist with flag (hand-off 56) and set, the Stereo and Kept pills, and the SET LIST button.
         val cardShape = RoundedCornerShape(14.dp)

@@ -96,6 +96,8 @@ fun SettingsPage(state: BenchState, actions: BenchActions, back: () -> Unit, ope
         // Archive (hand-off 64): only Open Kept for now. In the beta every set is kept, so Keep and Size limit have nothing to set, and there's no Archive screen yet.
         BasicText("ARCHIVE", Modifier.padding(top = 6.dp), Tokens.Text.cardLabel.style())
         Card { NavRow("Open Kept", "Every set on this phone · all kept in the beta", openKept) }
+        // Where the sets are kept: Music/Brocast stays after an uninstall, and needs All files access.
+        Card { NavRow(state.musicFolderText, "Tap to choose where sets are kept · a change takes effect when Brocast restarts") { state.musicChoiceOpen = true } }
         BasicText("DELIVERY", Modifier.padding(top = 6.dp), Tokens.Text.cardLabel.style())
         // Swarm › Block (hand-off 46): the one place to undo it.
         // Once shown, the card stays while this page is open, so unblocking never shifts the page under the finger (a second tap opened Your identity).

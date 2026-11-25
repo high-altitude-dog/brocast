@@ -118,6 +118,8 @@ private val CLOCK_FMT: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm:ss
 
 /** One listener on Swarm: [path] is lan, direct, punched or relayed (null while it's still being worked out). */
 private class SwarmPeer(val key: String, val path: String?, val toYouKbps: Int, val fromYouKbps: Int, val country: String? = null, val full: org.beachsync.proto.MeshPeer? = null) {
+    /** What the swarm calls this listener (user, 24 Nov: every node carries its nym): the checked nym, else the key's first four. */
+    val name: String get() = full?.nym?.let { nymCase(it) } ?: key.take(4)
     val relayed get() = path == "relayed"
     val lan get() = path == "lan"
 }
@@ -264,7 +266,7 @@ fun SwarmScreen(back: () -> Unit) {
                 drawCircle(if (p.lan) Ink.accent.copy(alpha = 0.15f) else Ink.surface, node, pos)
                 drawCircle(if (p.lan) Ink.accent else Ink.textSecondary, node, pos, style = Stroke(1.5.dp.toPx()))
                 if (p.lan) wifiMark(pos, node * 0.55f)
-                label(p.key.take(4), pos.x, pos.y + node + 13.dp.toPx(), 9f, Ink.textSecondary)
+                label(p.name, pos.x, pos.y + node + 13.dp.toPx(), 9f, Ink.textSecondary)
                 p.full?.let { f -> nodeHits.add(f.key to pos); if (f.key == openKey) { drawCircle(Ink.text, node + 6.dp.toPx(), pos, style = Stroke(2.dp.toPx())); drawCircle(Ink.text.copy(alpha = 0.3f), node + 11.dp.toPx(), pos, style = Stroke(1.dp.toPx())) } }
                 if (p.lan) label("same Wi-Fi", pos.x, pos.y - node - 6.dp.toPx(), 9f, Ink.accent)   // above the peer, clear of your halo
                 // A reaction from them (hand-off 53): a ring and a small emoji floating up for about a second.
@@ -292,7 +294,7 @@ fun SwarmScreen(back: () -> Unit) {
         if (live != null) {
             val sentence = when {
                 peers.isEmpty() && stationOffline == null -> null
-                peers.size == 1 -> peers[0].let { p -> if (p.lan) "${p.key.take(4)} is on your Wi-Fi: music between you never leaves the building." else "${p.key.take(4)} is also listening, ${if (p.relayed) "connected through a relay" else "directly connected"}." }
+                peers.size == 1 -> peers[0].let { p -> if (p.lan) "${p.name} is on your Wi-Fi: music between you never leaves the building." else "${p.name} is also listening, ${if (p.relayed) "connected through a relay" else "directly connected"}." }
                 peers.size == 2 -> "${peers[0].key.take(4)} and ${peers[1].key.take(4)} are also listening."
                 else -> null
             }

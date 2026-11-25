@@ -17,6 +17,14 @@ Where it stands (checked 19 Nov): the in-app scan of a `brocast://station/<key>`
 
 Parked behind the critical path: the 15 Nov list below, Android NTP rules and verbose test-mode NTP log (user 18 Nov), Running Order highlight on the upload page (user 19 Nov; the live page belongs to the visualiser session's copy), hand-offs h59/h60/h62 directory.
 
+- **Music survives an uninstall** (user 24 Nov, option 1 chosen). Today sets, visuals and photos live in `getExternalFilesDir/library` (`LibraryStore`), which Android deletes when the app is uninstalled. Plan: keep them in a shared folder (e.g. `Music/Brocast`) through the Storage Access Framework (`ACTION_OPEN_DOCUMENT_TREE` + a persistable URI grant; AOSP only, no Google Play). After a reinstall the user picks the folder once; the app checks every file against the station's signed catalog and offers it on the mesh again through the proofs-only import (`78668b5`); a file that fails the check is fetched again. Hypercore cores stay in app storage. Open: the engine reads sets by file path, so it needs a URI/fd bridge or a copy step. Optional add-on: `android:hasFragileUserData="true"` (a "keep app data" box at uninstall; not shown on every phone; unclear when the reinstall is signed with a different key).
+
+## Tests waiting (group them: user, 24 Nov)
+
+1. **Reinstall keeps the music (Documents/Brocast default).** Uninstall on the Pixel (Documents/Brocast stays; the app dir's 1.4 GB re-download is lost), install the current release-signed build, expect the "Found music from an earlier install" card, tap Use it → picker at Documents/Brocast → Allow; expect take-back, 23 sets with no re-download, station QR scan again. Also check: one-time notice on a phone with no Documents/Brocast; Settings › Music folder switching (Documents/Brocast ↔ Another folder ↔ This app only) moves files and restarts once.
+2. **Swarm node labels** show each listener's nym (needs 2+ phones on the station).
+3. **Known gap to fix before test 1:** "Start fresh" then Settings → Documents/Brocast hits the earlier install's unowned files with no take-back.
+
 ## Next session (user, 15 Nov)
 
 1. **Release with the relay.** Publish a new GitHub release so phones installed from GitHub get the relay support and the engine's catalog-wait fix (commit `193df04`). The relay key stays out of the APK and the repo; give it by adb (`--es relay`) or a later in-app setting.

@@ -20,7 +20,16 @@ import java.security.MessageDigest
  */
 class LibraryStore private constructor(ctx: Context) : Thread("library") {
     private val app = ctx.applicationContext
-    private val dir = File(app.getExternalFilesDir(null) ?: app.filesDir, "library").apply { mkdirs() }
+    // Music/Brocast with All files access, else the app's own folder; chosen once, so it can't change under a running store.
+    private val dir = SharedLibrary.dir(app)
+    /** Set once what the old app folder held has been moved over, or at once when there was nothing to move. */
+    private val moved = java.util.concurrent.CountDownLatch(1)
+    private val toMove = SharedLibrary.leftBehind(app)
+    /** After a reinstall with a picked folder, the old files are copied back in; the status line says how far it is. */
+    private val takeBack = SharedLibrary.choice(app) == SharedLibrary.FOLDER && SharedLibrary.inUse(app)
+
+    /** Waits until the app folder's old files are in [folder]. Call it off the main thread. */
+    fun awaitFolder() { moved.await() }
     private val listFile = File(dir, "library.json")
 
     @Volatile var editions: List<Edition> = emptyList()
@@ -45,6 +54,19 @@ class LibraryStore private constructor(ctx: Context) : Thread("library") {
     @Volatile var partMesh = false
     @Volatile private var going = true
 
+    /** Moves old files into the chosen folder, and takes back a reinstalled folder's, on a thread of its own, then reads the list, so the screen never waits for it. */
+    private fun moveOldFiles() {
+        if (toMove.isEmpty() && !takeBack) { SharedLibrary.noteDir(app); moved.countDown(); return }
+        Thread({
+            Process.setThreadPriority(Process.THREAD_PRIORITY_BACKGROUND)
+            // Take back first: once an earlier install's files are this install's own, the move can replace or skip them.
+            try { if (takeBack) SharedLibrary.takeBack(app, dir) { done, all -> status = "Taking back your music: $done of $all files" } } catch (e: Exception) { Log.w("BeachSync", "Take back: $e") }
+            try { if (toMove.isNotEmpty()) SharedLibrary.migrate(toMove, dir) } catch (e: Exception) { Log.w("BeachSync", "Library move: $e") }
+            SharedLibrary.noteDir(app)
+            try { if (listFile.exists()) { read(listFile.readText()); summarise(null) } } catch (e: Exception) { Log.w("BeachSync", "Library file: $e") }
+            moved.countDown()
+        }, "library-move").start()
+    }
 
 
     fun file(id: String) = File(dir, "$id.opus")
@@ -97,7 +119,7 @@ class LibraryStore private constructor(ctx: Context) : Thread("library") {
 
     // What is already on the phone shows at once, with no network. After the fields above, which would otherwise start empty again
     // (15 Nov: the artists and photos vanished whenever the server was off).
-    init { if (listFile.exists()) try { read(listFile.readText()); summarise(null) } catch (e: Exception) { Log.w("BeachSync", "Library file: $e") } }
+    init { if (toMove.isEmpty() && !takeBack && listFile.exists()) try { read(listFile.readText()); summarise(null) } catch (e: Exception) { Log.w("BeachSync", "Library file: $e") } }
     private val artistDir = File(dir, "artists").apply { mkdirs() }
     private fun artistFile(aid: String, crop: String) = artists[aid]?.let { File(artistDir, "$aid-$crop-${it.second}.jpg") }
 
@@ -217,6 +239,7 @@ class LibraryStore private constructor(ctx: Context) : Thread("library") {
 
     override fun run() {
         Process.setThreadPriority(Process.THREAD_PRIORITY_BACKGROUND)
+        moved.await()
         while (going) {
             if (meshKey.isNotEmpty()) { try { sleep(RETRY_MS) } catch (_: InterruptedException) { }; continue }   // PearsEngine fetches instead
             val done = try { refresh(); try { refreshBarFixes() } catch (e: Exception) { Log.w("BeachSync", "bar fixes: $e") }; sync() } catch (e: Exception) { Log.w("BeachSync", "Library: $e"); summarise(if (e is java.net.ConnectException || e is java.net.UnknownHostException || e is java.net.SocketTimeoutException || e is java.net.NoRouteToHostException) "waiting for a station" else e.message); false }
@@ -316,7 +339,7 @@ class LibraryStore private constructor(ctx: Context) : Thread("library") {
         val have = edition?.items?.count { file(it.id).exists() } ?: 0
         haveSets = have; totalSets = total
         status = when {
-            total == 0 -> note ?: "Library not downloaded yet"
+            total == 0 -> note ?: if (meshKey.isNotEmpty()) "Waiting for the station's set list" else "Library not downloaded yet"
             have == total -> "All $total on this phone"
             else -> "$have of $total on this phone" + (note?.let { " · $it" } ?: "")
         }
@@ -358,7 +381,10 @@ class LibraryStore private constructor(ctx: Context) : Thread("library") {
         @Volatile private var only: LibraryStore? = null
 
         @Synchronized
-        fun get(ctx: Context): LibraryStore = only ?: LibraryStore(ctx).also { only = it }
+        fun get(ctx: Context): LibraryStore = only ?: LibraryStore(ctx).also { only = it; it.moveOldFiles() }
+
+        /** The store if this process has made one, without making it. */
+        fun existing(): LibraryStore? = only
 
         /** Starts or redirects the downloads. Safe to call more than once. */
         @Synchronized

@@ -159,6 +159,7 @@ object PearsEngine {
         scope.launch { io.data.collect { rp.feed(it) } }
         val store = File(ctx.filesDir, "mesh-store").apply { mkdirs() }
         call(CMD_HELLO, JSONObject().put("api", JSONArray().put(1)).put("host", JSONObject().put("app", "beachsync-proto"))) {
+            lib.awaitFolder()   // the old app folder's files are moved into Music/Brocast first; this runs off the main thread
             call(CMD_START, JSONObject()
                 .put("seed", seed(ctx)).put("stationKey", key).put("profile", "balanced").put("share", sharing).put("count", counted)
                 .put("showCountry", showCountry).put("countryTable", countryTable(ctx)?.path)

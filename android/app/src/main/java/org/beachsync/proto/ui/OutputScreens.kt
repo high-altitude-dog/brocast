@@ -125,6 +125,15 @@ internal fun HeadphonesNameCard(onContinue: () -> Unit, notNow: () -> Unit) {
     }
 }
 
+/** Said once: where the music is kept by default. */
+@Composable
+internal fun MusicNoticeCard(ok: () -> Unit) {
+    Card {
+        BasicText("Your music is kept in Documents/Brocast, so it stays if you remove the app. Change this in Settings.", style = Tokens.Text.body.style())
+        PillButton("OK", true, ok)
+    }
+}
+
 /** Calibration's way back to the permission after "Not now" or a refusal. After a second refusal Android won't ask again, so the caller opens app settings. */
 @Composable
 internal fun HeadphonesNameRow(open: () -> Unit) {
